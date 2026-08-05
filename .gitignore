@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Azure Functions
+local.settings.json
+.python_packages/
+.azurefunctions/
+
+# Azure Developer CLI
+.azure/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.example.tfvars
+
+# Bicep
+bin/
+obj/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Secrets and certificates
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+
+# Logs
+*.log
+logs/
+
+# Editors
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Evidence generated locally
+docs/evidence/*
+!docs/evidence/.gitkeep

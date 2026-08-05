@@ -1,0 +1,27 @@
+{
+  "clientCode": "icenter",
+  "environment": "sandbox",
+  "primaryRegion": "westeurope",
+  "subscriptionId": "557fdabc-f3b6-4c24-a9ae-e9e89b5ad172",
+  "tenantId": "0cb40b2b-6cfc-4c63-bf7b-da710ea390cb",
+  "repositoryUrl": "https://github.com/ilopesae1989/ai-support-platform-sandbox",
+  "chatModel": "gpt-5-mini",
+  "chatModelVersion": "2025-08-07",
+  "chatDeploymentType": "DataZoneStandard",
+  "chatDeploymentCapacityKTPM": 10,
+  "embeddingModel": "text-embedding-3-small",
+  "embeddingModelVersion": "1",
+  "embeddingDeploymentType": "DataZoneStandard",
+  "embeddingDeploymentCapacityKTPM": 10,
+  "embeddingDimensions": 768,
+  "searchSku": "free",
+  "searchServiceName": "srch-icenter-sbx-weu",
+  "tags": {
+    "environment": "sandbox",
+    "project": "ai-support-platform",
+    "owner": "icenter-microsoft",
+    "costCenter": "inaki-poc",
+    "managedBy": "powershell-azure-cli",
+    "expiration": "2026-09-05"
+  }
+}
