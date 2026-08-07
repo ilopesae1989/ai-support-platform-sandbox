@@ -56,3 +56,24 @@ Thumbs.db
 # Evidence generated locally
 docs/evidence/*
 !docs/evidence/.gitkeep
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Azure local state
+.azure/
+
+# Runtime local state
+.checkpoints/
+
+# Local certificates
+.certs/
+
