@@ -70,3 +70,48 @@ class OperationRequest(BaseModel):
     ] = Field(
         default_factory=list
     )
+
+
+class OperationResult(BaseModel):
+    """
+    Contrato común vendor-neutral del resultado
+    actualmente producido por un executor de
+    operaciones.
+
+    FASE 15.3 realiza únicamente la extracción del
+    contrato existente.
+
+    No incorpora todavía:
+
+    - operation_id;
+    - identidad de correlación adicional;
+    - identidad operacional completa;
+    - evidencia de herramienta;
+    - evidencia MCP;
+    - evidencia técnica estructurada.
+
+    Esos elementos pertenecen a las siguientes
+    subfases de FASE 15.
+    """
+
+    workflow_id: str
+    approval_id: str
+
+    alert_id: str
+
+    correlation_id: str | None = None
+
+    procedure_id: str
+    procedure_version: str | None = None
+
+    current_step: int
+    step_id: str
+
+    operation_kind: OperationKind
+
+    target_resource: str | None = None
+
+    success: bool
+
+    response_text: str | None = None
+    error: str | None = None

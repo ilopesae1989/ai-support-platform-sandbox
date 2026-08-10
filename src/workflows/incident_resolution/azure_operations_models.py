@@ -2,14 +2,9 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
-
-from src.runtime.procedure.models import (
-    OperationKind,
-)
-
 from .operation_models import (
     OperationRequest,
+    OperationResult,
 )
 
 
@@ -51,25 +46,15 @@ class VerifiedAzureOperationRequest(
     ] = "pre_call_security_verifier"
 
 
-class AzureOperationResult(BaseModel):
-    workflow_id: str
-    approval_id: str
+class AzureOperationResult(
+    OperationResult
+):
+    """
+    Especialización Azure del contrato común
+    OperationResult.
 
-    alert_id: str
+    FASE 15.3 no añade todavía campos específicos
+    de proveedor ni evidencia técnica.
+    """
 
-    correlation_id: str | None = None
-
-    procedure_id: str
-    procedure_version: str | None = None
-
-    current_step: int
-    step_id: str
-
-    operation_kind: OperationKind
-
-    target_resource: str | None = None
-
-    success: bool
-
-    response_text: str | None = None
-    error: str | None = None
+    pass
