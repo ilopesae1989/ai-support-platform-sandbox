@@ -1,17 +1,25 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import StrEnum
+from datetime import (
+    datetime,
+    timezone,
+)
+from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    BaseModel,
+    Field,
+)
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(
+        timezone.utc
+    )
 
 
-class StepStatus(StrEnum):
+class StepStatus(str, Enum):
     PENDING = "pending"
     WAITING_APPROVAL = "waiting_approval"
     APPROVED = "approved"
@@ -23,10 +31,10 @@ class StepStatus(StrEnum):
     BLOCKED = "blocked"
 
 
-class WorkflowStatus(StrEnum):
+class WorkflowStatus(str, Enum):
     INITIALIZED = "initialized"
-    RUNNING = "running"
     WAITING_HUMAN = "waiting_human"
+    RUNNING = "running"
     WAITING_OPERATION = "waiting_operation"
     WAITING_VALIDATION = "waiting_validation"
     RESOLVED = "resolved"
@@ -35,14 +43,14 @@ class WorkflowStatus(StrEnum):
     FAILED = "failed"
 
 
-class ApprovalStatus(StrEnum):
-    NOT_REQUIRED = "not_required"
+class ApprovalStatus(str, Enum):
     PENDING = "pending"
+    NOT_REQUIRED = "not_required"
     APPROVED = "approved"
     REJECTED = "rejected"
 
 
-class OperationKind(StrEnum):
+class OperationKind(str, Enum):
     READ = "read"
     WRITE = "write"
     WAIT = "wait"
@@ -50,7 +58,7 @@ class OperationKind(StrEnum):
     NONE = "none"
 
 
-class NextAction(StrEnum):
+class NextAction(str, Enum):
     EXECUTE_STEP = "execute_step"
     CONTINUE = "continue"
     REPEAT = "repeat"
@@ -70,13 +78,19 @@ class ProcedureStep(BaseModel):
     id: str
     description: str
     step_type: str
+
     operation_domain: str
     operation_kind: OperationKind
 
     target_resource: str | None = None
 
-    required_parameters: list[str] = Field(default_factory=list)
-    preconditions: list[str] = Field(default_factory=list)
+    required_parameters: list[str] = Field(
+        default_factory=list
+    )
+
+    preconditions: list[str] = Field(
+        default_factory=list
+    )
 
     expected_result: str | None = None
     verification: str | None = None
@@ -84,9 +98,13 @@ class ProcedureStep(BaseModel):
 
 class StepEvidence(BaseModel):
     success: bool
+
     result: Any | None = None
     error: str | None = None
-    collected_at: datetime = Field(default_factory=utc_now)
+
+    collected_at: datetime = Field(
+        default_factory=utc_now
+    )
 
 
 class ProcedureExecutionResult(BaseModel):
@@ -100,9 +118,23 @@ class ProcedureExecutionResult(BaseModel):
     escalation_criteria: str | None = None
 
 
+class ResolvedParameter(BaseModel):
+    name: str
+    value: str
+    source: str
+
+
 class ProcedureRuntimeState(BaseModel):
     workflow_id: str
     alert_id: str
+
+    correlation_id: str | None = None
+
+    #
+    # Se asigna exactamente una vez cuando
+    # el paso entra en WAITING_APPROVAL.
+    #
+    approval_id: str | None = None
 
     conversation_id: str | None = None
 
@@ -113,9 +145,23 @@ class ProcedureRuntimeState(BaseModel):
 
     step: ProcedureStep
 
-    workflow_status: WorkflowStatus = WorkflowStatus.INITIALIZED
-    step_status: StepStatus = StepStatus.PENDING
-    approval_status: ApprovalStatus = ApprovalStatus.PENDING
+    resolved_parameters: list[
+        ResolvedParameter
+    ] = Field(
+        default_factory=list
+    )
+
+    workflow_status: WorkflowStatus = (
+        WorkflowStatus.INITIALIZED
+    )
+
+    step_status: StepStatus = (
+        StepStatus.PENDING
+    )
+
+    approval_status: ApprovalStatus = (
+        ApprovalStatus.PENDING
+    )
 
     operation_result: StepEvidence | None = None
     verification_result: StepEvidence | None = None
@@ -127,5 +173,52 @@ class ProcedureRuntimeState(BaseModel):
     escalation_level: str | None = None
     escalation_criteria: str | None = None
 
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(
+        default_factory=utc_now
+    )
+
+    updated_at: datetime = Field(
+        default_factory=utc_now
+    )
+
+
+class ApprovedProcedureStep(BaseModel):
+    """
+    Snapshot exacto de la operación autorizada
+    después de HITL.
+    """
+
+    workflow_id: str
+
+    approval_id: str
+
+    alert_id: str
+
+    correlation_id: str | None = None
+
+    conversation_id: str | None = None
+
+    procedure_id: str
+    procedure_version: str | None = None
+
+    current_step: int
+    step_id: str
+
+    operation_domain: str
+    operation_kind: OperationKind
+
+    next_action: NextAction
+
+    target_resource: str | None = None
+
+    required_parameters: list[str] = Field(
+        default_factory=list
+    )
+
+    resolved_parameters: list[
+        ResolvedParameter
+    ] = Field(
+        default_factory=list
+    )
+
+    approved: bool = True

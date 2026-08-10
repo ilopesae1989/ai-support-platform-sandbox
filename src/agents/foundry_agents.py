@@ -1,59 +1,137 @@
+import json
+import logging
 import os
-from dataclasses import dataclass
+from typing import Mapping
 
 from agent_framework.foundry import FoundryAgent
 from azure.identity import AzureCliCredential
+from pydantic import ValidationError
 
+from .audit import AgentInvocationMetadata
+from .catalog import (
+    AgentKey,
+    FoundryAgentDefinition,
+    build_agent_catalog,
+    get_agent_definition,
+)
 from .contracts import (
     AlertTriageResult,
+    ClassificationResult,
+    KnowledgeResult,
     ProcedureExecutionResult,
 )
 
 
-@dataclass(frozen=True)
-class FoundryAgentDefinition:
-    name: str
-    version: str | None = None
+logger = logging.getLogger(__name__)
 
 
 class FoundryAgents:
     """
-    Adaptadores hacia Prompt Agents administrados en Microsoft Foundry.
+    Adaptadores hacia Prompt Agents administrados
+    en Microsoft Foundry.
 
-    Este componente:
+    Responsabilidades:
+    - resolver el agente y su versión desde el
+      catálogo central;
+    - crear FoundryAgent con la definición versionada;
+    - invocar los Prompt Agents autorizados;
+    - extraer JSON textual cuando existe contrato
+      estructurado;
+    - validar respuestas mediante contratos Pydantic;
+    - registrar metadatos mínimos de auditoría.
 
-    - NO define instrucciones;
-    - NO añade herramientas;
-    - NO añade MCP;
-    - NO modifica Knowledge;
-    - NO decide routing;
-    - NO mantiene estado de workflow.
+    No define instrucciones.
+    No añade herramientas.
+    No añade MCP.
+    No modifica Knowledge.
+    No decide routing.
+    No gestiona HITL del workflow.
+    No mantiene el estado durable del workflow.
 
-    Las definiciones de los agentes siguen residiendo en Foundry.
+    IMPORTANTE:
+    agent-azure-operations-sbx puede tener tools/MCP
+    configurados server-side en Microsoft Foundry.
+
+    Por ello su invocación puede producir efectos
+    externos y se mantiene separada de los agentes
+    puramente cognitivos.
     """
 
     def __init__(
         self,
         project_endpoint: str | None = None,
+        catalog: Mapping[
+            AgentKey,
+            FoundryAgentDefinition,
+        ] | None = None,
     ) -> None:
         self._project_endpoint = (
             project_endpoint
-            or os.environ.get("FOUNDRY_PROJECT_ENDPOINT")
+            or os.environ.get(
+                "FOUNDRY_PROJECT_ENDPOINT"
+            )
         )
 
         if not self._project_endpoint:
             raise ValueError(
-                "FOUNDRY_PROJECT_ENDPOINT no está configurado."
+                "FOUNDRY_PROJECT_ENDPOINT "
+                "no está configurado."
             )
 
-        # Para desarrollo local.
-        # En producción lo sustituiremos por ManagedIdentityCredential.
+        #
+        # Desarrollo local:
+        # Azure CLI del operador.
+        #
+        # En producción este componente se sustituirá
+        # por la identidad administrada correspondiente.
+        #
         self._credential = AzureCliCredential()
+
+        #
+        # El catálogo efectivo se construye una sola vez
+        # para esta instancia.
+        #
+        # Todas las invocaciones realizadas por la
+        # instancia utilizan por tanto una configuración
+        # consistente de versiones.
+        #
+        self._catalog = (
+            catalog
+            if catalog is not None
+            else build_agent_catalog()
+        )
+
+    def get_definition(
+        self,
+        key: AgentKey,
+    ) -> FoundryAgentDefinition:
+        """
+        Obtiene la definición efectiva de un agente.
+
+        El nombre y la versión proceden exclusivamente
+        del catálogo central.
+        """
+
+        return get_agent_definition(
+            key,
+            self._catalog,
+        )
 
     def _create_agent(
         self,
         definition: FoundryAgentDefinition,
     ) -> FoundryAgent:
+        """
+        Crea un cliente FoundryAgent para una definición
+        concreta nombre + versión.
+
+        No añade instrucciones ni herramientas desde
+        Python.
+
+        Cualquier tool/MCP pertenece a la definición
+        administrada del agente en Microsoft Foundry.
+        """
+
         return FoundryAgent(
             project_endpoint=self._project_endpoint,
             agent_name=definition.name,
@@ -62,80 +140,453 @@ class FoundryAgents:
             timeout=120.0,
         )
 
-    async def run_alert_triage(
+    @staticmethod
+    def _register_invocation(
+        definition: FoundryAgentDefinition,
+    ) -> AgentInvocationMetadata:
+        """
+        Genera y registra evidencia mínima de la
+        definición de agente utilizada.
+
+        No registra:
+        - prompts;
+        - secretos;
+        - credenciales;
+        - chain-of-thought.
+        """
+
+        metadata = (
+            AgentInvocationMetadata.from_definition(
+                definition
+            )
+        )
+
+        logger.info(
+            "foundry_agent_invocation "
+            "agent_key=%s "
+            "agent_name=%s "
+            "agent_version=%s "
+            "invoked_at_utc=%s",
+            metadata.agent_key.value,
+            metadata.agent_name,
+            metadata.agent_version,
+            metadata.invoked_at_utc,
+        )
+
+        return metadata
+
+    @staticmethod
+    def _extract_json_text(
+        response,
+    ) -> str:
+        """
+        Extrae exclusivamente el contenido textual
+        devuelto por el Prompt Agent.
+
+        No interpreta semánticamente la respuesta.
+        """
+
+        text = getattr(
+            response,
+            "text",
+            None,
+        )
+
+        if text:
+            return text.strip()
+
+        messages = getattr(
+            response,
+            "messages",
+            None,
+        )
+
+        if messages:
+            for message in reversed(messages):
+                message_text = getattr(
+                    message,
+                    "text",
+                    None,
+                )
+
+                if message_text:
+                    return message_text.strip()
+
+        raise RuntimeError(
+            "El Prompt Agent no devolvió "
+            "contenido textual."
+        )
+
+    @staticmethod
+    def _parse_json(
+        text: str,
+    ) -> dict:
+        """
+        Convierte exclusivamente JSON válido.
+
+        No intenta reparar respuestas.
+        No elimina Markdown.
+        No completa campos.
+        """
+
+        try:
+            value = json.loads(
+                text
+            )
+
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "El Prompt Agent no devolvió "
+                "JSON válido."
+            ) from exc
+
+        if not isinstance(
+            value,
+            dict,
+        ):
+            raise RuntimeError(
+                "La respuesta del Prompt Agent "
+                "debe ser un objeto JSON."
+            )
+
+        return value
+
+    async def run_classification(
         self,
         message: str,
-        *,
-        agent_version: str | None = None,
-    ) -> AlertTriageResult:
+    ) -> ClassificationResult:
+        """
+        Invoca la capacidad lógica de clasificación
+        utilizando exclusivamente la definición
+        efectiva del catálogo.
+
+        No decide routing.
+        No gestiona aprobaciones.
+        No ejecuta operaciones.
+        """
+
+        definition = self.get_definition(
+            AgentKey.CLASSIFICATION
+        )
+
+        self._register_invocation(
+            definition
+        )
+
         agent = self._create_agent(
-            FoundryAgentDefinition(
-                name="agent-alert-triage-sbx",
-                version=agent_version,
-            )
+            definition
         )
 
         response = await agent.run(
-            message,
-            options={
-                "response_format": AlertTriageResult,
-            },
+            message
         )
 
-        if response.value is None:
-            raise RuntimeError(
-                "agent-alert-triage-sbx no devolvió "
-                "una salida estructurada válida."
+        text = self._extract_json_text(
+            response
+        )
+
+        payload = self._parse_json(
+            text
+        )
+
+        try:
+            return (
+                ClassificationResult.model_validate(
+                    payload
+                )
             )
 
-        return AlertTriageResult.model_validate(
-            response.value
+        except ValidationError as exc:
+            raise RuntimeError(
+                f"{definition.name} "
+                f"v{definition.version} "
+                "devolvió un JSON que no cumple "
+                "el contrato ClassificationResult."
+            ) from exc
+
+    async def run_knowledge(
+        self,
+        message: str,
+    ) -> KnowledgeResult:
+        """
+        Invoca la capacidad lógica de conocimiento
+        utilizando exclusivamente la definición
+        efectiva del catálogo.
+
+        No interpreta aplicabilidad.
+        No decide routing.
+        No ejecuta procedimientos.
+        """
+
+        definition = self.get_definition(
+            AgentKey.KNOWLEDGE
         )
+
+        self._register_invocation(
+            definition
+        )
+
+        agent = self._create_agent(
+            definition
+        )
+
+        response = await agent.run(
+            message
+        )
+
+        text = self._extract_json_text(
+            response
+        )
+
+        payload = self._parse_json(
+            text
+        )
+
+        try:
+            return (
+                KnowledgeResult.model_validate(
+                    payload
+                )
+            )
+
+        except ValidationError as exc:
+            raise RuntimeError(
+                f"{definition.name} "
+                f"v{definition.version} "
+                "devolvió un JSON que no cumple "
+                "el contrato KnowledgeResult."
+            ) from exc
+
+    async def run_alert_triage(
+        self,
+        message: str,
+    ) -> AlertTriageResult:
+        """
+        Invoca la capacidad de triage de alertas
+        utilizando exclusivamente la definición
+        efectiva del catálogo.
+        """
+
+        definition = self.get_definition(
+            AgentKey.ALERT_TRIAGE
+        )
+
+        self._register_invocation(
+            definition
+        )
+
+        agent = self._create_agent(
+            definition
+        )
+
+        response = await agent.run(
+            message
+        )
+
+        text = self._extract_json_text(
+            response
+        )
+
+        payload = self._parse_json(
+            text
+        )
+
+        try:
+            return (
+                AlertTriageResult.model_validate(
+                    payload
+                )
+            )
+
+        except ValidationError as exc:
+            raise RuntimeError(
+                f"{definition.name} "
+                f"v{definition.version} "
+                "devolvió un JSON que no cumple "
+                "el contrato AlertTriageResult."
+            ) from exc
 
     async def run_procedure_execution(
         self,
         message: str,
-        *,
-        agent_version: str | None = None,
     ) -> ProcedureExecutionResult:
+        """
+        Invoca la capacidad de ejecución de
+        procedimientos utilizando exclusivamente
+        la definición efectiva del catálogo.
+        """
+
+        definition = self.get_definition(
+            AgentKey.PROCEDURE_EXECUTION
+        )
+
+        self._register_invocation(
+            definition
+        )
+
         agent = self._create_agent(
-            FoundryAgentDefinition(
-                name="agent-procedure-execution-sbx",
-                version=agent_version,
-            )
+            definition
         )
 
         response = await agent.run(
-            message,
-            options={
-                "response_format": ProcedureExecutionResult,
-            },
+            message
         )
 
-        if response.value is None:
-            raise RuntimeError(
-                "agent-procedure-execution-sbx no devolvió "
-                "una salida estructurada válida."
+        text = self._extract_json_text(
+            response
+        )
+
+        payload = self._parse_json(
+            text
+        )
+
+        try:
+            return (
+                ProcedureExecutionResult.model_validate(
+                    payload
+                )
             )
 
-        return ProcedureExecutionResult.model_validate(
-            response.value
-        )
+        except ValidationError as exc:
+            raise RuntimeError(
+                f"{definition.name} "
+                f"v{definition.version} "
+                "devolvió un JSON que no cumple "
+                "el contrato ProcedureExecutionResult."
+            ) from exc
 
     def get_azure_operations_agent(
         self,
-        *,
-        agent_version: str | None = None,
     ) -> FoundryAgent:
         """
-        Devuelve el agente operativo Azure administrado en Foundry.
+        Obtiene agent-azure-operations-sbx utilizando
+        exclusivamente la definición efectiva
+        del catálogo.
 
-        No se ejecuta aquí ninguna operación.
-        La invocación real quedará controlada por el workflow.
+        Este método NO ejecuta todavía ninguna operación.
+
+        La ejecución real queda controlada por el
+        IncidentResolutionWorkflow después de:
+
+        - ProcedureRuntime;
+        - HITL;
+        - ApprovedProcedureStep;
+        - routing determinista post-HITL.
         """
+
+        definition = self.get_definition(
+            AgentKey.AZURE_OPERATIONS
+        )
+
+        self._register_invocation(
+            definition
+        )
+
         return self._create_agent(
-            FoundryAgentDefinition(
-                name="agent-azure-operations-sbx",
-                version=agent_version,
-            )
+            definition
+        )
+
+    async def run_azure_operations(
+        self,
+        message: str,
+    ):
+        """
+        Invoca agent-azure-operations-sbx utilizando
+        exclusivamente la definición efectiva
+        del catálogo.
+
+        IMPORTANTE:
+
+        Este agente puede utilizar tools/MCP
+        configurados server-side en Microsoft Foundry
+        y, por tanto, su ejecución puede provocar
+        interacciones reales contra Azure.
+
+        Este método NO decide:
+
+        - si la operación está aprobada;
+        - si el paso pertenece al dominio Azure;
+        - el routing;
+        - el recurso autorizado;
+        - la operación autorizada;
+        - los parámetros autorizados;
+        - la política pre-call.
+
+        Esas responsabilidades pertenecen al
+        workflow determinista y a las fases de
+        seguridad correspondientes.
+
+        Durante FASE 13 devuelve deliberadamente
+        la respuesta nativa de Agent Framework.
+
+        No intenta:
+
+        - extraer JSON;
+        - reparar respuestas;
+        - convertir el resultado a AzureOperationResult;
+        - aprobar automáticamente solicitudes MCP.
+
+        Esto permite inspeccionar correctamente
+        respuestas MCP y posibles
+        mcp_approval_request antes de formalizar
+        el contrato operacional definitivo.
+        """
+
+        definition = self.get_definition(
+            AgentKey.AZURE_OPERATIONS
+        )
+
+        self._register_invocation(
+            definition
+        )
+
+        agent = self._create_agent(
+            definition
+        )
+
+        return await agent.run(
+            message
+        )
+
+    def get_classification_definition(
+        self,
+    ) -> FoundryAgentDefinition:
+        """
+        Devuelve la definición versionada del agente
+        de clasificación.
+
+        Todavía no realiza la invocación.
+        """
+
+        return self.get_definition(
+            AgentKey.CLASSIFICATION
+        )
+
+    def get_knowledge_definition(
+        self,
+    ) -> FoundryAgentDefinition:
+        """
+        Devuelve la definición versionada del agente
+        de conocimiento.
+
+        Todavía no realiza la invocación.
+        """
+
+        return self.get_definition(
+            AgentKey.KNOWLEDGE
+        )
+
+    def get_itsm_definition(
+        self,
+    ) -> FoundryAgentDefinition:
+        """
+        Devuelve la definición versionada del
+        agente ITSM.
+
+        La integración real con el backend ITSM
+        permanece pendiente.
+        """
+
+        return self.get_definition(
+            AgentKey.ITSM
         )

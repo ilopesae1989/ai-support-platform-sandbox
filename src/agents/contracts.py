@@ -58,6 +58,198 @@ FalsePositiveAssessment = Literal[
 ]
 
 
+# ============================================================
+# CLASSIFICATION AGENT CONTRACT
+# ============================================================
+
+class ClassificationResult(BaseModel):
+    """
+    Contrato de salida del agente de clasificación.
+
+    Responsabilidad:
+    representar exclusivamente la clasificación técnica
+    inicial de una alerta.
+
+    No contiene:
+    - routing;
+    - nombres de otros agentes;
+    - decisiones de aprobación;
+    - procedimientos;
+    - criticidad corporativa;
+    - escalado;
+    - operaciones.
+    """
+
+    alert_id: str
+
+    alert_classification: str
+
+    technical_domain: TechnicalDomain
+
+    affected_resource: str | None = None
+
+    affected_service: str | None = None
+
+    classification_summary: str
+
+    requires_clarification: bool
+
+    missing_information: list[str] = Field(
+        default_factory=list
+    )
+
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+    )
+
+    @model_validator(mode="after")
+    def validate_classification_consistency(
+        self,
+    ):
+        """
+        Valida coherencia determinista del resultado
+        del Classification Agent.
+
+        Estas reglas pertenecen al contrato Python
+        y no dependen del LLM.
+        """
+
+        if (
+            self.requires_clarification
+            and not self.missing_information
+        ):
+            raise ValueError(
+                "requires_clarification=true requiere "
+                "missing_information."
+            )
+
+        if (
+            not self.requires_clarification
+            and self.missing_information
+        ):
+            raise ValueError(
+                "requires_clarification=false requiere "
+                "missing_information=[]."
+            )
+
+        return self
+
+# ============================================================
+# KNOWLEDGE AGENT CONTRACT
+# ============================================================
+
+class KnowledgeDocument(BaseModel):
+    """
+    Documento corporativo recuperado mediante Foundry IQ.
+
+    id representa exclusivamente el identificador
+    documental corporativo cuando esté disponible.
+    """
+
+    id: str | None = None
+    name: str
+    version: str | None = None
+    relevance_summary: str
+
+
+class KnowledgeResult(BaseModel):
+    """
+    Contrato de salida del Knowledge Agent.
+
+    Representa únicamente conocimiento corporativo
+    recuperado y fundamentado.
+
+    No decide:
+    - procedure_match;
+    - knowledge_coverage;
+    - criticidad;
+    - escalado;
+    - ejecución;
+    - routing.
+    """
+
+    alert_id: str | None = None
+
+    knowledge_found: bool
+
+    documents: list[KnowledgeDocument] = Field(
+        default_factory=list
+    )
+
+    knowledge_summary: str | None = None
+
+    limitations: list[str] = Field(
+        default_factory=list
+    )
+
+    confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+    )
+
+    @model_validator(mode="after")
+    def validate_knowledge_consistency(
+        self,
+    ):
+        """
+        Reglas deterministas del contrato Knowledge.
+        """
+
+        if self.knowledge_found:
+            if not self.documents:
+                raise ValueError(
+                    "knowledge_found=true requiere "
+                    "al menos un documento."
+                )
+
+            if self.knowledge_summary is None:
+                raise ValueError(
+                    "knowledge_found=true requiere "
+                    "knowledge_summary."
+                )
+
+        else:
+            if self.documents:
+                raise ValueError(
+                    "knowledge_found=false requiere "
+                    "documents=[]."
+                )
+
+            if self.knowledge_summary is not None:
+                raise ValueError(
+                    "knowledge_found=false requiere "
+                    "knowledge_summary=null."
+                )
+
+            if self.confidence != 0.0:
+                raise ValueError(
+                    "knowledge_found=false requiere "
+                    "confidence=0.0."
+                )
+
+        #
+        # Evitar duplicados cuando existe un identificador
+        # documental corporativo.
+        #
+        document_ids = [
+            document.id
+            for document in self.documents
+            if document.id is not None
+        ]
+
+        if len(document_ids) != len(set(document_ids)):
+            raise ValueError(
+                "documents contiene identificadores "
+                "documentales duplicados."
+            )
+
+        return self
+
+# ============================================================
+# TRIAGE AGENT CONTRACT
+# ============================================================
+
 class ProcedureReference(BaseModel):
     id: str
     name: str
@@ -229,6 +421,10 @@ class AlertTriageResult(BaseModel):
 
         return self
 
+
+# ============================================================
+# PROCEDURE EXECUTION AGENT CONTRACT
+# ============================================================
 
 ProcedureStepType = Literal[
     "information",
