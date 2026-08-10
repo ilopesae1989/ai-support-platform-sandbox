@@ -8,12 +8,30 @@ from src.runtime.procedure.models import (
     ApprovedProcedureStep,
     NextAction,
     OperationKind,
+    ResolvedParameter,
 )
+
+from src.workflows.incident_resolution.azure_operations import (
+    build_azure_operation_request,
+)
+
 from src.workflows.incident_resolution.azure_operations_models import (
     AzureOperationResult,
+    VerifiedAzureOperationRequest,
 )
+
 from src.workflows.incident_resolution.executors.azure_operations import (
     AzureOperationsExecutor,
+)
+
+from src.workflows.incident_resolution.pre_call_security import (
+    PreCallSecurityVerifier,
+)
+
+
+APPROVAL_ID = (
+    "apr-11111111-1111-4111-"
+    "8111-111111111111"
 )
 
 
@@ -38,7 +56,9 @@ class FakeFoundryAgents:
         )
 
         return FakeNativeResponse(
-            text="Azure operation fake result."
+            text=(
+                "Azure operation fake result."
+            )
         )
 
 
@@ -59,47 +79,105 @@ class FailingFoundryAgents:
         )
 
 
-def create_step(
-    *,
-    domain: str = "azure",
-    approved: bool = True,
+def create_approved_step(
 ) -> ApprovedProcedureStep:
     return ApprovedProcedureStep(
         workflow_id="wf-azure-001",
+
+        approval_id=(
+            APPROVAL_ID
+        ),
+
         alert_id="ALT-AZ-001",
+
+        correlation_id="corr-azure-001",
+
         conversation_id="conv-001",
+
         procedure_id="PROC-AZ-001",
+
         procedure_version="v1.0",
+
         current_step=1,
+
         step_id="1",
-        operation_domain=domain,
-        operation_kind=OperationKind.READ,
-        next_action=NextAction.EXECUTE_STEP,
+
+        operation_domain="azure",
+
+        operation_kind=(
+            OperationKind.READ
+        ),
+
+        next_action=(
+            NextAction.EXECUTE_STEP
+        ),
+
         target_resource=(
             "/subscriptions/sub-001/"
             "resourceGroups/rg-demo"
         ),
+
         required_parameters=[
-            "resource_group=rg-demo",
+            "resource_group",
         ],
-        approved=approved,
+
+        resolved_parameters=[
+            ResolvedParameter(
+                name="resource_group",
+
+                value="rg-demo",
+
+                source=(
+                    "normalized_alert."
+                    "resource_group"
+                ),
+            )
+        ],
+
+        approved=True,
+    )
+
+
+def create_verified_request(
+) -> VerifiedAzureOperationRequest:
+    step = (
+        create_approved_step()
+    )
+
+    candidate = (
+        build_azure_operation_request(
+            step
+        )
+    )
+
+    return (
+        PreCallSecurityVerifier.verify(
+            approved_step=step,
+            candidate=candidate,
+        )
     )
 
 
 def build_executor_workflow(
     agents,
 ):
-    executor = AzureOperationsExecutor(
-        agents=agents,
+    executor = (
+        AzureOperationsExecutor(
+            agents=agents,
+        )
     )
 
     return (
         WorkflowBuilder(
             start_executor=executor,
+
             output_from=[
                 executor,
             ],
-            name="azure-operations-test",
+
+            name=(
+                "azure-operations-test"
+            ),
         )
         .build()
     )
@@ -107,16 +185,24 @@ def build_executor_workflow(
 
 @pytest.mark.asyncio
 async def test_executor_invokes_azure_operations_agent():
-    agents = FakeFoundryAgents()
+    agents = (
+        FakeFoundryAgents()
+    )
 
-    workflow = build_executor_workflow(
-        agents
+    workflow = (
+        build_executor_workflow(
+            agents
+        )
+    )
+
+    request = (
+        create_verified_request()
     )
 
     outputs = []
 
     async for event in workflow.run(
-        create_step(),
+        request,
         stream=True,
     ):
         if event.type == "output":
@@ -126,24 +212,57 @@ async def test_executor_invokes_azure_operations_agent():
 
     assert len(outputs) == 1
 
-    assert len(agents.calls) == 1
+    assert len(
+        agents.calls
+    ) == 1
 
-    prompt = agents.calls[0]
+    prompt = (
+        agents.calls[0]
+    )
 
-    assert "wf-azure-001" in prompt
-    assert "ALT-AZ-001" in prompt
-    assert "PROC-AZ-001" in prompt
-    assert "rg-demo" in prompt
-    assert "Tipo: read" in prompt
+    assert (
+        "wf-azure-001"
+        in prompt
+    )
 
-    result = outputs[0]
+    assert (
+        APPROVAL_ID
+        in prompt
+    )
+
+    assert (
+        "ALT-AZ-001"
+        in prompt
+    )
+
+    assert (
+        "PROC-AZ-001"
+        in prompt
+    )
+
+    assert (
+        "resource_group = rg-demo"
+        in prompt
+    )
+
+    assert (
+        "Tipo: read"
+        in prompt
+    )
+
+    result = (
+        outputs[0]
+    )
 
     assert isinstance(
         result,
         AzureOperationResult,
     )
 
-    assert result.success is True
+    assert (
+        result.success
+        is True
+    )
 
     assert (
         result.response_text
@@ -155,18 +274,24 @@ async def test_executor_invokes_azure_operations_agent():
 
 @pytest.mark.asyncio
 async def test_executor_preserves_operation_identity():
-    agents = FakeFoundryAgents()
+    agents = (
+        FakeFoundryAgents()
+    )
 
-    workflow = build_executor_workflow(
-        agents
+    workflow = (
+        build_executor_workflow(
+            agents
+        )
+    )
+
+    request = (
+        create_verified_request()
     )
 
     outputs = []
 
-    step = create_step()
-
     async for event in workflow.run(
-        step,
+        request,
         stream=True,
     ):
         if event.type == "output":
@@ -176,61 +301,81 @@ async def test_executor_preserves_operation_identity():
 
     assert len(outputs) == 1
 
-    result = outputs[0]
+    result = (
+        outputs[0]
+    )
 
     assert (
         result.workflow_id
-        == step.workflow_id
+        == request.workflow_id
+    )
+
+    assert (
+        result.approval_id
+        == request.approval_id
     )
 
     assert (
         result.alert_id
-        == step.alert_id
+        == request.alert_id
+    )
+
+    assert (
+        result.correlation_id
+        == request.correlation_id
     )
 
     assert (
         result.procedure_id
-        == step.procedure_id
+        == request.procedure_id
     )
 
     assert (
         result.procedure_version
-        == step.procedure_version
+        == request.procedure_version
     )
 
     assert (
         result.current_step
-        == step.current_step
+        == request.current_step
     )
 
     assert (
         result.step_id
-        == step.step_id
+        == request.step_id
     )
 
     assert (
         result.operation_kind
-        == step.operation_kind
+        == request.operation_kind
     )
 
     assert (
         result.target_resource
-        == step.target_resource
+        == request.target_resource
     )
 
 
 @pytest.mark.asyncio
 async def test_executor_fails_closed_when_foundry_fails():
-    agents = FailingFoundryAgents()
+    agents = (
+        FailingFoundryAgents()
+    )
 
-    workflow = build_executor_workflow(
-        agents
+    workflow = (
+        build_executor_workflow(
+            agents
+        )
+    )
+
+    request = (
+        create_verified_request()
     )
 
     outputs = []
 
     async for event in workflow.run(
-        create_step(),
+        request,
         stream=True,
     ):
         if event.type == "output":
@@ -240,43 +385,31 @@ async def test_executor_fails_closed_when_foundry_fails():
 
     assert len(outputs) == 1
 
-    result = outputs[0]
+    result = (
+        outputs[0]
+    )
 
     assert isinstance(
         result,
         AzureOperationResult,
     )
 
-    assert result.success is False
+    assert (
+        result.success
+        is False
+    )
 
-    assert result.response_text is None
+    assert (
+        result.response_text
+        is None
+    )
 
-    assert result.error is not None
+    assert (
+        result.error
+        is not None
+    )
 
     assert (
         "Foundry unavailable"
         in result.error
     )
-
-
-@pytest.mark.asyncio
-async def test_executor_rejects_non_azure_step_before_foundry_call():
-    agents = FakeFoundryAgents()
-
-    workflow = build_executor_workflow(
-        agents
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="dominio Azure",
-    ):
-        async for _ in workflow.run(
-            create_step(
-                domain="database"
-            ),
-            stream=True,
-        ):
-            pass
-
-    assert agents.calls == []

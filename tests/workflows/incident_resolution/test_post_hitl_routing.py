@@ -26,6 +26,7 @@ def create_step(
 ) -> ApprovedProcedureStep:
     return ApprovedProcedureStep(
         workflow_id="wf-001",
+        approval_id="apr-post-hitl-routing-001",
         alert_id="ALT-001",
         procedure_id="PROC-001",
         procedure_version="v1.0",

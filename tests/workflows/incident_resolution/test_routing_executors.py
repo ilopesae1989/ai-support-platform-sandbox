@@ -18,7 +18,7 @@ from src.workflows.incident_resolution.executors.routing import (
 from src.workflows.incident_resolution.models import (
     KnowledgeReviewRequest,
     ManualAnalysisRequest,
-    ProcedureExecutionRequest,
+    ProcedureExecutionInput,
     TriagedAlertContext,
 )
 
@@ -213,26 +213,88 @@ async def test_procedure_request_executor_builds_request():
 
     result = ctx.messages[0]
 
+    #
+    # El executor no envía directamente el request
+    # cognitivo.
+    #
+    # Desde FASE 12 mantiene separados:
+    #
+    # - request cognitivo;
+    # - identidad determinista de ejecución;
+    # - OperationalContext autoritativo.
+    #
     assert isinstance(
         result,
-        ProcedureExecutionRequest,
+        ProcedureExecutionInput,
     )
 
-    assert result.alert_id == "ALT-TEST-001"
+    request = result.request
 
-    assert result.procedure_found is True
-    assert result.procedure_match == "exact"
-    assert result.execution_eligible is True
+    assert request.alert_id == "ALT-TEST-001"
 
-    assert result.procedure_id == "PROC-001"
-    assert result.procedure_name == "Test Procedure"
-    assert result.procedure_version == "v1"
+    assert request.procedure_found is True
+    assert request.procedure_match == "exact"
+    assert request.execution_eligible is True
 
-    assert result.affected_resource == "SERVER01"
+    assert request.procedure_id == "PROC-001"
+    assert request.procedure_name == "Test Procedure"
+    assert request.procedure_version == "v1"
 
     assert (
-        result.incident_description
+        request.affected_resource
+        == "SERVER01"
+    )
+
+    assert (
+        request.incident_description
         == "Alerta utilizada para pruebas de routing."
+    )
+
+    #
+    # La identidad de ejecución nace en Python
+    # antes de Procedure v5.
+    #
+    assert (
+        result.execution_identity.workflow_id
+        .startswith("wf-")
+    )
+
+    assert (
+        result.execution_identity.alert_id
+        == "ALT-TEST-001"
+    )
+
+    assert (
+        result.execution_identity.correlation_id
+        == "corr-test-001"
+    )
+
+    #
+    # El contexto operacional no procede del LLM.
+    #
+    assert (
+        result.operational_context.alert_id
+        == "ALT-TEST-001"
+    )
+
+    assert (
+        result.operational_context.affected_resource
+        == "SERVER01"
+    )
+
+    assert (
+        result.operational_context.resource_type
+        == "TestResource"
+    )
+
+    assert (
+        result.operational_context.service
+        == "Test Service"
+    )
+
+    assert (
+        result.operational_context.correlation_id
+        == "corr-test-001"
     )
 
 

@@ -7,6 +7,7 @@ from src.runtime.procedure.models import (
     ProcedureReference,
     ProcedureRuntimeState,
     ProcedureStep,
+    ResolvedParameter,
     StepStatus,
     WorkflowStatus,
 )
@@ -43,12 +44,16 @@ def create_state() -> ProcedureRuntimeState:
 def test_approved_state_builds_approved_step():
     state = create_state()
 
+    state.approval_id = (
+        "apr-approved-step-001"
+    )
+
     state.resolved_parameters = [
-        {
-            "name": "instance_name",
-            "value": "prod-sql",
-            "source": "manual",
-        }
+        ResolvedParameter(
+            name="instance_name",
+            value="prod-sql",
+            source="manual",
+        )
     ]
 
     state.step_status = (
@@ -70,6 +75,11 @@ def test_approved_state_builds_approved_step():
     )
 
     assert result.approved is True
+
+    assert (
+        result.approval_id
+        == "apr-approved-step-001"
+    )
 
     assert (
         result.workflow_id
