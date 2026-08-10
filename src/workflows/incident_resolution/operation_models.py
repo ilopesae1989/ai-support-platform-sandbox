@@ -11,6 +11,10 @@ from src.runtime.procedure.models import (
     ResolvedParameter,
 )
 
+from .operation_evidence import (
+    OperationEvidence,
+)
+
 
 class OperationRequest(BaseModel):
     """
@@ -75,13 +79,19 @@ class OperationRequest(BaseModel):
 class OperationResult(BaseModel):
     """
     Contrato común vendor-neutral del resultado
-    actualmente producido por un executor de
-    operaciones.
+    producido por un executor de operaciones.
 
-    FASE 15.3 realiza únicamente la extracción del
-    contrato existente.
+    OperationResult representa el resultado lógico
+    del executor.
 
-    No incorpora todavía:
+    OperationEvidence representa, por separado, la
+    evidencia técnica que permitirá demostrar qué
+    ocurrió realmente durante la operación.
+
+    FASE 15.4 introduce únicamente esa separación
+    estructural.
+
+    Todavía no incorpora:
 
     - operation_id;
     - identidad de correlación adicional;
@@ -115,3 +125,5 @@ class OperationResult(BaseModel):
 
     response_text: str | None = None
     error: str | None = None
+
+    evidence: OperationEvidence | None = None

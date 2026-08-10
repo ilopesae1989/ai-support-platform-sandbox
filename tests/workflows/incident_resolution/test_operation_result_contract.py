@@ -25,6 +25,7 @@ CURRENT_OPERATION_RESULT_FIELDS = (
     "success",
     "response_text",
     "error",
+    "evidence",
 )
 
 
@@ -74,15 +75,13 @@ def create_azure_result(
     )
 
 
-def test_operation_result_contains_exact_current_contract():
+def test_operation_result_contains_current_contract():
     """
-    FASE 15.3
+    FASE 15.3 / 15.4
 
-    OperationResult extrae exactamente el contrato
-    de resultado existente.
-
-    No se adelantan campos pertenecientes a las
-    siguientes subfases.
+    OperationResult conserva el contrato común
+    extraído en 15.3 y añade únicamente la relación
+    tipada con OperationEvidence.
     """
 
     assert (
@@ -94,11 +93,6 @@ def test_operation_result_contains_exact_current_contract():
 
 
 def test_azure_operation_result_reuses_common_contract():
-    """
-    AzureOperationResult debe ser una especialización
-    del resultado vendor-neutral.
-    """
-
     assert issubclass(
         AzureOperationResult,
         OperationResult,
@@ -113,11 +107,6 @@ def test_azure_operation_result_reuses_common_contract():
 
 
 def test_azure_result_is_common_operation_result():
-    """
-    Un resultado Azure producido por el executor debe
-    ser consumible como OperationResult común.
-    """
-
     result = (
         create_azure_result()
     )
@@ -139,15 +128,26 @@ def test_azure_result_is_common_operation_result():
         == OperationKind.READ
     )
 
+    #
+    # FASE 15.4 todavía no fabrica evidencia
+    # técnica.
+    #
+    assert result.evidence is None
+
 
 def test_operation_result_does_not_advance_later_phases():
     """
-    FASE 15.3 no debe introducir accidentalmente
-    contratos reservados para 15.5-15.11.
+    FASE 15.4 introduce evidence, pero no adelanta
+    los campos que pertenecen a 15.5-15.11.
     """
 
     fields = (
         OperationResult.model_fields
+    )
+
+    assert (
+        "evidence"
+        in fields
     )
 
     assert (
@@ -200,21 +200,8 @@ def test_operation_result_does_not_advance_later_phases():
         not in fields
     )
 
-    assert (
-        "evidence"
-        not in fields
-    )
-
 
 def test_common_result_supports_failure_without_changing_semantics():
-    """
-    El contrato común preserva también el resultado
-    de fallo existente.
-
-    La semántica técnica definitiva de success se
-    endurecerá en fases posteriores.
-    """
-
     result = (
         create_azure_result(
             success=False
@@ -237,3 +224,5 @@ def test_common_result_supports_failure_without_changing_semantics():
         result.error
         == "RuntimeError: test failure"
     )
+
+    assert result.evidence is None
