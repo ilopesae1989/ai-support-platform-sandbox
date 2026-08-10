@@ -625,3 +625,134 @@ class ProcedureExecutionResult(BaseModel):
                 )
 
         return self
+
+# ============================================================
+# PROCEDURE VALIDATION AGENT CONTRACT
+# ============================================================
+
+ProcedureValidationStatus = Literal[
+    "satisfied",
+    "not_satisfied",
+    "indeterminate",
+]
+
+ProcedureValidationNextAction = Literal[
+    "continue",
+    "repeat",
+    "wait",
+    "resolved",
+    "escalate",
+    "blocked",
+]
+
+
+class ProcedureValidationEscalation(BaseModel):
+    """
+    Propuesta cognitiva de escalado.
+
+    No modifica ProcedureRuntimeState
+    ni constituye autorización.
+    """
+
+    model_config = {
+        "extra": "forbid",
+        "frozen": True,
+        "revalidate_instances": "always",
+    }
+
+    required: bool
+    team: str | None = None
+    level: str | None = None
+    criteria: str | None = None
+
+    @model_validator(mode="after")
+    def validate_escalation_consistency(
+        self,
+    ):
+        if self.required:
+            if (
+                self.team is None
+                and self.level is None
+                and self.criteria is None
+            ):
+                raise ValueError(
+                    "required=true requiere "
+                    "algún dato de escalado."
+                )
+
+        else:
+            if (
+                self.team is not None
+                or self.level is not None
+                or self.criteria is not None
+            ):
+                raise ValueError(
+                    "required=false no puede "
+                    "contener datos de escalado."
+                )
+
+        return self
+
+
+class ProcedureValidationResult(BaseModel):
+    """
+    Salida cognitiva del Procedure Agent
+    al interpretar un resultado operacional.
+
+    proposed_next_action es únicamente una
+    propuesta. Python decidirá posteriormente
+    si la transición es válida.
+
+    Deliberadamente NO contiene:
+    - workflow_status;
+    - step_status;
+    - approval_status;
+    - target_resource;
+    - resolved_parameters;
+    - success;
+    - technical_success.
+    """
+
+    model_config = {
+        "extra": "forbid",
+        "frozen": True,
+        "revalidate_instances": "always",
+    }
+
+    operation_id: str
+
+    validation_status: (
+        ProcedureValidationStatus
+    )
+
+    proposed_next_action: (
+        ProcedureValidationNextAction
+    )
+
+    validation_summary: str
+
+    escalation: (
+        ProcedureValidationEscalation
+    )
+
+    @model_validator(mode="after")
+    def validate_result_consistency(
+        self,
+    ):
+        if (
+            self.proposed_next_action
+            == "escalate"
+        ):
+            if not self.escalation.required:
+                raise ValueError(
+                    "proposed_next_action=escalate "
+                    "requiere escalation.required=true."
+                )
+
+        elif self.escalation.required:
+            raise ValueError(
+                "Sólo proposed_next_action=escalate "
+                "puede declarar escalation.required=true."
+            )
+
+        return self

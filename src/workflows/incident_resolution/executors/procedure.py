@@ -193,6 +193,8 @@ class ProcedureExecutionExecutor(Executor):
         )
 
         return f"""
+mode = "prepare_step"
+
 Prepara la ejecución del procedimiento asociado a la siguiente alerta:
 
 AlertId: {request.alert_id}

@@ -288,3 +288,20 @@ def test_runtime_blocks_operational_alert_swap():
         ProcedureRuntimeExecutor._validate_execution_context(
             execution_context
         )
+def test_procedure_prompt_declares_prepare_step_mode():
+    prompt = (
+        ProcedureExecutionExecutor
+        ._build_prompt(
+            create_request()
+        )
+    )
+
+    assert (
+        'mode = "prepare_step"'
+        in prompt
+    )
+
+    assert (
+        'mode = "validate_result"'
+        not in prompt
+    )

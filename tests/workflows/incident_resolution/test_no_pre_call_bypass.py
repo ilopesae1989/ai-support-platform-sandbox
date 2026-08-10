@@ -423,21 +423,22 @@ def test_verified_request_preserves_approval_identity():
     )
 
 
-def test_workflow_source_contains_pre_call_edge_and_no_direct_azure_edge():
+def test_workflow_source_contains_pre_call_and_lifecycle_without_azure_bypass():
     """
-    Defensa estructural adicional.
+    Defensa estructural FASE 16.2.3.
 
-    El switch post-HITL debe enviar Azure a:
+    La única secuencia Azure permitida es:
 
+        approval
+            ↓
         azure_pre_call
+            ↓
+        operation_start
+            ↓
+        azure_route
 
-    y únicamente después:
-
-        azure_pre_call -> azure_route
-
-    No debe existir:
-
-        approval -> azure_route
+    No puede existir bypass desde approval
+    ni desde azure_pre_call hacia Azure Operations.
     """
 
     source = (
@@ -452,10 +453,29 @@ def test_workflow_source_contains_pre_call_edge_and_no_direct_azure_edge():
     )
 
     assert (
+        "operation_start"
+        in source
+    )
+
+    assert (
+        ".add_edge(\n"
+        "            azure_pre_call,\n"
+        "            operation_start,"
+        in source
+    )
+
+    assert (
+        ".add_edge(\n"
+        "            operation_start,\n"
+        "            azure_route,"
+        in source
+    )
+
+    assert (
         ".add_edge(\n"
         "            azure_pre_call,\n"
         "            azure_route,"
-        in source
+        not in source
     )
 
     assert (

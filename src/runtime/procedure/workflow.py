@@ -30,6 +30,10 @@ from .runtime import (
     ProcedureRuntime,
 )
 
+from .workflow_state import (
+    store_procedure_runtime_state,
+)
+
 
 @dataclass
 class ApprovalRequest:
@@ -367,6 +371,11 @@ class ProcedureApprovalExecutor(Executor):
                     create_approval_id()
                 )
 
+            store_procedure_runtime_state(
+                ctx,
+                state,
+            )
+
             self._pending_state = (
                 state
             )
@@ -383,6 +392,11 @@ class ProcedureApprovalExecutor(Executor):
             )
 
             return
+
+        store_procedure_runtime_state(
+            ctx,
+            state,
+        )
 
         await ctx.yield_output(
             ApprovalOutcome(
@@ -427,6 +441,11 @@ class ProcedureApprovalExecutor(Executor):
                 pending_state,
                 approved=response,
             )
+        )
+
+        store_procedure_runtime_state(
+            ctx,
+            state,
         )
 
         #

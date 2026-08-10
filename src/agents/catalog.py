@@ -65,7 +65,7 @@ _DEFAULT_AGENT_CATALOG: dict[
     AgentKey.PROCEDURE_EXECUTION: FoundryAgentDefinition(
         key=AgentKey.PROCEDURE_EXECUTION,
         name="agent-procedure-execution-sbx",
-        version="5",
+        version="6",
     ),
     AgentKey.AZURE_OPERATIONS: FoundryAgentDefinition(
         key=AgentKey.AZURE_OPERATIONS,

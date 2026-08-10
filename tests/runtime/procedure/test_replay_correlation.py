@@ -319,6 +319,24 @@ class FakeResponseContext:
     def __init__(self):
         self.messages = []
         self.outputs = []
+        self.states = {}
+
+    def get_state(
+        self,
+        key,
+        default=None,
+    ):
+        return self.states.get(
+            key,
+            default,
+        )
+
+    def set_state(
+        self,
+        key,
+        value,
+    ):
+        self.states[key] = value
 
     async def send_message(
         self,

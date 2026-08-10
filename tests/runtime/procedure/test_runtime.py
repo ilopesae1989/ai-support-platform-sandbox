@@ -153,6 +153,17 @@ def test_continue_decision_marks_step_succeeded(
         ),
     )
 
+    state = runtime.register_verification_result(
+        state,
+        StepEvidence(
+            success=True,
+            result={
+                "validation_status": "satisfied",
+                "proposed_next_action": "continue",
+            },
+        ),
+    )
+
     state = runtime.apply_procedure_decision(
         state,
         ProcedureExecutionResult(
@@ -180,6 +191,17 @@ def test_resolved_decision_finishes_workflow(
         ),
     )
 
+    state = runtime.register_verification_result(
+        state,
+        StepEvidence(
+            success=True,
+            result={
+                "validation_status": "satisfied",
+                "proposed_next_action": "resolved",
+            },
+        ),
+    )
+
     state = runtime.apply_procedure_decision(
         state,
         ProcedureExecutionResult(
@@ -203,6 +225,17 @@ def test_escalation_decision(
         StepEvidence(
             success=False,
             error="Replica remains unhealthy",
+        ),
+    )
+
+    state = runtime.register_verification_result(
+        state,
+        StepEvidence(
+            success=False,
+            result={
+                "validation_status": "not_satisfied",
+                "proposed_next_action": "escalate",
+            },
         ),
     )
 

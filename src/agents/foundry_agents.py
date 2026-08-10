@@ -19,6 +19,7 @@ from .contracts import (
     ClassificationResult,
     KnowledgeResult,
     ProcedureExecutionResult,
+    ProcedureValidationResult,
 )
 
 
@@ -453,6 +454,64 @@ class FoundryAgents:
                 f"v{definition.version} "
                 "devolvió un JSON que no cumple "
                 "el contrato ProcedureExecutionResult."
+            ) from exc
+
+    async def run_procedure_validation(
+        self,
+        message: str,
+    ) -> ProcedureValidationResult:
+        """
+        Invoca la interpretación post-operación
+        del Procedure Agent.
+
+        Utiliza PROCEDURE_EXECUTION, pero valida
+        exclusivamente ProcedureValidationResult.
+
+        No repara respuestas ni convierte
+        silenciosamente contratos antiguos.
+        """
+
+        definition = self.get_definition(
+            AgentKey.PROCEDURE_EXECUTION
+        )
+
+        self._register_invocation(
+            definition
+        )
+
+        agent = self._create_agent(
+            definition
+        )
+
+        response = await agent.run(
+            message
+        )
+
+        response_text = (
+            self._extract_json_text(
+                response
+            )
+        )
+
+        payload = self._parse_json(
+            response_text
+        )
+
+        try:
+            return (
+                ProcedureValidationResult
+                .model_validate(
+                    payload
+                )
+            )
+
+        except ValidationError as exc:
+            raise RuntimeError(
+                f"{definition.name} "
+                f"v{definition.version} "
+                "devolvió un JSON que no cumple "
+                "el contrato "
+                "ProcedureValidationResult."
             ) from exc
 
     def get_azure_operations_agent(

@@ -20,6 +20,10 @@ from src.workflows.incident_resolution.executors.azure_pre_call import (
     AzurePreCallSecurityExecutor,
 )
 
+from src.workflows.incident_resolution.executors.operation_lifecycle import (
+    OperationStartExecutor,
+)
+
 from src.workflows.incident_resolution.executors.classification import (
     ClassificationExecutor,
 )
@@ -221,6 +225,10 @@ def build_incident_resolution_workflow(
 
     azure_pre_call = (
         AzurePreCallSecurityExecutor()
+    )
+
+    operation_start = (
+        OperationStartExecutor()
     )
 
     #
@@ -471,12 +479,20 @@ def build_incident_resolution_workflow(
         )
 
         #
-        # ÚNICO edge que puede alcanzar
-        # AzureOperationsExecutor.
+        # Pre-call verificado
+        #     ↓
+        # lifecycle determinista
+        #     ↓
+        # Azure Operations
         #
 
         .add_edge(
             azure_pre_call,
+            operation_start,
+        )
+
+        .add_edge(
+            operation_start,
             azure_route,
         )
 

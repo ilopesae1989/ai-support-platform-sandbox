@@ -23,6 +23,8 @@ async def test_foundry_procedure_execution_live():
     agents = FoundryAgents()
 
     prompt = """
+mode = "prepare_step"
+
 Prepara la ejecución del procedimiento asociado a la siguiente alerta:
 
 AlertId: ALT-SQL-AG-001

@@ -138,12 +138,64 @@ class ProcedureRuntime:
 
         state.operation_result = evidence
 
-        if evidence.success:
-            state.step_status = StepStatus.WAITING_VALIDATION
-            state.workflow_status = WorkflowStatus.WAITING_VALIDATION
-        else:
-            state.step_status = StepStatus.FAILED
-            state.workflow_status = WorkflowStatus.WAITING_VALIDATION
+        #
+        # success pertenece al resultado operacional.
+        # No constituye una decisión semántica sobre
+        # el ProcedureStep.
+        #
+        # Tanto éxito como fallo de backend deben ser
+        # interpretados posteriormente por la fase de
+        # Procedure Validation.
+        #
+        state.step_status = (
+            StepStatus.WAITING_VALIDATION
+        )
+
+        state.workflow_status = (
+            WorkflowStatus.WAITING_VALIDATION
+        )
+
+        state.updated_at = utc_now()
+
+        return state
+
+    def register_verification_result(
+        self,
+        state: ProcedureRuntimeState,
+        evidence: StepEvidence,
+    ) -> ProcedureRuntimeState:
+        """
+        Registra exactamente una validación semántica
+        para el resultado operacional actual.
+
+        No interpreta la evidencia.
+        No decide la transición.
+        """
+
+        if (
+            state.step_status
+            != StepStatus.WAITING_VALIDATION
+            or state.workflow_status
+            != WorkflowStatus.WAITING_VALIDATION
+        ):
+            raise ValueError(
+                "La validación sólo puede registrarse "
+                "en estado waiting_validation."
+            )
+
+        if state.operation_result is None:
+            raise ValueError(
+                "No existe operation_result registrado "
+                "para validar."
+            )
+
+        if state.verification_result is not None:
+            raise ValueError(
+                "La validación del resultado actual "
+                "ya fue registrada."
+            )
+
+        state.verification_result = evidence
 
         state.updated_at = utc_now()
 
@@ -155,51 +207,167 @@ class ProcedureRuntime:
         decision: ProcedureExecutionResult,
     ) -> ProcedureRuntimeState:
         """
-        Aplica de forma determinista la decisión devuelta por
-        Procedure Execution Agent después de interpretar la evidencia.
+        Aplica una transición ya validada por la capa
+        determinista del workflow.
 
-        El runtime no decide el camino; solo ejecuta la transición.
+        Esta función NO interpreta Procedure Validation.
+        Sólo aplica una decisión estructurada después de
+        comprobar el lifecycle autoritativo.
         """
 
-        if decision.next_action == NextAction.CONTINUE:
-            state.step_status = StepStatus.SUCCEEDED
-            state.workflow_status = WorkflowStatus.RUNNING
-
-        elif decision.next_action == NextAction.REPEAT:
-            state.retry_count += 1
-            state.step_status = StepStatus.PENDING
-            state.workflow_status = WorkflowStatus.RUNNING
-
-        elif decision.next_action == NextAction.WAIT:
-            state.step_status = StepStatus.WAITING_VALIDATION
-            state.workflow_status = WorkflowStatus.WAITING_VALIDATION
-
-        elif decision.next_action == NextAction.RESOLVED:
-            state.step_status = StepStatus.SUCCEEDED
-            state.workflow_status = WorkflowStatus.RESOLVED
-
-        elif decision.next_action == NextAction.ESCALATE:
-            state.step_status = StepStatus.FAILED
-            state.workflow_status = WorkflowStatus.ESCALATION_REQUIRED
-
-            state.escalation_required = True
-            state.escalation_team = decision.escalation_team
-            state.escalation_level = decision.escalation_level
-            state.escalation_criteria = decision.escalation_criteria
-
-        elif decision.next_action == NextAction.BLOCKED:
-            state.step_status = StepStatus.BLOCKED
-            state.workflow_status = WorkflowStatus.BLOCKED
-
-        elif decision.next_action == NextAction.EXECUTE_STEP:
+        if (
+            state.step_status
+            != StepStatus.WAITING_VALIDATION
+            or state.workflow_status
+            != WorkflowStatus.WAITING_VALIDATION
+        ):
             raise ValueError(
-                "execute_step no es una decisión válida después "
-                "de ejecutar un paso."
+                "La decisión sólo puede aplicarse "
+                "en estado waiting_validation."
+            )
+
+        if state.operation_result is None:
+            raise ValueError(
+                "No existe operation_result registrado."
+            )
+
+        if state.verification_result is None:
+            raise ValueError(
+                "No existe una validación registrada "
+                "para el resultado operacional."
+            )
+
+        if (
+            decision.next_action
+            == NextAction.CONTINUE
+        ):
+            state.step_status = (
+                StepStatus.SUCCEEDED
+            )
+
+            state.workflow_status = (
+                WorkflowStatus.RUNNING
+            )
+
+        elif (
+            decision.next_action
+            == NextAction.REPEAT
+        ):
+            state.retry_count += 1
+
+            #
+            # REPEAT representa una nueva operación
+            # concreta.
+            #
+            # Nunca puede reutilizar:
+            # - approval_id;
+            # - aprobación anterior;
+            # - parámetros resueltos;
+            # - resultado operacional;
+            # - validación anterior.
+            #
+            state.approval_id = None
+
+            state.approval_status = (
+                ApprovalStatus.PENDING
+            )
+
+            state.resolved_parameters = []
+
+            state.operation_result = None
+
+            state.verification_result = None
+
+            state.escalation_required = False
+            state.escalation_team = None
+            state.escalation_level = None
+            state.escalation_criteria = None
+
+            state.step_status = (
+                StepStatus.PENDING
+            )
+
+            state.workflow_status = (
+                WorkflowStatus.RUNNING
+            )
+
+        elif (
+            decision.next_action
+            == NextAction.WAIT
+        ):
+            state.step_status = (
+                StepStatus.WAITING_VALIDATION
+            )
+
+            state.workflow_status = (
+                WorkflowStatus.WAITING_VALIDATION
+            )
+
+        elif (
+            decision.next_action
+            == NextAction.RESOLVED
+        ):
+            state.step_status = (
+                StepStatus.SUCCEEDED
+            )
+
+            state.workflow_status = (
+                WorkflowStatus.RESOLVED
+            )
+
+        elif (
+            decision.next_action
+            == NextAction.ESCALATE
+        ):
+            state.step_status = (
+                StepStatus.FAILED
+            )
+
+            state.workflow_status = (
+                WorkflowStatus.ESCALATION_REQUIRED
+            )
+
+            state.escalation_required = (
+                decision.escalation_required
+            )
+
+            state.escalation_team = (
+                decision.escalation_team
+            )
+
+            state.escalation_level = (
+                decision.escalation_level
+            )
+
+            state.escalation_criteria = (
+                decision.escalation_criteria
+            )
+
+        elif (
+            decision.next_action
+            == NextAction.BLOCKED
+        ):
+            state.step_status = (
+                StepStatus.BLOCKED
+            )
+
+            state.workflow_status = (
+                WorkflowStatus.BLOCKED
+            )
+
+        elif (
+            decision.next_action
+            == NextAction.EXECUTE_STEP
+        ):
+            raise ValueError(
+                "execute_step no es una decisión "
+                "válida después de ejecutar un paso."
             )
 
         else:
             raise ValueError(
-                f"next_action no soportado: {decision.next_action}"
+                "next_action no soportado: "
+                f"{decision.next_action}"
             )
 
         state.updated_at = utc_now()

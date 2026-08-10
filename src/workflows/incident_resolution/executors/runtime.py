@@ -13,6 +13,10 @@ from src.runtime.procedure.models import (
     ProcedureStep,
 )
 
+from src.runtime.procedure.workflow_state import (
+    store_procedure_runtime_state,
+)
+
 from src.workflows.incident_resolution.models import (
     ProcedureExecutionContext,
 )
@@ -267,6 +271,11 @@ class ProcedureRuntimeExecutor(Executor):
             self._build_runtime_state(
                 context
             )
+        )
+
+        store_procedure_runtime_state(
+            ctx,
+            state,
         )
 
         await ctx.send_message(

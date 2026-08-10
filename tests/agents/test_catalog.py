@@ -60,7 +60,7 @@ def test_catalog_uses_expected_sandbox_versions(
         catalog[
             AgentKey.PROCEDURE_EXECUTION
         ].version
-        == "5"
+        == "6"
     )
 
     assert (
