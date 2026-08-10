@@ -399,13 +399,27 @@ def test_verified_request_preserves_approval_identity():
     )
 
     assert (
-        verified.required_parameters
+        list(
+            verified.required_parameters
+        )
         == approved_step.required_parameters
     )
 
     assert (
-        verified.resolved_parameters
-        == approved_step.resolved_parameters
+        [
+            parameter.model_dump(
+                mode="python"
+            )
+            for parameter
+            in verified.resolved_parameters
+        ]
+        == [
+            parameter.model_dump(
+                mode="python"
+            )
+            for parameter
+            in approved_step.resolved_parameters
+        ]
     )
 
 

@@ -306,6 +306,11 @@ async def test_executor_preserves_operation_identity():
     )
 
     assert (
+        result.operation_id
+        == request.operation_id
+    )
+
+    assert (
         result.workflow_id
         == request.workflow_id
     )
@@ -323,6 +328,11 @@ async def test_executor_preserves_operation_identity():
     assert (
         result.correlation_id
         == request.correlation_id
+    )
+
+    assert (
+        result.conversation_id
+        == request.conversation_id
     )
 
     assert (

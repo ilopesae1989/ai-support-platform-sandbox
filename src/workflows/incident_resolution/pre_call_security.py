@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from src.runtime.procedure.identity import (
+    create_operation_id,
+)
+
 from src.runtime.procedure.models import (
     ApprovedProcedureStep,
     NextAction,
@@ -18,6 +22,7 @@ class PreCallSecurityError(ValueError):
 
 class PreCallSecurityVerifier:
     _SECURITY_FIELDS = (
+        "operation_id",
         "workflow_id",
         "approval_id",
         "alert_id",
@@ -160,6 +165,12 @@ class PreCallSecurityVerifier:
         cls,
         candidate: AzureOperationRequest,
     ) -> None:
+        if not candidate.operation_id:
+            raise PreCallSecurityError(
+                "AzureOperationRequest no contiene "
+                "operation_id."
+            )
+
         if not candidate.approval_id:
             raise PreCallSecurityError(
                 "AzureOperationRequest no contiene "
@@ -211,7 +222,39 @@ class PreCallSecurityVerifier:
     def _build_expected_request(
         step: ApprovedProcedureStep,
     ) -> AzureOperationRequest:
+        operation_id = (
+            create_operation_id(
+                workflow_id=(
+                    step.workflow_id
+                ),
+
+                approval_id=(
+                    step.approval_id
+                ),
+
+                alert_id=(
+                    step.alert_id
+                ),
+
+                procedure_id=(
+                    step.procedure_id
+                ),
+
+                current_step=(
+                    step.current_step
+                ),
+
+                step_id=(
+                    step.step_id
+                ),
+            )
+        )
+
         return AzureOperationRequest(
+            operation_id=(
+                operation_id
+            ),
+
             workflow_id=(
                 step.workflow_id
             ),

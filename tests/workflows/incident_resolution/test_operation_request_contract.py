@@ -58,6 +58,7 @@ SUBSCRIPTION_ID = (
 
 
 COMMON_OPERATION_FIELDS = (
+    "operation_id",
     "workflow_id",
     "approval_id",
     "alert_id",
@@ -322,6 +323,29 @@ def test_pre_call_verification_preserves_common_contract():
     for field_name in (
         COMMON_OPERATION_FIELDS
     ):
+        if (
+            field_name
+            == "resolved_parameters"
+        ):
+            assert (
+                [
+                    parameter.model_dump(
+                        mode="python"
+                    )
+                    for parameter
+                    in verified.resolved_parameters
+                ]
+                == [
+                    parameter.model_dump(
+                        mode="python"
+                    )
+                    for parameter
+                    in candidate.resolved_parameters
+                ]
+            )
+
+            continue
+
         assert (
             getattr(
                 verified,

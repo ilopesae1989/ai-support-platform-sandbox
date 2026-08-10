@@ -258,6 +258,13 @@ def test_candidate_does_not_share_resolved_parameter_object():
     ),
     [
         (
+            "operation_id",
+            (
+                "op-00000000-0000-5000-"
+                "8000-000000000000"
+            ),
+        ),
+        (
             "workflow_id",
             "wf-other",
         ),

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from src.runtime.procedure.identity import (
+    create_operation_id,
+)
+
 from src.runtime.procedure.models import (
     ApprovedProcedureStep,
     NextAction,
@@ -117,7 +121,39 @@ def build_azure_operation_request(
         step
     )
 
+    operation_id = (
+        create_operation_id(
+            workflow_id=(
+                step.workflow_id
+            ),
+
+            approval_id=(
+                step.approval_id
+            ),
+
+            alert_id=(
+                step.alert_id
+            ),
+
+            procedure_id=(
+                step.procedure_id
+            ),
+
+            current_step=(
+                step.current_step
+            ),
+
+            step_id=(
+                step.step_id
+            ),
+        )
+    )
+
     return AzureOperationRequest(
+        operation_id=(
+            operation_id
+        ),
+
         workflow_id=(
             step.workflow_id
         ),

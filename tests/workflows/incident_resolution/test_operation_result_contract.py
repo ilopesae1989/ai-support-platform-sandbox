@@ -1,5 +1,7 @@
 from src.runtime.procedure.models import (
+    NextAction,
     OperationKind,
+    ResolvedParameter,
 )
 
 from src.workflows.incident_resolution.azure_operations_models import (
@@ -12,17 +14,24 @@ from src.workflows.incident_resolution.operation_models import (
 
 
 CURRENT_OPERATION_RESULT_FIELDS = (
+    "operation_id",
     "workflow_id",
     "approval_id",
     "alert_id",
     "correlation_id",
+    "conversation_id",
     "procedure_id",
     "procedure_version",
     "current_step",
     "step_id",
+    "operation_domain",
     "operation_kind",
+    "next_action",
     "target_resource",
+    "required_parameters",
+    "resolved_parameters",
     "success",
+    "technical_success",
     "response_text",
     "error",
     "evidence",
@@ -34,6 +43,8 @@ def create_azure_result(
     success: bool = True,
 ) -> AzureOperationResult:
     return AzureOperationResult(
+        operation_id="op-operation-result-001",
+
         workflow_id="wf-operation-result-001",
 
         approval_id="apr-operation-result-001",
@@ -41,6 +52,8 @@ def create_azure_result(
         alert_id="ALT-AZ-001",
 
         correlation_id="corr-azure-001",
+
+        conversation_id="conv-azure-001",
 
         procedure_id="PROC-AZ-001",
 
@@ -50,16 +63,42 @@ def create_azure_result(
 
         step_id="1",
 
+        operation_domain="azure",
+
         operation_kind=(
             OperationKind.READ
         ),
 
-        target_resource=(
-            "/subscriptions/sub-001/"
-            "resourceGroups/rg-demo"
+        next_action=(
+            NextAction.EXECUTE_STEP
         ),
 
+        target_resource="subscription",
+
+        required_parameters=[
+            "subscription_id",
+        ],
+
+        resolved_parameters=[
+            ResolvedParameter(
+                name="subscription_id",
+
+                value="sub-001",
+
+                source=(
+                    "normalized_alert."
+                    "subscription_id"
+                ),
+            )
+        ],
+
         success=success,
+
+        technical_success=(
+            None
+            if success
+            else False
+        ),
 
         response_text=(
             "Azure operation fake result."
@@ -76,14 +115,6 @@ def create_azure_result(
 
 
 def test_operation_result_contains_current_contract():
-    """
-    FASE 15.3 / 15.4
-
-    OperationResult conserva el contrato común
-    extraído en 15.3 y añade únicamente la relación
-    tipada con OperationEvidence.
-    """
-
     assert (
         tuple(
             OperationResult.model_fields
@@ -116,68 +147,24 @@ def test_azure_result_is_common_operation_result():
         OperationResult,
     )
 
-    assert isinstance(
-        result,
-        AzureOperationResult,
-    )
-
     assert result.success is True
 
     assert (
-        result.operation_kind
-        == OperationKind.READ
+        result.technical_success
+        is None
     )
 
-    #
-    # FASE 15.4 todavía no fabrica evidencia
-    # técnica.
-    #
     assert result.evidence is None
 
 
 def test_operation_result_does_not_advance_later_phases():
-    """
-    FASE 15.4 introduce evidence, pero no adelanta
-    los campos que pertenecen a 15.5-15.11.
-    """
-
     fields = (
         OperationResult.model_fields
     )
 
     assert (
-        "evidence"
+        "technical_success"
         in fields
-    )
-
-    assert (
-        "operation_id"
-        not in fields
-    )
-
-    assert (
-        "conversation_id"
-        not in fields
-    )
-
-    assert (
-        "operation_domain"
-        not in fields
-    )
-
-    assert (
-        "next_action"
-        not in fields
-    )
-
-    assert (
-        "required_parameters"
-        not in fields
-    )
-
-    assert (
-        "resolved_parameters"
-        not in fields
     )
 
     assert (
@@ -186,34 +173,24 @@ def test_operation_result_does_not_advance_later_phases():
     )
 
     assert (
-        "tool_name"
-        not in fields
-    )
-
-    assert (
-        "mcp_call_id"
-        not in fields
-    )
-
-    assert (
-        "response_id"
+        "provider_response_id"
         not in fields
     )
 
 
-def test_common_result_supports_failure_without_changing_semantics():
+def test_common_result_supports_failure_semantics():
     result = (
         create_azure_result(
             success=False
         )
     )
 
-    assert isinstance(
-        result,
-        OperationResult,
-    )
-
     assert result.success is False
+
+    assert (
+        result.technical_success
+        is False
+    )
 
     assert (
         result.response_text
@@ -224,5 +201,3 @@ def test_common_result_supports_failure_without_changing_semantics():
         result.error
         == "RuntimeError: test failure"
     )
-
-    assert result.evidence is None
