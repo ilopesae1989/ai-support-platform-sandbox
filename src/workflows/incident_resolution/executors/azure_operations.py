@@ -886,12 +886,36 @@ Restricciones obligatorias:
                 "válida."
             ) from exc
 
+    @staticmethod
+    async def _emit_result(
+        ctx,
+        result: AzureOperationResult,
+    ) -> None:
+        """
+        Emite exactamente la misma instancia de
+        AzureOperationResult hacia:
+
+        - downstream mediante send_message();
+        - output mediante yield_output().
+
+        No reconstruye el resultado.
+        No modifica identidad ni evidencia.
+        """
+
+        await ctx.send_message(
+            result
+        )
+
+        await ctx.yield_output(
+            result
+        )
+
     @handler
     async def handle(
         self,
         request: VerifiedAzureOperationRequest,
         ctx: WorkflowContext[
-            None,
+            AzureOperationResult,
             AzureOperationResult,
         ],
     ) -> None:
@@ -935,7 +959,8 @@ Restricciones obligatorias:
             )
 
         except Exception as exc:
-            await ctx.yield_output(
+            await self._emit_result(
+                ctx,
                 AzureOperationResult(
                     operation_id=(
                         request.operation_id
@@ -1033,7 +1058,8 @@ Restricciones obligatorias:
             else None
         )
 
-        await ctx.yield_output(
+        await self._emit_result(
+            ctx,
             AzureOperationResult(
                 operation_id=(
                     request.operation_id

@@ -24,6 +24,10 @@ from src.workflows.incident_resolution.executors.operation_lifecycle import (
     OperationStartExecutor,
 )
 
+from src.workflows.incident_resolution.executors.operation_result_registration import (
+    OperationResultRegistrationExecutor,
+)
+
 from src.workflows.incident_resolution.executors.classification import (
     ClassificationExecutor,
 )
@@ -44,6 +48,14 @@ from src.workflows.incident_resolution.executors.post_hitl import (
 
 from src.workflows.incident_resolution.executors.procedure import (
     ProcedureExecutionExecutor,
+)
+
+from src.workflows.incident_resolution.executors.procedure_validation import (
+    ProcedureValidationExecutor,
+)
+
+from src.workflows.incident_resolution.executors.procedure_transition import (
+    ProcedureTransitionExecutor,
 )
 
 from src.workflows.incident_resolution.executors.routing import (
@@ -243,6 +255,20 @@ def build_incident_resolution_workflow(
         )
     )
 
+    operation_result_registration = (
+        OperationResultRegistrationExecutor()
+    )
+
+    procedure_validation = (
+        ProcedureValidationExecutor(
+            agents=foundry_agents,
+        )
+    )
+
+    procedure_transition = (
+        ProcedureTransitionExecutor()
+    )
+
     #
     # --------------------------------------------------
     # Remaining post-HITL placeholders
@@ -297,7 +323,7 @@ def build_incident_resolution_workflow(
                 approval,
                 knowledge_review,
                 manual_analysis,
-                azure_route,
+                procedure_transition,
                 database_route,
                 itsm_route,
                 windows_route,
@@ -494,6 +520,34 @@ def build_incident_resolution_workflow(
         .add_edge(
             operation_start,
             azure_route,
+        )
+
+        #
+        # --------------------------------------------------
+        # Post-operation validation loop
+        # --------------------------------------------------
+        #
+        # AzureOperationResult
+        #     ↓
+        # registro autoritativo
+        #     ↓
+        # Procedure Validation v6
+        #     ↓
+        # Transition Gate determinista
+        #
+        .add_edge(
+            azure_route,
+            operation_result_registration,
+        )
+
+        .add_edge(
+            operation_result_registration,
+            procedure_validation,
+        )
+
+        .add_edge(
+            procedure_validation,
+            procedure_transition,
         )
 
         .build()
