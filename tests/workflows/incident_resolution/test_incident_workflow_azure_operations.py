@@ -1,15 +1,28 @@
+import json
+
 import pytest
 
 from src.agents.contracts import (
     ProcedureExecutionResult,
 )
 
+from src.agents.contracts import (
+    ProcedureValidationEscalation,
+    ProcedureValidationResult,
+)
+
+from src.runtime.procedure.models import (
+    ProcedureRuntimeState,
+    StepStatus,
+    WorkflowStatus,
+)
+
 from src.runtime.procedure.workflow import (
     ApprovalOutcome,
 )
 
-from src.workflows.incident_resolution.azure_operations_models import (
-    AzureOperationResult,
+from src.workflows.incident_resolution.operation_models import (
+    OperationResult,
 )
 
 from src.workflows.incident_resolution.workflow import (
@@ -64,6 +77,10 @@ class AzureWorkflowFakeFoundryAgents(
         super().__init__()
 
         self.azure_operations_prompt: (
+            str | None
+        ) = None
+
+        self.procedure_validation_prompt: (
             str | None
         ) = None
 
@@ -233,6 +250,63 @@ class AzureWorkflowFakeFoundryAgents(
         )
 
 
+    async def run_procedure_validation(
+        self,
+        message: str,
+    ) -> ProcedureValidationResult:
+        """
+        Simula Procedure v6 en modo
+        validate_result.
+
+        No aplica transiciones de estado.
+        El Transition Gate real continúa
+        ejecutándose en Python.
+        """
+
+        self.calls.append(
+            "procedure_validation"
+        )
+
+        self.procedure_validation_prompt = (
+            message
+        )
+
+        payload = json.loads(
+            message
+        )
+
+        operation_id = (
+            payload[
+                "trusted_identity"
+            ][
+                "operation_id"
+            ]
+        )
+
+        return ProcedureValidationResult(
+            operation_id=operation_id,
+
+            validation_status=(
+                "satisfied"
+            ),
+
+            proposed_next_action=(
+                "continue"
+            ),
+
+            validation_summary=(
+                "El resultado Azure satisface "
+                "el criterio del procedimiento."
+            ),
+
+            escalation=(
+                ProcedureValidationEscalation(
+                    required=False
+                )
+            ),
+        )
+
+
 class DatabaseWorkflowFakeFoundryAgents(
     FakeFoundryAgents
 ):
@@ -271,35 +345,21 @@ class DatabaseWorkflowFakeFoundryAgents(
 @pytest.mark.asyncio
 async def test_approved_azure_step_reaches_azure_operations_once():
     """
-    FASE 13.7 / 13.8
+    FASE 13.7 / 13.8 / 16.8
 
-    Flujo esperado:
+    La aprobación debe ejecutar Azure exactamente
+    una vez y después continuar obligatoriamente por:
 
-        NormalizedAlert
+        Azure Operations
             ↓
-        Classification
+        OperationResultRegistration
             ↓
-        Knowledge
+        Procedure Validation
             ↓
-        Triage
-            ↓
-        Procedure
-            ↓
-        Runtime
-            ↓
-        HITL
-            ↓
-        approved=True
-            ↓
-        ApprovedProcedureStep
-            ↓
-        route_to_azure_operation
-            ↓
-        AzureOperationsExecutor
-            ↓
-        run_azure_operations()
+        Transition Gate
 
-    Debe existir exactamente una invocación Azure.
+    Las garantías históricas del resultado Azure
+    deben conservarse dentro del runtime.
     """
 
     agents = (
@@ -315,8 +375,7 @@ async def test_approved_azure_step_reaches_azure_operations_once():
     pending_responses = {}
 
     #
-    # Primera ejecución:
-    # pipeline hasta HITL.
+    # Primera ejecución hasta HITL.
     #
     async for event in workflow.run(
         create_alert(),
@@ -332,8 +391,8 @@ async def test_approved_azure_step_reaches_azure_operations_once():
     ) == 1
 
     #
-    # Antes de resolver HITL no puede existir
-    # ninguna llamada Azure.
+    # Antes de HITL no existe ejecución Azure
+    # ni validación post-operación.
     #
     assert agents.calls == [
         "classification",
@@ -343,8 +402,7 @@ async def test_approved_azure_step_reaches_azure_operations_once():
     ]
 
     #
-    # Segunda ejecución:
-    # respuesta HITL.
+    # Resolver aprobación.
     #
     outputs = []
 
@@ -357,16 +415,13 @@ async def test_approved_azure_step_reaches_azure_operations_once():
                 event.data
             )
 
-    #
-    # Azure Operations debe haberse invocado
-    # exactamente una vez.
-    #
     assert agents.calls == [
         "classification",
         "knowledge",
         "alert_triage",
         "procedure_execution",
         "azure_operations",
+        "procedure_validation",
     ]
 
     assert (
@@ -376,65 +431,115 @@ async def test_approved_azure_step_reaches_azure_operations_once():
         == 1
     )
 
-    assert len(outputs) == 1
-
-    result = outputs[0]
-
-    assert isinstance(
-        result,
-        AzureOperationResult,
+    assert (
+        agents.calls.count(
+            "procedure_validation"
+        )
+        == 1
     )
 
-    assert result.success is True
+    assert len(outputs) == 1
+
+    runtime_state = outputs[0]
+
+    assert isinstance(
+        runtime_state,
+        ProcedureRuntimeState,
+    )
 
     assert (
-        result.response_text
+        runtime_state.step_status
+        == StepStatus.SUCCEEDED
+    )
+
+    assert (
+        runtime_state.workflow_status
+        == WorkflowStatus.RUNNING
+    )
+
+    assert (
+        runtime_state.operation_result
+        is not None
+    )
+
+    assert (
+        runtime_state.verification_result
+        is not None
+    )
+
+    #
+    # Recuperar el OperationResult registrado
+    # autoritativamente.
+    #
+    operation_result = (
+        OperationResult.model_validate(
+            runtime_state
+            .operation_result
+            .result
+        )
+    )
+
+    #
+    # Garantías históricas Azure.
+    #
+    assert (
+        operation_result.success
+        is True
+    )
+
+    assert (
+        operation_result.response_text
         == "Azure operation fake completed."
     )
 
     assert (
-        result.workflow_id
+        operation_result.workflow_id
         is not None
     )
 
     assert (
-        result.alert_id
+        operation_result.alert_id
         == "ALT-SQL-AG-001"
     )
 
     assert (
-        result.procedure_id
+        operation_result.procedure_id
         == "NTTSY-PRO-016"
     )
 
     assert (
-        result.procedure_version
+        operation_result.procedure_version
         == "v1.1"
     )
 
-    assert result.current_step == 1
-
-    assert result.step_id == "1"
+    assert (
+        operation_result.current_step
+        == 1
+    )
 
     assert (
-        result.operation_kind.value
+        operation_result.step_id
+        == "1"
+    )
+
+    assert (
+        operation_result.operation_kind.value
         == "read"
     )
 
     assert (
-        result.target_resource
+        operation_result.target_resource
         is not None
     )
 
     assert (
-        result.target_resource.endswith(
+        operation_result.target_resource.endswith(
             "/virtualMachines/vm-demo-01"
         )
     )
 
     #
-    # Mensaje que atraviesa nuestra frontera
-    # hacia Foundry.
+    # Frontera enviada a Azure Operations.
     #
     assert (
         agents.azure_operations_prompt
@@ -449,6 +554,15 @@ async def test_approved_azure_step_reaches_azure_operations_once():
     assert (
         "Tipo: read"
         in agents.azure_operations_prompt
+    )
+
+    #
+    # Procedure Validation recibió el resultado
+    # después de Azure.
+    #
+    assert (
+        agents.procedure_validation_prompt
+        is not None
     )
 
 
@@ -609,15 +723,19 @@ async def test_database_route_never_invokes_azure_operations():
 @pytest.mark.asyncio
 async def test_post_hitl_azure_routing_does_not_reinvoke_cognitive_agents():
     """
-    Resolver HITL y alcanzar Azure Operations
-    no puede volver a ejecutar:
+    Resolver HITL no puede volver a ejecutar los
+    agentes cognitivos pre-operación:
 
     - Classification;
     - Knowledge;
     - Alert Triage;
-    - Procedure Execution.
+    - Procedure Execution prepare_step.
 
-    El routing post-HITL continúa siendo Python.
+    Azure Operations se ejecuta una vez.
+    Procedure Validation se ejecuta una vez.
+
+    Routing, lifecycle y Transition Gate siguen
+    siendo deterministas en Python.
     """
 
     agents = (
@@ -697,10 +815,23 @@ async def test_post_hitl_azure_routing_does_not_reinvoke_cognitive_agents():
         == 1
     )
 
+    assert (
+        agents.calls.count(
+            "procedure_validation"
+        )
+        == 1
+    )
+
     assert agents.calls == [
         "classification",
         "knowledge",
         "alert_triage",
         "procedure_execution",
         "azure_operations",
+        "procedure_validation",
     ]
+
+    assert (
+        agents.procedure_validation_prompt
+        is not None
+    )
