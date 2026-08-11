@@ -300,7 +300,7 @@ async def test_incident_workflow_azure_live_probe():
         agents.get_definition(
             AgentKey.PROCEDURE_EXECUTION
         ).version
-        == "5"
+        == "6"
     )
 
     assert (

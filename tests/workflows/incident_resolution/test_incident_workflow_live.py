@@ -193,7 +193,7 @@ async def test_incident_workflow_live_reaches_hitl():
         agents.get_definition(
             AgentKey.PROCEDURE_EXECUTION
         ).version
-        == "5"
+        == "6"
     )
 
     workflow = (

@@ -115,6 +115,72 @@ class ProcedureRuntimeExecutor(Executor):
                 "a la versión solicitada."
             )
 
+    @staticmethod
+    def _resolve_authoritative_target_resource(
+        context: ProcedureExecutionContext,
+    ) -> str | None:
+        """
+        Resuelve el target_resource que puede cruzar
+        la frontera hacia ProcedureRuntimeState.
+
+        Para Azure, el target_resource operativo no
+        puede depender de texto libre generado por
+        Procedure Execution.
+
+        El tipo de recurso procede exclusivamente de
+        OperationalContext, construido desde campos
+        tipados de NormalizedAlert.
+
+        El identificador concreto del recurso no se
+        pierde: se conserva mediante los parámetros
+        operacionales resueltos, por ejemplo:
+
+            resource_type = "subscription"
+
+            subscription_id =
+                "557fdabc-..."
+
+        Así se mantiene separada:
+
+        - la clase/tipo de recurso autorizado;
+        - la identidad concreta resuelta del recurso.
+        """
+
+        result = context.result
+        operational = (
+            context.operational_context
+        )
+
+        if result.step is None:
+            raise ValueError(
+                "ProcedureExecutionResult "
+                "no contiene step."
+            )
+
+        if (
+            result.step.operation_domain
+            != "azure"
+        ):
+            return (
+                result.step.target_resource
+            )
+
+        resource_type = (
+            operational.resource_type
+        )
+
+        if (
+            resource_type is None
+            or not resource_type.strip()
+        ):
+            raise ValueError(
+                "Una operación Azure requiere "
+                "resource_type autoritativo en "
+                "OperationalContext antes del HITL."
+            )
+
+        return resource_type
+
     @classmethod
     def _build_runtime_state(
         cls,
@@ -180,6 +246,13 @@ class ProcedureRuntimeExecutor(Executor):
                 )
             )
 
+        target_resource = (
+            cls
+            ._resolve_authoritative_target_resource(
+                context
+            )
+        )
+
         return ProcedureRuntimeState(
             workflow_id=(
                 identity.workflow_id
@@ -233,7 +306,7 @@ class ProcedureRuntimeExecutor(Executor):
                 ),
 
                 target_resource=(
-                    result.step.target_resource
+                    target_resource
                 ),
 
                 required_parameters=list(

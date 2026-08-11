@@ -11,12 +11,18 @@ from src.agents.foundry_agents import (
     FoundryAgents,
 )
 
+from src.runtime.procedure.models import (
+    ProcedureRuntimeState,
+    StepStatus,
+    WorkflowStatus,
+)
+
 from src.runtime.procedure.workflow import (
     ApprovalRequest,
 )
 
-from src.workflows.incident_resolution.azure_operations_models import (
-    AzureOperationResult,
+from src.workflows.incident_resolution.operation_models import (
+    OperationResult,
 )
 
 from src.workflows.incident_resolution.workflow import (
@@ -244,6 +250,9 @@ class LiveE2ERecordingFoundryAgents(
         self.azure_native_response = None
         self.azure_operations_prompt = None
 
+        self.procedure_validation_prompt = None
+        self.procedure_validation_result = None
+
     async def run_classification(
         self,
         message: str,
@@ -343,12 +352,44 @@ class LiveE2ERecordingFoundryAgents(
 
         return response
 
+    async def run_procedure_validation(
+        self,
+        message: str,
+    ):
+        """
+        Ejecuta Procedure Validation REAL v6.
+
+        Sólo añade observabilidad de test.
+        No sustituye ni modifica la respuesta.
+        """
+
+        self.calls.append(
+            "procedure_validation"
+        )
+
+        self.procedure_validation_prompt = (
+            message
+        )
+
+        result = (
+            await super()
+            .run_procedure_validation(
+                message
+            )
+        )
+
+        self.procedure_validation_result = (
+            result
+        )
+
+        return result
+
 
 @pytest.mark.asyncio
 @pytest.mark.live
 async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     """
-    FASE 13.12
+    FASE 16.12.8
 
     E2E LIVE:
 
@@ -362,7 +403,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
             ↓
         Triage v10 REAL
             ↓
-        Procedure v5 REAL
+        Procedure v6 REAL
             ↓
         ProcedureRuntime
             ↓
@@ -387,6 +428,14 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         group_list
             ↓
         5 Resource Groups reales
+            ↓
+        OperationResultRegistration
+            ↓
+        Procedure Validation v6 REAL
+            ↓
+        Transition Gate Python
+            ↓
+        ProcedureRuntimeState
 
     La aprobación HITL se responde mediante el
     harness del test.
@@ -439,7 +488,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         agents.get_definition(
             AgentKey.PROCEDURE_EXECUTION
         ).version
-        == "5"
+        == "6"
     )
 
     assert (
@@ -557,7 +606,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
 
     assert (
         agents.procedure_result.procedure.version
-        == "v1.0"
+        == "1.0"
     )
 
     assert (
@@ -566,18 +615,18 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     )
 
     assert (
-        agents.procedure_result.step.operation_kind.value
+        agents.procedure_result.step.operation_kind
         == "read"
     )
 
     assert (
-        agents.procedure_result.next_action.value
+        agents.procedure_result.next_action
         == "execute_step"
     )
 
     assert (
         agents.procedure_result.step.target_resource
-        == "subscription"
+        == SUBSCRIPTION_ID
     )
 
     assert (
@@ -610,7 +659,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
 
     assert (
         approval.procedure_version
-        == "v1.0"
+        == "1.0"
     )
 
     assert (
@@ -619,18 +668,18 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     )
 
     assert (
-        approval.operation_kind.value
+        approval.operation_kind
         == "read"
     )
 
     assert (
-        approval.next_action.value
+        approval.next_action
         == "execute_step"
     )
 
     assert (
         approval.target_resource
-        == "subscription"
+        == SUBSCRIPTION_ID
     )
 
     assert (
@@ -688,7 +737,12 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     # --------------------------------------------------
     # Segunda ejecución:
     #
-    # Respuesta HITL → Azure → MCP
+    # Respuesta HITL
+    #     → Azure
+    #     → MCP
+    #     → Registration
+    #     → Procedure Validation
+    #     → Transition Gate
     # --------------------------------------------------
     #
 
@@ -715,6 +769,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         "alert_triage",
         "procedure_execution",
         "azure_operations",
+        "procedure_validation",
     ]
 
     assert (
@@ -752,9 +807,16 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         == 1
     )
 
+    assert (
+        agents.calls.count(
+            "procedure_validation"
+        )
+        == 1
+    )
+
     #
     # --------------------------------------------------
-    # Resultado operacional del workflow
+    # Resultado terminal del workflow FASE 16
     # --------------------------------------------------
     #
 
@@ -762,18 +824,72 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         output_events
     ) == 1
 
-    operation_result = (
+    runtime_state = (
         output_events[0]
     )
 
     assert isinstance(
-        operation_result,
-        AzureOperationResult,
+        runtime_state,
+        ProcedureRuntimeState,
+    )
+
+    assert (
+        runtime_state.step_status
+        == StepStatus.SUCCEEDED
+    )
+
+    assert (
+        runtime_state.workflow_status
+        in {
+            WorkflowStatus.RUNNING,
+            WorkflowStatus.RESOLVED,
+        }
+    )
+
+    assert (
+        runtime_state.approval_id
+        == approval.approval_id
+    )
+
+    assert (
+        runtime_state.operation_result
+        is not None
+    )
+
+    assert (
+        runtime_state.verification_result
+        is not None
+    )
+
+    #
+    # Recuperamos el OperationResult registrado
+    # autoritativamente por el workflow.
+    #
+    operation_result = (
+        OperationResult.model_validate(
+            runtime_state
+            .operation_result
+            .result
+        )
     )
 
     assert (
         operation_result.success
         is True
+    )
+
+    #
+    # El MCP real debe haber producido evidencia
+    # técnica suficiente para demostrar éxito.
+    #
+    assert (
+        operation_result.technical_success
+        is True
+    )
+
+    assert (
+        operation_result.evidence
+        is not None
     )
 
     assert (
@@ -793,7 +909,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
 
     assert (
         operation_result.procedure_version
-        == "v1.0"
+        == "1.0"
     )
 
     assert (
@@ -803,7 +919,114 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
 
     assert (
         operation_result.target_resource
-        == "subscription"
+        == SUBSCRIPTION_ID
+    )
+
+    assert (
+        operation_result.approval_id
+        == approval.approval_id
+    )
+
+    assert (
+        len(
+            operation_result
+            .resolved_parameters
+        )
+        == 1
+    )
+
+    assert (
+        operation_result
+        .resolved_parameters[0]
+        .name
+        == "subscription_id"
+    )
+
+    assert (
+        operation_result
+        .resolved_parameters[0]
+        .value
+        == SUBSCRIPTION_ID
+    )
+
+    #
+    # Evidencia operacional normalizada por
+    # AzureOperationsExecutor.
+    #
+    assert (
+        len(
+            operation_result
+            .evidence
+            .mcp_calls
+        )
+        == 1
+    )
+
+    assert (
+        operation_result
+        .evidence
+        .mcp_calls[0]
+        .tool_name
+        == "group_list"
+    )
+
+    assert (
+        len(
+            operation_result
+            .evidence
+            .mcp_results
+        )
+        == 1
+    )
+
+    #
+    # --------------------------------------------------
+    # Procedure Validation v6 REAL
+    # --------------------------------------------------
+    #
+
+    assert (
+        agents.procedure_validation_prompt
+        is not None
+    )
+
+    assert (
+        agents.procedure_validation_result
+        is not None
+    )
+
+    validation_result = (
+        agents.procedure_validation_result
+    )
+
+    assert (
+        validation_result.operation_id
+        == operation_result.operation_id
+    )
+
+    #
+    # Con una llamada MCP group_list completada
+    # correctamente y evidencia técnica real,
+    # el criterio del paso debe quedar satisfecho.
+    #
+    assert (
+        validation_result.validation_status
+        == "satisfied"
+    )
+
+    assert (
+        validation_result.proposed_next_action
+        in {
+            "continue",
+            "resolved",
+        }
+    )
+
+    assert (
+        runtime_state
+        .verification_result
+        .success
+        is True
     )
 
     #
@@ -956,13 +1179,13 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     print()
     print("=" * 80)
     print(
-        "FASE 13.12 — LIVE E2E PASSED"
+        "FASE 16.12.8 — LIVE E2E PASSED"
     )
     print("=" * 80)
 
     print(
         "Procedure:"
-        " NTTSY-SBX-AZ-001 v1.0"
+        " NTTSY-SBX-AZ-001 1.0"
     )
 
     print(

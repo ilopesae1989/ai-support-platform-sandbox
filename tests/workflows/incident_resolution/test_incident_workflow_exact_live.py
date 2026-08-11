@@ -230,7 +230,7 @@ async def test_exact_candidate_live_probe():
         agents.get_definition(
             AgentKey.PROCEDURE_EXECUTION
         ).version
-        == "5"
+        == "6"
     )
 
     alert = create_exact_candidate_alert()

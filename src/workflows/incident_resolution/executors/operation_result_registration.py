@@ -191,4 +191,3 @@ class OperationResultRegistrationExecutor(
         await ctx.send_message(
             validation_request
         )
-

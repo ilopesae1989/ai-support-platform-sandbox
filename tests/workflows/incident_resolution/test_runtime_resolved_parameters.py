@@ -108,6 +108,7 @@ def create_operational_context(
 def create_result(
     *,
     required_parameters: list[str],
+    target_resource: str = "subscription",
 ) -> ProcedureExecutionResult:
     return (
         ProcedureExecutionResult.model_validate(
@@ -157,7 +158,7 @@ def create_result(
                         "read",
 
                     "target_resource":
-                        "subscription",
+                        target_resource,
 
                     "required_parameters":
                         required_parameters,
@@ -223,6 +224,7 @@ def create_execution_context(
     subscription_id: str | None = (
         SUBSCRIPTION_ID
     ),
+    target_resource: str = "subscription",
 ) -> ProcedureExecutionContext:
     return ProcedureExecutionContext(
         request=create_request(),
@@ -230,7 +232,10 @@ def create_execution_context(
         result=create_result(
             required_parameters=(
                 required_parameters
-            )
+            ),
+            target_resource=(
+                target_resource
+            ),
         ),
 
         execution_identity=(
@@ -270,6 +275,99 @@ def test_runtime_resolves_subscription_id_before_hitl():
         ]
     )
 
+    assert state.resolved_parameters == [
+        ResolvedParameter(
+            name="subscription_id",
+            value=SUBSCRIPTION_ID,
+            source=(
+                "normalized_alert.subscription_id"
+            ),
+        )
+    ]
+
+
+def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
+    """
+    El target_resource cognitivo no puede decidir
+    por sí solo la identidad operacional que llegará
+    al HITL.
+
+    Reproduce el comportamiento observado LIVE:
+
+    Procedure puede devolver como target_resource
+    el UUID concreto de la suscripción aunque el
+    tipo autoritativo del recurso en
+    OperationalContext sea "subscription".
+
+    El Runtime debe normalizar antes del HITL:
+
+        target_resource -> resource_type autoritativo
+
+    mientras el identificador concreto autorizado
+    permanece en:
+
+        resolved_parameters.subscription_id
+    """
+
+    context = (
+        create_execution_context(
+            required_parameters=[
+                "subscription_id",
+            ],
+            target_resource=(
+                SUBSCRIPTION_ID
+            ),
+        )
+    )
+
+    #
+    # Precondición del ataque/regresión:
+    #
+    # Procedure ha devuelto el UUID como
+    # target_resource.
+    #
+    assert (
+        context.result.step.target_resource
+        == SUBSCRIPTION_ID
+    )
+
+    #
+    # Fuente determinista/autoritativa.
+    #
+    assert (
+        context.operational_context.resource_type
+        == "subscription"
+    )
+
+    assert (
+        context.operational_context.subscription_id
+        == SUBSCRIPTION_ID
+    )
+
+    state = (
+        ProcedureRuntimeExecutor
+        ._build_runtime_state(
+            context
+        )
+    )
+
+    #
+    # Gate principal:
+    #
+    # El dato cognitivo no debe controlar
+    # target_resource después de la frontera
+    # Runtime.
+    #
+    assert (
+        state.step.target_resource
+        == "subscription"
+    )
+
+    #
+    # El recurso concreto sigue existiendo,
+    # pero como parámetro resuelto desde el
+    # contexto operacional confiable.
+    #
     assert state.resolved_parameters == [
         ResolvedParameter(
             name="subscription_id",

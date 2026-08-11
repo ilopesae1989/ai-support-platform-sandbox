@@ -162,4 +162,3 @@ class ProcedureValidationExecutor(
         await ctx.send_message(
             context
         )
-
