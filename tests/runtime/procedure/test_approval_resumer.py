@@ -49,6 +49,7 @@ async def prepare_pending_approval(
     *,
     tmp_path,
     decision: ApprovalDecision,
+    conversation_id: str | None = None,
 ):
     """
     Genera realmente:
@@ -75,8 +76,26 @@ async def prepare_pending_approval(
 
     request_event = None
 
+    state = (
+        create_state()
+    )
+
+    if (
+        conversation_id
+        is not None
+    ):
+        state = (
+            state.model_copy(
+                update={
+                    "conversation_id": (
+                        conversation_id
+                    ),
+                }
+            )
+        )
+
     async for event in workflow_a.run(
-        create_state(),
+        state,
         stream=True,
     ):
         if (

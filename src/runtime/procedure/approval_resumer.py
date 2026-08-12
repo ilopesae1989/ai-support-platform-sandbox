@@ -52,6 +52,7 @@ async def _restore_and_verify_pending_request(
     *,
     workflow: Any,
     instruction: ApprovalResumeInstruction,
+    expected_conversation_id: str | None = None,
 ) -> ApprovalRequest:
     """
     Restaura el checkpoint pero NO responde todavía.
@@ -165,6 +166,37 @@ async def _restore_and_verify_pending_request(
             "con la correlación HITL persistida."
         )
 
+    if (
+        expected_conversation_id
+        is not None
+    ):
+        if (
+            not isinstance(
+                expected_conversation_id,
+                str,
+            )
+            or not expected_conversation_id
+            or not expected_conversation_id.strip()
+            or (
+                expected_conversation_id
+                != expected_conversation_id.strip()
+            )
+        ):
+            raise ValueError(
+                "expected_conversation_id debe ser "
+                "un string no vacío y exacto."
+            )
+
+        if (
+            request.conversation_id
+            != expected_conversation_id
+        ):
+            raise ApprovalResumeMismatchError(
+                "conversation_id restaurado no "
+                "coincide con la conversación "
+                "autenticada del canal."
+            )
+
     return request
 
 
@@ -173,6 +205,7 @@ async def resume_approval_workflow(
     workflow: Any,
     instruction: ApprovalResumeInstruction,
     store: PendingApprovalStore,
+    expected_conversation_id: str | None = None,
 ) -> (
     ApprovedProcedureStep
     | ApprovalOutcome
@@ -208,6 +241,9 @@ async def resume_approval_workflow(
     await _restore_and_verify_pending_request(
         workflow=workflow,
         instruction=instruction,
+        expected_conversation_id=(
+            expected_conversation_id
+        ),
     )
 
     claimed = (

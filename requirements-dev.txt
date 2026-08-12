@@ -4,3 +4,5 @@ azure-identity
 pydantic
 pytest
 pytest-asyncio
+microsoft-teams-api==2.0.14
+microsoft-teams-cards==2.0.14
