@@ -230,16 +230,28 @@ def build_default_procedure_capability_registry(
     Construye el registry gobernado de bindings
     actualmente publicados.
 
-    IMPORTANTE:
+    Los bindings representan exclusivamente
+    procedimientos corporativos reales y versionados.
 
-    todavía no existe un procedimiento corporativo
-    real/versionado de VM Start en el repositorio.
+    La resolución es exacta:
 
-    Por tanto el catálogo comienza deliberadamente
-    vacío.
+        procedure_id
+        procedure_version
+        step_id
+            ↓
+        capability_id
 
-    No se inventan bindings para hacer funcionar
-    una demo.
+    Dos procedimientos distintos pueden reutilizar
+    una misma capability operacional.
+
+    No existe:
+
+    - fuzzy matching;
+    - aliases;
+    - wildcard de versión;
+    - fallback de step;
+    - inferencia desde operation_action;
+    - selección mediante LLM.
     """
 
     return ProcedureCapabilityRegistry(
@@ -247,5 +259,41 @@ def build_default_procedure_capability_registry(
             build_default_capability_registry()
         ),
 
-        bindings=[],
+        bindings=[
+            ProcedureCapabilityBinding(
+                procedure_id=(
+                    "NTTSY-SBX-AZ-VM-001"
+                ),
+
+                procedure_version=(
+                    "1.0"
+                ),
+
+                step_id=(
+                    "1"
+                ),
+
+                capability_id=(
+                    "azure.vm.start"
+                ),
+            ),
+
+            ProcedureCapabilityBinding(
+                procedure_id=(
+                    "NTTSY-SBX-AZ-VM-002"
+                ),
+
+                procedure_version=(
+                    "1.0"
+                ),
+
+                step_id=(
+                    "1"
+                ),
+
+                capability_id=(
+                    "azure.vm.start"
+                ),
+            ),
+        ],
     )

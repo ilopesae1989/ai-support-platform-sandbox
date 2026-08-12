@@ -18,6 +18,7 @@ from src.workflows.incident_resolution.procedure_capability_registry import (
     DuplicateProcedureCapabilityBindingError,
     ProcedureCapabilityBindingNotFoundError,
     ProcedureCapabilityRegistry,
+    build_default_procedure_capability_registry,
 )
 
 
@@ -380,3 +381,157 @@ def test_different_procedures_can_reuse_same_capability():
     # cada procedimiento.
     #
     assert first is second
+
+
+def test_default_registry_contains_real_vm_start_bindings():
+    registry = (
+        build_default_procedure_capability_registry()
+    )
+
+    assert registry.count() == 2
+
+    assert registry.contains_binding(
+        procedure_id=(
+            "NTTSY-SBX-AZ-VM-001"
+        ),
+        procedure_version="1.0",
+        step_id="1",
+    )
+
+    assert registry.contains_binding(
+        procedure_id=(
+            "NTTSY-SBX-AZ-VM-002"
+        ),
+        procedure_version="1.0",
+        step_id="1",
+    )
+
+
+def test_vm_001_resolves_real_vm_start_capability():
+    registry = (
+        build_default_procedure_capability_registry()
+    )
+
+    capability = (
+        registry.resolve_capability(
+            procedure_id=(
+                "NTTSY-SBX-AZ-VM-001"
+            ),
+            procedure_version="1.0",
+            step_id="1",
+        )
+    )
+
+    assert (
+        capability.capability_id
+        == "azure.vm.start"
+    )
+
+
+def test_vm_002_resolves_real_vm_start_capability():
+    registry = (
+        build_default_procedure_capability_registry()
+    )
+
+    capability = (
+        registry.resolve_capability(
+            procedure_id=(
+                "NTTSY-SBX-AZ-VM-002"
+            ),
+            procedure_version="1.0",
+            step_id="1",
+        )
+    )
+
+    assert (
+        capability.capability_id
+        == "azure.vm.start"
+    )
+
+
+def test_real_vm_procedures_reuse_same_capability():
+    registry = (
+        build_default_procedure_capability_registry()
+    )
+
+    vm_stopped = (
+        registry.resolve_capability(
+            procedure_id=(
+                "NTTSY-SBX-AZ-VM-001"
+            ),
+            procedure_version="1.0",
+            step_id="1",
+        )
+    )
+
+    vm_deallocated = (
+        registry.resolve_capability(
+            procedure_id=(
+                "NTTSY-SBX-AZ-VM-002"
+            ),
+            procedure_version="1.0",
+            step_id="1",
+        )
+    )
+
+    assert vm_stopped is vm_deallocated
+
+    assert (
+        vm_stopped.capability_id
+        == "azure.vm.start"
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "procedure_id",
+        "procedure_version",
+        "step_id",
+    ),
+    [
+        (
+            "NTTSY-SBX-AZ-VM-001",
+            "2.0",
+            "1",
+        ),
+        (
+            "NTTSY-SBX-AZ-VM-001",
+            "1.0",
+            "2",
+        ),
+        (
+            "NTTSY-SBX-AZ-VM-002",
+            "2.0",
+            "1",
+        ),
+        (
+            "NTTSY-SBX-AZ-VM-002",
+            "1.0",
+            "2",
+        ),
+        (
+            "NTTSY-SBX-AZ-VM-003",
+            "1.0",
+            "1",
+        ),
+    ],
+)
+def test_real_vm_bindings_fail_closed_on_non_exact_identity(
+    procedure_id,
+    procedure_version,
+    step_id,
+):
+    registry = (
+        build_default_procedure_capability_registry()
+    )
+
+    with pytest.raises(
+        ProcedureCapabilityBindingNotFoundError,
+    ):
+        registry.resolve_capability(
+            procedure_id=procedure_id,
+            procedure_version=(
+                procedure_version
+            ),
+            step_id=step_id,
+        )

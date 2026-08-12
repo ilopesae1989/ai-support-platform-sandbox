@@ -936,3 +936,270 @@ def test_bound_write_rejects_tampered_authoritative_resource_type():
         runtime._build_runtime_state(
             tampered_context
         )
+REAL_VM_PROCEDURES = [
+    (
+        "NTTSY-SBX-AZ-VM-001",
+        (
+            "Arranque de máquina virtual Azure "
+            "en estado Stopped (Allocated)"
+        ),
+    ),
+    (
+        "NTTSY-SBX-AZ-VM-002",
+        (
+            "Arranque de máquina virtual Azure "
+            "en estado Deallocated"
+        ),
+    ),
+]
+
+
+def create_real_vm_execution_context(
+    *,
+    procedure_id: str,
+    procedure_name: str,
+) -> ProcedureExecutionContext:
+    """
+    Convierte el contexto sintético existente en un
+    contexto cognitivo equivalente al que producirían
+    los procedimientos VM reales.
+
+    No introduce authority operacional.
+
+    Sólo sustituye:
+
+        procedure_id
+        procedure_name
+        procedure_version
+        step_id
+
+    La capability seguirá naciendo exclusivamente del
+    registry default gobernado por Python.
+    """
+
+    context = (
+        create_execution_context()
+    )
+
+    request = (
+        context.request.model_copy(
+            update={
+                "procedure_id": (
+                    procedure_id
+                ),
+
+                "procedure_name": (
+                    procedure_name
+                ),
+
+                "procedure_version": (
+                    "1.0"
+                ),
+            }
+        )
+    )
+
+    procedure = (
+        context.result.procedure.model_copy(
+            update={
+                "id": (
+                    procedure_id
+                ),
+
+                "name": (
+                    procedure_name
+                ),
+
+                "version": (
+                    "1.0"
+                ),
+            }
+        )
+    )
+
+    assert (
+        context.result.step
+        is not None
+    )
+
+    step = (
+        context.result.step.model_copy(
+            update={
+                "id": (
+                    "1"
+                )
+            }
+        )
+    )
+
+    result = (
+        context.result.model_copy(
+            update={
+                "procedure": (
+                    procedure
+                ),
+
+                "total_steps": (
+                    1
+                ),
+
+                "current_step": (
+                    1
+                ),
+
+                "step": (
+                    step
+                ),
+            }
+        )
+    )
+
+    return (
+        context.model_copy(
+            update={
+                "request": (
+                    request
+                ),
+
+                "result": (
+                    result
+                ),
+            }
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "procedure_id",
+        "procedure_name",
+    ),
+    REAL_VM_PROCEDURES,
+    ids=[
+        "vm-stopped-allocated",
+        "vm-deallocated",
+    ],
+)
+def test_default_runtime_resolves_real_vm_start_procedures(
+    procedure_id,
+    procedure_name,
+):
+    """
+    Garantía productiva de FASE 18.0.
+
+    Procedure Agent sólo proporciona:
+
+        procedure/version/step
+        operation_domain
+        operation_kind
+        required_parameters
+
+    El Runtime DEFAULT debe resolver:
+
+        procedure/version/step
+                ↓
+        azure.vm.start
+                ↓
+        OperationAction.VM_START
+
+    sin inyección de registry de test.
+    """
+
+    runtime = (
+        ProcedureRuntimeExecutor()
+    )
+
+    context = (
+        create_real_vm_execution_context(
+            procedure_id=(
+                procedure_id
+            ),
+
+            procedure_name=(
+                procedure_name
+            ),
+        )
+    )
+
+    state = (
+        runtime._build_runtime_state(
+            context
+        )
+    )
+
+    assert (
+        state.procedure.id
+        == procedure_id
+    )
+
+    assert (
+        state.procedure.version
+        == "1.0"
+    )
+
+    assert (
+        state.step.id
+        == "1"
+    )
+
+    assert (
+        state.step.capability_id
+        == "azure.vm.start"
+    )
+
+    assert (
+        state.step.operation_action
+        == OperationAction.VM_START
+    )
+
+    assert (
+        state.step.operation_domain
+        == "azure"
+    )
+
+    assert (
+        state.step.operation_kind
+        == OperationKind.WRITE
+    )
+
+    assert (
+        state.step.hitl_required
+        is True
+    )
+
+    assert (
+        state.step.required_parameters
+        == [
+            "subscription_id",
+            "resource_group",
+            "vm_name",
+        ]
+    )
+
+    assert (
+        state.step.target_resource
+        == CANONICAL_VM_RESOURCE_ID
+    )
+
+    resolved = {
+        parameter.name:
+            parameter.value
+
+        for parameter
+        in state.resolved_parameters
+    }
+
+    assert (
+        resolved["subscription_id"]
+        == SUBSCRIPTION_ID
+    )
+
+    assert (
+        resolved["resource_group"]
+        == RESOURCE_GROUP
+    )
+
+    assert (
+        resolved["vm_name"]
+        == VM_NAME
+    )
