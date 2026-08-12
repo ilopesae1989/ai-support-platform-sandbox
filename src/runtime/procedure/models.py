@@ -186,6 +186,12 @@ class ApprovedProcedureStep(BaseModel):
     """
     Snapshot exacto de la operación autorizada
     después de HITL.
+
+    description forma parte de la operación que
+    el operador humano vio y aprobó.
+
+    No puede reconstruirse, reinterpretarse ni
+    sustituirse después de HITL.
     """
 
     workflow_id: str
@@ -203,6 +209,8 @@ class ApprovedProcedureStep(BaseModel):
 
     current_step: int
     step_id: str
+
+    description: str
 
     operation_domain: str
     operation_kind: OperationKind

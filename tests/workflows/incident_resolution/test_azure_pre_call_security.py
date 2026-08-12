@@ -35,6 +35,11 @@ OTHER_SUBSCRIPTION_ID = (
     "0000-000000000000"
 )
 
+APPROVED_DESCRIPTION = (
+    "Consultar el listado de Resource Groups "
+    "de la suscripción."
+)
+
 
 def create_approved_step() -> (
     ApprovedProcedureStep
@@ -70,6 +75,10 @@ def create_approved_step() -> (
         current_step=1,
 
         step_id="1",
+
+        description=(
+            APPROVED_DESCRIPTION
+        ),
 
         operation_domain="azure",
 
@@ -151,6 +160,11 @@ def test_builder_creates_complete_candidate():
     )
 
     assert (
+        candidate.description
+        == APPROVED_DESCRIPTION
+    )
+
+    assert (
         candidate.operation_domain
         == "azure"
     )
@@ -218,6 +232,11 @@ def test_exact_candidate_becomes_verified_request():
     assert (
         verified.verification_source
         == "pre_call_security_verifier"
+    )
+
+    assert (
+        verified.description
+        == APPROVED_DESCRIPTION
     )
 
     assert (
@@ -302,6 +321,13 @@ def test_candidate_does_not_share_resolved_parameter_object():
         (
             "step_id",
             "99",
+        ),
+        (
+            "description",
+            (
+                "Listar las suscripciones "
+                "disponibles para el tenant."
+            ),
         ),
         (
             "operation_domain",
@@ -489,6 +515,11 @@ def test_prompt_contains_exact_resolved_parameter():
         ._build_prompt(
             verified
         )
+    )
+
+    assert (
+        APPROVED_DESCRIPTION
+        in prompt
     )
 
     assert (

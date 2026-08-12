@@ -20,19 +20,43 @@ def create_step(
 ) -> ApprovedProcedureStep:
     return ApprovedProcedureStep(
         workflow_id="wf-001",
-        approval_id="apr-post-hitl-001",
+
+        approval_id=(
+            "apr-post-hitl-001"
+        ),
+
         alert_id="ALT-001",
+
         procedure_id="PROC-001",
+
         procedure_version="v1.0",
+
         current_step=1,
+
         step_id="1",
+
+        description=(
+            "Ejecutar la operación de lectura "
+            f"aprobada para el dominio {domain} "
+            "sobre resource-01."
+        ),
+
         operation_domain=domain,
-        operation_kind=OperationKind.READ,
+
+        operation_kind=(
+            OperationKind.READ
+        ),
+
         next_action=(
             NextAction.EXECUTE_STEP
         ),
-        target_resource="resource-01",
+
+        target_resource=(
+            "resource-01"
+        ),
+
         required_parameters=[],
+
         approved=True,
     )
 

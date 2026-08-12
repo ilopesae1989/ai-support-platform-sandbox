@@ -65,6 +65,11 @@ SUBSCRIPTION_ID = (
     "a9ae-e9e89b5ad172"
 )
 
+APPROVED_DESCRIPTION = (
+    "Consultar Resource Groups "
+    "de la suscripción."
+)
+
 
 class FakeWorkflowContext:
     def __init__(
@@ -157,8 +162,7 @@ def create_runtime_state(
             id="1",
 
             description=(
-                "Consultar Resource Groups "
-                "de la suscripción."
+                APPROVED_DESCRIPTION
             ),
 
             step_type=(
@@ -249,6 +253,10 @@ def create_approved_step():
         current_step=1,
 
         step_id="1",
+
+        description=(
+            APPROVED_DESCRIPTION
+        ),
 
         operation_domain="azure",
 
@@ -407,8 +415,10 @@ async def test_verified_operation_marks_authoritative_runtime_as_waiting_operati
         ctx.messages
     ) == 1
 
+    #
     # El lifecycle no debe reconstruir,
     # modificar ni sustituir la request.
+    #
     assert (
         ctx.messages[0]
         is verified

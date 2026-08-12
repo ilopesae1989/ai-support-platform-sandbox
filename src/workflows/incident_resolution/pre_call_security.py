@@ -32,6 +32,7 @@ class PreCallSecurityVerifier:
         "procedure_version",
         "current_step",
         "step_id",
+        "description",
         "operation_domain",
         "operation_kind",
         "next_action",
@@ -120,6 +121,15 @@ class PreCallSecurityVerifier:
             )
 
         if (
+            not step.description
+            or not step.description.strip()
+        ):
+            raise PreCallSecurityError(
+                "ApprovedProcedureStep no contiene "
+                "description válida."
+            )
+
+        if (
             step.operation_domain
             != "azure"
         ):
@@ -175,6 +185,15 @@ class PreCallSecurityVerifier:
             raise PreCallSecurityError(
                 "AzureOperationRequest no contiene "
                 "approval_id."
+            )
+
+        if (
+            not candidate.description
+            or not candidate.description.strip()
+        ):
+            raise PreCallSecurityError(
+                "AzureOperationRequest no contiene "
+                "description válida."
             )
 
         if (
@@ -289,6 +308,10 @@ class PreCallSecurityVerifier:
 
             step_id=(
                 step.step_id
+            ),
+
+            description=(
+                step.description
             ),
 
             operation_domain=(

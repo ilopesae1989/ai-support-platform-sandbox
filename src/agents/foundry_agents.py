@@ -123,21 +123,53 @@ class FoundryAgents:
         definition: FoundryAgentDefinition,
     ) -> FoundryAgent:
         """
-        Crea un cliente FoundryAgent para una definición
-        concreta nombre + versión.
+        Crea un FoundryAgent para una definición
+        versionada del catálogo.
 
-        No añade instrucciones ni herramientas desde
-        Python.
+        Azure Operations recibe además una política
+        de ejecución que limita una aprobación a una
+        única tool call del backend.
 
-        Cualquier tool/MCP pertenece a la definición
-        administrada del agente en Microsoft Foundry.
+        La política se configura mediante
+        default_options porque el runtime instalado
+        no acepta extra_body como argumento directo
+        de Agent.run().
         """
 
+        default_options = None
+
+        if (
+            definition.key
+            == AgentKey.AZURE_OPERATIONS
+        ):
+            default_options = {
+                "extra_body": {
+                    "max_tool_calls": 1,
+                    "parallel_tool_calls": False,
+                }
+            }
+
         return FoundryAgent(
-            project_endpoint=self._project_endpoint,
-            agent_name=definition.name,
-            agent_version=definition.version,
-            credential=self._credential,
+            project_endpoint=(
+                self._project_endpoint
+            ),
+
+            agent_name=(
+                definition.name
+            ),
+
+            agent_version=(
+                definition.version
+            ),
+
+            credential=(
+                self._credential
+            ),
+
+            default_options=(
+                default_options
+            ),
+
             timeout=120.0,
         )
 

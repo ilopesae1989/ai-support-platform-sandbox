@@ -18,7 +18,9 @@ from src.workflows.incident_resolution.routing_post_hitl import (
 def create_step(
     *,
     domain: str = "azure",
-    kind: OperationKind = OperationKind.READ,
+    kind: OperationKind = (
+        OperationKind.READ
+    ),
     next_action: NextAction = (
         NextAction.EXECUTE_STEP
     ),
@@ -26,17 +28,41 @@ def create_step(
 ) -> ApprovedProcedureStep:
     return ApprovedProcedureStep(
         workflow_id="wf-001",
-        approval_id="apr-post-hitl-routing-001",
+
+        approval_id=(
+            "apr-post-hitl-routing-001"
+        ),
+
         alert_id="ALT-001",
+
         procedure_id="PROC-001",
+
         procedure_version="v1.0",
+
         current_step=1,
+
         step_id="1",
+
+        description=(
+            "Operación aprobada para validar "
+            f"routing del dominio {domain}, "
+            f"tipo {kind.value}, "
+            f"acción {next_action.value}, "
+            "sobre resource-01."
+        ),
+
         operation_domain=domain,
+
         operation_kind=kind,
+
         next_action=next_action,
-        target_resource="resource-01",
+
+        target_resource=(
+            "resource-01"
+        ),
+
         required_parameters=[],
+
         approved=approved,
     )
 

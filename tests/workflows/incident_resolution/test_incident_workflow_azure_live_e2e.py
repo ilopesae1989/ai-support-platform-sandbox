@@ -163,12 +163,19 @@ def find_mcp_calls(
         value,
         dict,
     ):
-        if value.get("type") == "mcp_call":
-            calls.append(value)
+        if (
+            value.get("type")
+            == "mcp_call"
+        ):
+            calls.append(
+                value
+            )
 
         for child in value.values():
             calls.extend(
-                find_mcp_calls(child)
+                find_mcp_calls(
+                    child
+                )
             )
 
     elif isinstance(
@@ -177,7 +184,9 @@ def find_mcp_calls(
     ):
         for child in value:
             calls.extend(
-                find_mcp_calls(child)
+                find_mcp_calls(
+                    child
+                )
             )
 
     return calls
@@ -204,7 +213,10 @@ def extract_group_names_from_mcp_output(
         output
     )
 
-    assert payload["status"] == 200
+    assert (
+        payload["status"]
+        == 200
+    )
 
     groups = (
         payload[
@@ -261,8 +273,11 @@ class LiveE2ERecordingFoundryAgents(
             "classification"
         )
 
-        result = await super().run_classification(
-            message
+        result = (
+            await super()
+            .run_classification(
+                message
+            )
         )
 
         self.classification_result = (
@@ -279,11 +294,16 @@ class LiveE2ERecordingFoundryAgents(
             "knowledge"
         )
 
-        result = await super().run_knowledge(
-            message
+        result = (
+            await super()
+            .run_knowledge(
+                message
+            )
         )
 
-        self.knowledge_result = result
+        self.knowledge_result = (
+            result
+        )
 
         return result
 
@@ -295,11 +315,16 @@ class LiveE2ERecordingFoundryAgents(
             "alert_triage"
         )
 
-        result = await super().run_alert_triage(
-            message
+        result = (
+            await super()
+            .run_alert_triage(
+                message
+            )
         )
 
-        self.triage_result = result
+        self.triage_result = (
+            result
+        )
 
         return result
 
@@ -312,12 +337,15 @@ class LiveE2ERecordingFoundryAgents(
         )
 
         result = (
-            await super().run_procedure_execution(
+            await super()
+            .run_procedure_execution(
                 message
             )
         )
 
-        self.procedure_result = result
+        self.procedure_result = (
+            result
+        )
 
         return result
 
@@ -341,7 +369,8 @@ class LiveE2ERecordingFoundryAgents(
         )
 
         response = (
-            await super().run_azure_operations(
+            await super()
+            .run_azure_operations(
                 message
             )
         )
@@ -516,11 +545,22 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
 
     approval_requests = []
 
+    first_run_outputs = []
+
+    first_run_event_types = []
+
     async for event in workflow.run(
         create_live_azure_alert(),
         stream=True,
     ):
-        if event.type == "request_info":
+        first_run_event_types.append(
+            event.type
+        )
+
+        if (
+            event.type
+            == "request_info"
+        ):
             approval_requests.append(
                 event.data
             )
@@ -529,19 +569,122 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
                 event.request_id
             ] = True
 
+        elif (
+            event.type
+            == "output"
+        ):
+            first_run_outputs.append(
+                event.data
+            )
+
     #
     # --------------------------------------------------
-    # Debe haberse alcanzado HITL.
+    # Diagnóstico fail-closed pre-HITL.
+    # --------------------------------------------------
+    #
+    # No reintentamos.
+    # No forzamos routing.
+    # No sustituimos resultados.
+    #
+    # Si el pipeline cognitivo no alcanza HITL,
+    # dejamos visible exactamente qué etapa y qué
+    # resultado provocaron la desviación.
+    #
+
+    if (
+        len(pending_responses)
+        != 1
+    ):
+        print()
+        print("=" * 80)
+        print(
+            "FASE 16.12.8 — PRE-HITL LIVE DIAGNOSTIC"
+        )
+        print("=" * 80)
+
+        print(
+            "calls =",
+            agents.calls,
+        )
+
+        print(
+            "event_types =",
+            first_run_event_types,
+        )
+
+        print(
+            "request_info_count =",
+            len(
+                approval_requests
+            ),
+        )
+
+        print(
+            "output_count =",
+            len(
+                first_run_outputs
+            ),
+        )
+
+        print()
+        print("# CLASSIFICATION")
+        print(
+            agents.classification_result
+        )
+
+        print()
+        print("# KNOWLEDGE")
+        print(
+            agents.knowledge_result
+        )
+
+        print()
+        print("# TRIAGE")
+        print(
+            agents.triage_result
+        )
+
+        print()
+        print("# PROCEDURE")
+        print(
+            agents.procedure_result
+        )
+
+        print()
+        print("# FIRST RUN OUTPUTS")
+
+        for index, output in enumerate(
+            first_run_outputs,
+            start=1,
+        ):
+            print(
+                f"[{index}] "
+                f"type={type(output).__name__}"
+            )
+
+            print(
+                output
+            )
+
+        print("=" * 80)
+
+        pytest.fail(
+            "El LIVE E2E no alcanzó exactamente "
+            "un HITL. Revisar el diagnóstico "
+            "PRE-HITL anterior; no se permite "
+            "retry automático ni forzar routing."
+        )
+
+    #
+    # --------------------------------------------------
+    # Debe haberse alcanzado exactamente un HITL.
     # --------------------------------------------------
     #
 
-    assert len(
-        pending_responses
-    ) == 1
-
-    assert len(
-        approval_requests
-    ) == 1
+    assert (
+        len(approval_requests)
+        == 1
+    )
 
     approval = (
         approval_requests[0]
@@ -624,13 +767,38 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         == "execute_step"
     )
 
-    assert (
-        agents.procedure_result.step.target_resource
-        == SUBSCRIPTION_ID
+    #
+    # target_resource de Procedure sigue siendo
+    # salida cognitiva.
+    #
+    # Hemos observado LIVE las dos representaciones:
+    #
+    #     "subscription"
+    #
+    # y:
+    #
+    #     <subscription UUID>
+    #
+    # La autoridad NO nace aquí.
+    #
+    raw_procedure_target_resource = (
+        agents.procedure_result
+        .step
+        .target_resource
     )
 
     assert (
-        agents.procedure_result.step.required_parameters
+        raw_procedure_target_resource
+        in {
+            "subscription",
+            SUBSCRIPTION_ID,
+        }
+    )
+
+    assert (
+        agents.procedure_result
+        .step
+        .required_parameters
         == [
             "subscription_id",
         ]
@@ -640,6 +808,9 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     # --------------------------------------------------
     # Snapshot HITL exacto
     # --------------------------------------------------
+    #
+    # A partir de esta frontera ya exigimos el
+    # target canónico producido por Python.
     #
 
     assert (
@@ -679,7 +850,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
 
     assert (
         approval.target_resource
-        == SUBSCRIPTION_ID
+        == "subscription"
     )
 
     assert (
@@ -710,12 +881,18 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         == SUBSCRIPTION_ID
     )
 
+    assert (
+        resolved.source
+        == "normalized_alert.subscription_id"
+    )
+
     #
     # Antes de aprobar:
     #
     # Azure Operations = 0
     # MCP = 0
     #
+
     assert (
         "azure_operations"
         not in agents.calls
@@ -752,7 +929,10 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         responses=pending_responses,
         stream=True,
     ):
-        if event.type == "output":
+        if (
+            event.type
+            == "output"
+        ):
             output_events.append(
                 event.data
             )
@@ -820,9 +1000,10 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     # --------------------------------------------------
     #
 
-    assert len(
-        output_events
-    ) == 1
+    assert (
+        len(output_events)
+        == 1
+    )
 
     runtime_state = (
         output_events[0]
@@ -833,6 +1014,152 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         ProcedureRuntimeState,
     )
 
+    #
+    # --------------------------------------------------
+    # Diagnóstico post-Procedure Validation
+    # --------------------------------------------------
+    #
+    # No alteramos ningún resultado.
+    # No forzamos SUCCEEDED.
+    # No sustituimos la decisión cognitiva.
+    #
+    # Si Procedure Validation propone BLOCKED,
+    # queremos ver exactamente:
+    #
+    # - qué recibió;
+    # - qué respondió;
+    # - qué evidencia operacional existía;
+    # - qué transición aplicó Python.
+    #
+
+    print()
+    print("=" * 80)
+    print(
+        "FASE 16.12.8 — POST-VALIDATION LIVE DIAGNOSTIC"
+    )
+    print("=" * 80)
+
+    print(
+        "calls =",
+        agents.calls,
+    )
+
+    print()
+    print("# RUNTIME STATE")
+
+    print(
+        "step_status =",
+        runtime_state.step_status,
+    )
+
+    print(
+        "workflow_status =",
+        runtime_state.workflow_status,
+    )
+
+    print(
+        "approval_id =",
+        runtime_state.approval_id,
+    )
+
+    print(
+        "target_resource =",
+        runtime_state.step.target_resource,
+    )
+
+    print(
+        "resolved_parameters =",
+        runtime_state.resolved_parameters,
+    )
+
+    print()
+    print("# OPERATION RESULT EVIDENCE")
+
+    print(
+        runtime_state.operation_result
+    )
+
+    print()
+    print("# VERIFICATION RESULT")
+
+    print(
+        runtime_state.verification_result
+    )
+
+    print()
+    print("# PROCEDURE VALIDATION RESULT")
+
+    print(
+        agents.procedure_validation_result
+    )
+
+    if (
+        agents.procedure_validation_result
+        is not None
+    ):
+        print(
+            "validation_status =",
+            (
+                agents
+                .procedure_validation_result
+                .validation_status
+            ),
+        )
+
+        print(
+            "proposed_next_action =",
+            (
+                agents
+                .procedure_validation_result
+                .proposed_next_action
+            ),
+        )
+
+        print(
+            "validation_summary =",
+            (
+                agents
+                .procedure_validation_result
+                .validation_summary
+            ),
+        )
+
+        print(
+            "escalation =",
+            (
+                agents
+                .procedure_validation_result
+                .escalation
+            ),
+        )
+
+    print()
+    print("# PROCEDURE VALIDATION PROMPT")
+
+    if (
+        agents.procedure_validation_prompt
+        is not None
+    ):
+        validation_prompt_payload = (
+            json.loads(
+                agents.procedure_validation_prompt
+            )
+        )
+
+        print(
+            json.dumps(
+                validation_prompt_payload,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+        )
+
+    print("=" * 80)
+
+    #
+    # El gate sigue siendo estricto.
+    #
     assert (
         runtime_state.step_status
         == StepStatus.SUCCEEDED
@@ -851,6 +1178,54 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         == approval.approval_id
     )
 
+    #
+    # La identidad operacional autorizada debe
+    # conservar exactamente la canonicalización
+    # realizada antes del HITL.
+    #
+
+    assert (
+        runtime_state.step.target_resource
+        == "subscription"
+    )
+
+    assert (
+        runtime_state
+        .step
+        .required_parameters
+        == [
+            "subscription_id",
+        ]
+    )
+
+    assert (
+        len(
+            runtime_state
+            .resolved_parameters
+        )
+        == 1
+    )
+
+    runtime_resolved = (
+        runtime_state
+        .resolved_parameters[0]
+    )
+
+    assert (
+        runtime_resolved.name
+        == "subscription_id"
+    )
+
+    assert (
+        runtime_resolved.value
+        == SUBSCRIPTION_ID
+    )
+
+    assert (
+        runtime_resolved.source
+        == "normalized_alert.subscription_id"
+    )
+
     assert (
         runtime_state.operation_result
         is not None
@@ -865,6 +1240,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     # Recuperamos el OperationResult registrado
     # autoritativamente por el workflow.
     #
+
     operation_result = (
         OperationResult.model_validate(
             runtime_state
@@ -882,6 +1258,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     # El MCP real debe haber producido evidencia
     # técnica suficiente para demostrar éxito.
     #
+
     assert (
         operation_result.technical_success
         is True
@@ -891,6 +1268,12 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         operation_result.evidence
         is not None
     )
+
+    #
+    # --------------------------------------------------
+    # Identidad OperationResult
+    # --------------------------------------------------
+    #
 
     assert (
         operation_result.alert_id
@@ -919,7 +1302,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
 
     assert (
         operation_result.target_resource
-        == SUBSCRIPTION_ID
+        == "subscription"
     )
 
     assert (
@@ -949,10 +1332,18 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         == SUBSCRIPTION_ID
     )
 
+    assert (
+        operation_result
+        .resolved_parameters[0]
+        .source
+        == "normalized_alert.subscription_id"
+    )
+
     #
     # Evidencia operacional normalizada por
     # AzureOperationsExecutor.
     #
+
     assert (
         len(
             operation_result
@@ -999,6 +1390,11 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         agents.procedure_validation_result
     )
 
+    #
+    # La validación cognitiva debe corresponder
+    # exactamente a la operación ejecutada.
+    #
+
     assert (
         validation_result.operation_id
         == operation_result.operation_id
@@ -1009,6 +1405,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     # correctamente y evidencia técnica real,
     # el criterio del paso debe quedar satisfecho.
     #
+
     assert (
         validation_result.validation_status
         == "satisfied"
@@ -1039,6 +1436,13 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         agents.azure_operations_prompt
         is not None
     )
+
+    #
+    # Aunque target_resource sea el scope lógico
+    # "subscription", la operación concreta debe
+    # conservar el UUID mediante el parámetro
+    # resuelto.
+    #
 
     assert (
         SUBSCRIPTION_ID
@@ -1082,9 +1486,11 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     # Este procedimiento sólo requiere una
     # operación MCP.
     #
-    assert len(
-        mcp_calls
-    ) == 1
+
+    assert (
+        len(mcp_calls)
+        == 1
+    )
 
     mcp_call = (
         mcp_calls[0]
@@ -1122,6 +1528,7 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     # group_list actualmente está configurado
     # server-side sin segunda aprobación MCP.
     #
+
     assert (
         mcp_call.get(
             "approval_request_id"
@@ -1166,9 +1573,11 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     #
     # También exigimos exactamente 5.
     #
-    assert len(
-        actual_resource_groups
-    ) == 5
+
+    assert (
+        len(actual_resource_groups)
+        == 5
+    )
 
     #
     # --------------------------------------------------
@@ -1178,14 +1587,38 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
 
     print()
     print("=" * 80)
+
     print(
         "FASE 16.12.8 — LIVE E2E PASSED"
     )
+
     print("=" * 80)
 
     print(
         "Procedure:"
         " NTTSY-SBX-AZ-001 1.0"
+    )
+
+    print(
+        "Procedure raw target_resource:",
+        raw_procedure_target_resource,
+    )
+
+    print(
+        "Runtime target_resource:",
+        runtime_state
+        .step
+        .target_resource,
+    )
+
+    print(
+        "Resolved subscription_id:",
+        runtime_resolved.value,
+    )
+
+    print(
+        "Resolved source:",
+        runtime_resolved.source,
     )
 
     print(
@@ -1201,6 +1634,26 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
     print(
         "correlation_id:",
         approval.correlation_id,
+    )
+
+    print(
+        "operation_id:",
+        operation_result.operation_id,
+    )
+
+    print(
+        "technical_success:",
+        operation_result.technical_success,
+    )
+
+    print(
+        "validation_status:",
+        validation_result.validation_status,
+    )
+
+    print(
+        "proposed_next_action:",
+        validation_result.proposed_next_action,
     )
 
     print(

@@ -37,19 +37,32 @@ def route_to_knowledge_review(
     """
     Ruta hacia Knowledge Review.
 
-    Solo debe activarse cuando:
-    - existe match parcial;
-    - no es elegible;
-    - Triage solicita knowledge_review.
+    Puede activarse cuando existe un procedimiento
+    identificado pero todavía no es elegible para
+    ejecución:
 
-    Esto mantiene la ruta mutuamente exclusiva
-    respecto a manual_analysis/human_escalation.
+    - match partial; o
+    - match exact con contexto insuficiente.
+
+    En ambos casos Triage debe solicitar
+    explícitamente knowledge_review.
+
+    La ruta permanece mutuamente exclusiva respecto
+    a Procedure Execution y Manual Analysis.
     """
 
     triage = context.triage
 
     return (
-        triage.procedure_match == "partial"
+        triage.procedure_found
+        and triage.procedure is not None
+        and (
+            triage.procedure_match
+            in {
+                "exact",
+                "partial",
+            }
+        )
         and not triage.execution_eligible
         and (
             triage.recommended_next_step

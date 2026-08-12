@@ -212,6 +212,26 @@ Versión: {version}
 Recurso afectado:
 {request.affected_resource}
 
+Contrato obligatorio de target_resource:
+
+- target_resource identifica el recurso al que aplica
+    exactamente el paso recuperado.
+
+- Para una operación Azure a nivel de suscripción cuyo
+    parámetro requerido sea subscription_id, devuelve
+    target_resource exclusivamente como uno de estos
+    valores:
+
+    1. el literal exacto "subscription"; o
+    2. el valor exacto de Recurso afectado mostrado arriba.
+
+- No uses descripciones como "Azure subscription",
+    "suscripción Azure", "subscription_id" ni otros textos.
+
+- No construyas rutas ARM ni transformes el identificador.
+
+- No inventes ni sustituyas el identificador del recurso.
+
 Incidencia:
 {request.incident_description}
 

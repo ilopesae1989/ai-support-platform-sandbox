@@ -34,6 +34,10 @@ APPROVAL_ID = (
     "8111-111111111111"
 )
 
+APPROVED_DESCRIPTION = (
+    "Consultar el Resource Group rg-demo."
+)
+
 
 class FakeNativeResponse:
     def __init__(
@@ -101,6 +105,10 @@ def create_approved_step(
         current_step=1,
 
         step_id="1",
+
+        description=(
+            APPROVED_DESCRIPTION
+        ),
 
         operation_domain="azure",
 
@@ -237,6 +245,11 @@ async def test_executor_invokes_azure_operations_agent():
 
     assert (
         "PROC-AZ-001"
+        in prompt
+    )
+
+    assert (
+        APPROVED_DESCRIPTION
         in prompt
     )
 

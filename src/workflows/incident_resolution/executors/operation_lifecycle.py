@@ -65,7 +65,9 @@ def _validate_request_against_runtime(
             "VerifiedAzureOperationRequest."
         )
 
+    #
     # Revalidación estructural fail-closed.
+    #
     VerifiedAzureOperationRequest.model_validate(
         request.model_dump(
             mode="python"
@@ -103,66 +105,87 @@ def _validate_request_against_runtime(
             request.workflow_id,
             state.workflow_id,
         ),
+
         "approval_id": (
             request.approval_id,
             state.approval_id,
         ),
+
         "alert_id": (
             request.alert_id,
             state.alert_id,
         ),
+
         "correlation_id": (
             request.correlation_id,
             state.correlation_id,
         ),
+
         "conversation_id": (
             request.conversation_id,
             state.conversation_id,
         ),
+
         "procedure_id": (
             request.procedure_id,
             state.procedure.id,
         ),
+
         "procedure_version": (
             request.procedure_version,
             state.procedure.version,
         ),
+
         "current_step": (
             request.current_step,
             state.current_step,
         ),
+
         "step_id": (
             request.step_id,
             state.step.id,
         ),
+
+        "description": (
+            request.description,
+            state.step.description,
+        ),
+
         "operation_domain": (
             request.operation_domain,
             state.step.operation_domain,
         ),
+
         "operation_kind": (
             request.operation_kind,
             state.step.operation_kind,
         ),
+
         "next_action": (
             request.next_action,
             NextAction.EXECUTE_STEP,
         ),
+
         "target_resource": (
             request.target_resource,
             state.step.target_resource,
         ),
+
         "required_parameters": (
             list(
                 request.required_parameters
             ),
+
             list(
                 state.step.required_parameters
             ),
         ),
+
         "resolved_parameters": (
             _resolved_parameter_snapshot(
                 request.resolved_parameters
             ),
+
             _resolved_parameter_snapshot(
                 state.resolved_parameters
             ),
@@ -181,18 +204,23 @@ def _validate_request_against_runtime(
             workflow_id=(
                 state.workflow_id
             ),
+
             approval_id=(
                 request.approval_id
             ),
+
             alert_id=(
                 state.alert_id
             ),
+
             procedure_id=(
                 state.procedure.id
             ),
+
             current_step=(
                 state.current_step
             ),
+
             step_id=(
                 state.step.id
             ),
@@ -267,8 +295,10 @@ class OperationStartExecutor(Executor):
             state,
         )
 
+        #
         # El request verificado no se reconstruye
         # ni se modifica.
+        #
         await ctx.send_message(
             request
         )

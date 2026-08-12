@@ -91,6 +91,15 @@ def build_azure_operation_request(
         )
 
     if (
+        not step.description
+        or not step.description.strip()
+    ):
+        raise ValueError(
+            "La operación Azure aprobada no contiene "
+            "description válida."
+        )
+
+    if (
         step.operation_domain
         != "azure"
     ):
@@ -188,6 +197,10 @@ def build_azure_operation_request(
 
         step_id=(
             step.step_id
+        ),
+
+        description=(
+            step.description
         ),
 
         operation_domain=(

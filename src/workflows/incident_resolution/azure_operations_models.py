@@ -33,9 +33,35 @@ class AzureOperationRequest(
     Operación Azure candidata.
 
     No representa autorización.
+
+    description contiene exactamente la operación
+    semántica que fue presentada y aprobada en HITL.
+
+    No puede inferirse posteriormente a partir de:
+
+    - operation_domain;
+    - operation_kind;
+    - target_resource;
+    - required_parameters.
     """
 
-    pass
+    description: str
+
+    @field_validator(
+        "description"
+    )
+    @classmethod
+    def validate_description(
+        cls,
+        value: str,
+    ) -> str:
+        if not value.strip():
+            raise ValueError(
+                "AzureOperationRequest requiere "
+                "description no vacía."
+            )
+
+        return value
 
 
 class VerifiedResolvedParameter(

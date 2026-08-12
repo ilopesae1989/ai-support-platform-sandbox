@@ -328,6 +328,10 @@ async def test_triage_executor_builds_expected_prompt():
 
     prompt = agents.received_message
 
+    normalized_prompt = " ".join(
+        prompt.split()
+    )
+
     assert "ALT-SQL-AG-001" in prompt
 
     assert (
@@ -341,6 +345,35 @@ async def test_triage_executor_builds_expected_prompt():
     assert "NTTSY-PRO-016" in prompt
     assert "NTTSY-PRO-017" in prompt
     assert "NTTSY-PRO-020" in prompt
+
+    assert (
+        "La autenticación y los permisos RBAC "
+        "del backend de ejecución"
+        in normalized_prompt
+    )
+
+    assert (
+        "no forman parte de la cobertura "
+        "documental del procedimiento"
+        in normalized_prompt
+    )
+
+    assert (
+        "no marques execution_eligible=false"
+        in normalized_prompt
+    )
+
+    assert (
+        "únicamente porque la documentación "
+        "no describa credenciales o roles RBAC"
+        in normalized_prompt
+    )
+
+    assert (
+        "La autorización técnica efectiva "
+        "se valida posteriormente"
+        in normalized_prompt
+    )
 
 
 @pytest.mark.asyncio

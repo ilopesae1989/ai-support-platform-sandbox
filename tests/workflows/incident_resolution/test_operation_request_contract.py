@@ -56,6 +56,11 @@ SUBSCRIPTION_ID = (
     "a9ae-e9e89b5ad172"
 )
 
+APPROVED_DESCRIPTION = (
+    "Consultar el listado de Resource Groups "
+    "de la suscripción."
+)
+
 
 COMMON_OPERATION_FIELDS = (
     "operation_id",
@@ -110,6 +115,10 @@ def create_approved_step() -> ApprovedProcedureStep:
         current_step=1,
 
         step_id="1",
+
+        description=(
+            APPROVED_DESCRIPTION
+        ),
 
         operation_domain="azure",
 
@@ -186,21 +195,41 @@ def test_operation_request_contains_exact_common_contract():
 
 def test_azure_operation_request_reuses_common_contract():
     """
-    AzureOperationRequest debe reutilizar el
-    contrato vendor-neutral sin duplicar campos.
+    AzureOperationRequest reutiliza íntegramente
+    OperationRequest y añade exclusivamente:
+
+        description
     """
 
-    assert issubclass(
-        AzureOperationRequest,
-        OperationRequest,
+    common_fields = tuple(
+        OperationRequest
+        .model_fields
+        .keys()
+    )
+
+    azure_fields = tuple(
+        AzureOperationRequest
+        .model_fields
+        .keys()
     )
 
     assert (
-        tuple(
-            AzureOperationRequest.model_fields
+        azure_fields.count(
+            "description"
         )
-        == COMMON_OPERATION_FIELDS
+        == 1
     )
+
+    assert (
+        len(azure_fields)
+        == len(common_fields) + 1
+    )
+
+    assert tuple(
+        field_name
+        for field_name in azure_fields
+        if field_name != "description"
+    ) == common_fields
 
 
 def test_verified_azure_request_keeps_security_layer():
@@ -256,6 +285,11 @@ def test_azure_builder_still_creates_domain_candidate():
         build_azure_operation_request(
             create_approved_step()
         )
+    )
+
+    assert (
+        candidate.description
+        == APPROVED_DESCRIPTION
     )
 
     assert (
@@ -318,6 +352,11 @@ def test_pre_call_verification_preserves_common_contract():
     assert isinstance(
         verified,
         VerifiedAzureOperationRequest,
+    )
+
+    assert (
+        verified.description
+        == APPROVED_DESCRIPTION
     )
 
     for field_name in (

@@ -334,3 +334,31 @@ def test_partial_manual_analysis_does_not_route_to_knowledge_review():
         route_to_manual_analysis(context)
         is True
     )
+def test_exact_non_eligible_routes_only_to_knowledge_review():
+    context = create_context(
+        procedure_match="exact",
+        execution_eligible=False,
+        recommended_next_step="knowledge_review",
+        procedure_found=True,
+    )
+
+    assert (
+        route_to_procedure_execution(
+            context
+        )
+        is False
+    )
+
+    assert (
+        route_to_knowledge_review(
+            context
+        )
+        is True
+    )
+
+    assert (
+        route_to_manual_analysis(
+            context
+        )
+        is False
+    )

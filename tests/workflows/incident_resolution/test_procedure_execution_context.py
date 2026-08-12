@@ -305,3 +305,33 @@ def test_procedure_prompt_declares_prepare_step_mode():
         'mode = "validate_result"'
         not in prompt
     )
+
+    normalized_prompt = " ".join(
+        prompt.split()
+    )
+
+    assert (
+        'el literal exacto "subscription"'
+        in normalized_prompt
+    )
+
+    assert (
+        "el valor exacto de Recurso afectado "
+        "mostrado arriba"
+        in normalized_prompt
+    )
+
+    assert (
+        'No uses descripciones como "Azure subscription"'
+        in normalized_prompt
+    )
+
+    assert (
+        "No construyas rutas ARM"
+        in normalized_prompt
+    )
+
+    assert (
+        "No inventes ni sustituyas el identificador"
+        in normalized_prompt
+    )

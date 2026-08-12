@@ -61,6 +61,11 @@ SUBSCRIPTION_ID = (
     "a9ae-e9e89b5ad172"
 )
 
+APPROVED_DESCRIPTION = (
+    "Consultar el listado de Resource Groups "
+    "de la suscripción."
+)
+
 
 def create_approved_step() -> ApprovedProcedureStep:
     return ApprovedProcedureStep(
@@ -95,6 +100,10 @@ def create_approved_step() -> ApprovedProcedureStep:
         current_step=1,
 
         step_id="1",
+
+        description=(
+            APPROVED_DESCRIPTION
+        ),
 
         operation_domain="azure",
 
@@ -244,6 +253,11 @@ def test_builder_only_creates_unverified_candidate():
     )
 
     assert (
+        candidate.description
+        == APPROVED_DESCRIPTION
+    )
+
+    assert (
         not hasattr(
             candidate,
             "security_verified",
@@ -296,6 +310,11 @@ def test_only_verifier_creates_verified_request():
     assert (
         verified.verification_source
         == "pre_call_security_verifier"
+    )
+
+    assert (
+        verified.description
+        == APPROVED_DESCRIPTION
     )
 
 
@@ -376,6 +395,11 @@ def test_verified_request_preserves_approval_identity():
     assert (
         verified.step_id
         == approved_step.step_id
+    )
+
+    assert (
+        verified.description
+        == approved_step.description
     )
 
     assert (

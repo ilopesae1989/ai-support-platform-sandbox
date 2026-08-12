@@ -29,7 +29,17 @@ from src.workflows.incident_resolution.parameter_resolution import (
 class ProcedureRuntimeExecutor(Executor):
     """
     Construye ProcedureRuntimeState preservando la
-    identidad generada antes de Procedure v5.
+    identidad generada antes de Procedure.
+
+    El Runtime constituye la frontera entre:
+
+        salida cognitiva de Procedure
+                ↓
+        estado operacional autoritativo
+
+    Ningún valor cognitivo adquiere autoridad
+    operacional por el mero hecho de haber sido
+    producido por el agente.
     """
 
     def __init__(self) -> None:
@@ -120,33 +130,51 @@ class ProcedureRuntimeExecutor(Executor):
         context: ProcedureExecutionContext,
     ) -> str | None:
         """
-        Resuelve el target_resource que puede cruzar
-        la frontera hacia ProcedureRuntimeState.
+        Canonicaliza únicamente scopes Azure para los
+        que existe una regla operacional determinista.
 
-        Para Azure, el target_resource operativo no
-        puede depender de texto libre generado por
-        Procedure Execution.
+        Actualmente está definida la operación Azure
+        a nivel de suscripción:
 
-        El tipo de recurso procede exclusivamente de
-        OperationalContext, construido desde campos
-        tipados de NormalizedAlert.
+            operation_domain = azure
+            required_parameters = ["subscription_id"]
 
-        El identificador concreto del recurso no se
-        pierde: se conserva mediante los parámetros
-        operacionales resueltos, por ejemplo:
+        Para ese caso:
 
-            resource_type = "subscription"
+            target_resource = "subscription"
 
-            subscription_id =
-                "557fdabc-..."
+        El UUID concreto autorizado permanece en:
 
-        Así se mantiene separada:
+            resolved_parameters.subscription_id
 
-        - la clase/tipo de recurso autorizado;
-        - la identidad concreta resuelta del recurso.
+        y procede exclusivamente de
+        OperationalContext.
+
+        Procedure puede haber expresado cognitivamente
+        el target como:
+
+            "subscription"
+
+        o como:
+
+            "<subscription_id>"
+
+        Ambas representaciones sólo son aceptadas si
+        coinciden con el contexto operacional
+        autoritativo.
+
+        Para otros scopes Azure todavía no existe una
+        regla canónica general. En esos casos se
+        conserva el target preparado por Procedure para
+        que llegue exactamente al HITL y sea aprobado
+        como parte de la operación concreta.
+
+        No se intenta inferir, transformar ni
+        generalizar esos scopes.
         """
 
         result = context.result
+
         operational = (
             context.operational_context
         )
@@ -165,21 +193,69 @@ class ProcedureRuntimeExecutor(Executor):
                 result.step.target_resource
             )
 
-        resource_type = (
+        required_parameters = list(
+            result.step.required_parameters
+        )
+
+        #
+        # Única regla canónica Azure definida
+        # actualmente:
+        #
+        # operación sobre una suscripción concreta.
+        #
+        if (
+            required_parameters
+            != ["subscription_id"]
+        ):
+            return (
+                result.step.target_resource
+            )
+
+        if (
             operational.resource_type
+            != "subscription"
+        ):
+            raise ValueError(
+                "Una operación Azure de suscripción "
+                "requiere resource_type=subscription "
+                "autoritativo en OperationalContext "
+                "antes del HITL."
+            )
+
+        subscription_id = (
+            operational.subscription_id
         )
 
         if (
-            resource_type is None
-            or not resource_type.strip()
+            subscription_id is None
+            or not subscription_id.strip()
         ):
             raise ValueError(
-                "Una operación Azure requiere "
-                "resource_type autoritativo en "
-                "OperationalContext antes del HITL."
+                "Una operación Azure de suscripción "
+                "requiere subscription_id autoritativo "
+                "antes del HITL."
             )
 
-        return resource_type
+        allowed_cognitive_targets = {
+            "subscription",
+            subscription_id,
+        }
+
+        if (
+            result.step.target_resource
+            not in allowed_cognitive_targets
+        ):
+            raise ValueError(
+                "Procedure Execution devolvió un "
+                "target_resource incompatible con "
+                "la suscripción autoritativa. "
+                "target_resource="
+                f"{result.step.target_resource!r}; "
+                "valores admitidos="
+                f"{sorted(allowed_cognitive_targets)!r}."
+            )
+
+        return "subscription"
 
     @classmethod
     def _build_runtime_state(

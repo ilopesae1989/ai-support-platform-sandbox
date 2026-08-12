@@ -56,10 +56,12 @@ def create_request() -> (
         procedure_id=(
             "NTTSY-SBX-AZ-001"
         ),
+
         procedure_name=(
             "Consulta de Resource Groups "
             "de una suscripción Azure"
         ),
+
         procedure_version="v1.0",
 
         affected_resource=(
@@ -76,8 +78,14 @@ def create_request() -> (
 def create_identity() -> ExecutionIdentity:
     return ExecutionIdentity(
         workflow_id=WORKFLOW_ID,
-        alert_id="ALT-AZ-RG-LIST-001",
-        correlation_id=CORRELATION_ID,
+
+        alert_id=(
+            "ALT-AZ-RG-LIST-001"
+        ),
+
+        correlation_id=(
+            CORRELATION_ID
+        ),
     )
 
 
@@ -89,16 +97,38 @@ def create_operational_context(
     resource_group: str | None = None,
 ) -> OperationalContext:
     return OperationalContext(
-        alert_id="ALT-AZ-RG-LIST-001",
+        alert_id=(
+            "ALT-AZ-RG-LIST-001"
+        ),
+
         affected_resource=(
             SUBSCRIPTION_ID
         ),
-        resource_type="subscription",
-        service="Azure Resource Manager",
-        environment="sandbox",
-        subscription_id=subscription_id,
-        resource_group=resource_group,
-        tenant_id=TENANT_ID,
+
+        resource_type=(
+            "subscription"
+        ),
+
+        service=(
+            "Azure Resource Manager"
+        ),
+
+        environment=(
+            "sandbox"
+        ),
+
+        subscription_id=(
+            subscription_id
+        ),
+
+        resource_group=(
+            resource_group
+        ),
+
+        tenant_id=(
+            TENANT_ID
+        ),
+
         correlation_id=(
             CORRELATION_ID
         ),
@@ -119,10 +149,12 @@ def create_result(
                 "procedure": {
                     "id":
                         "NTTSY-SBX-AZ-001",
+
                     "name": (
                         "Consulta de Resource Groups "
                         "de una suscripción Azure"
                     ),
+
                     "version":
                         "v1.0",
                 },
@@ -190,10 +222,13 @@ def create_result(
                 "escalation": {
                     "required":
                         False,
+
                     "team":
                         None,
+
                     "level":
                         None,
+
                     "criteria":
                         None,
                 },
@@ -227,12 +262,15 @@ def create_execution_context(
     target_resource: str = "subscription",
 ) -> ProcedureExecutionContext:
     return ProcedureExecutionContext(
-        request=create_request(),
+        request=(
+            create_request()
+        ),
 
         result=create_result(
             required_parameters=(
                 required_parameters
             ),
+
             target_resource=(
                 target_resource
             ),
@@ -269,6 +307,11 @@ def test_runtime_resolves_subscription_id_before_hitl():
     )
 
     assert (
+        state.step.target_resource
+        == "subscription"
+    )
+
+    assert (
         state.step.required_parameters
         == [
             "subscription_id",
@@ -277,8 +320,14 @@ def test_runtime_resolves_subscription_id_before_hitl():
 
     assert state.resolved_parameters == [
         ResolvedParameter(
-            name="subscription_id",
-            value=SUBSCRIPTION_ID,
+            name=(
+                "subscription_id"
+            ),
+
+            value=(
+                SUBSCRIPTION_ID
+            ),
+
             source=(
                 "normalized_alert.subscription_id"
             ),
@@ -288,23 +337,18 @@ def test_runtime_resolves_subscription_id_before_hitl():
 
 def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
     """
-    El target_resource cognitivo no puede decidir
-    por sí solo la identidad operacional que llegará
-    al HITL.
-
     Reproduce el comportamiento observado LIVE:
 
-    Procedure puede devolver como target_resource
-    el UUID concreto de la suscripción aunque el
-    tipo autoritativo del recurso en
-    OperationalContext sea "subscription".
+    Procedure puede expresar cognitivamente el
+    target_resource como el UUID concreto de la
+    suscripción.
 
-    El Runtime debe normalizar antes del HITL:
+    El Runtime debe convertir exclusivamente esta
+    operación conocida al scope canónico:
 
-        target_resource -> resource_type autoritativo
+        target_resource = "subscription"
 
-    mientras el identificador concreto autorizado
-    permanece en:
+    mientras la identidad concreta permanece en:
 
         resolved_parameters.subscription_id
     """
@@ -314,6 +358,7 @@ def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
             required_parameters=[
                 "subscription_id",
             ],
+
             target_resource=(
                 SUBSCRIPTION_ID
             ),
@@ -321,10 +366,9 @@ def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
     )
 
     #
-    # Precondición del ataque/regresión:
+    # Precondición:
     #
-    # Procedure ha devuelto el UUID como
-    # target_resource.
+    # La salida cognitiva contiene el UUID.
     #
     assert (
         context.result.step.target_resource
@@ -332,7 +376,7 @@ def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
     )
 
     #
-    # Fuente determinista/autoritativa.
+    # Fuente operacional autoritativa.
     #
     assert (
         context.operational_context.resource_type
@@ -352,11 +396,8 @@ def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
     )
 
     #
-    # Gate principal:
-    #
-    # El dato cognitivo no debe controlar
-    # target_resource después de la frontera
-    # Runtime.
+    # El UUID cognitivo no atraviesa como
+    # target_resource operacional.
     #
     assert (
         state.step.target_resource
@@ -364,19 +405,109 @@ def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
     )
 
     #
-    # El recurso concreto sigue existiendo,
-    # pero como parámetro resuelto desde el
-    # contexto operacional confiable.
+    # El identificador concreto sí permanece,
+    # resuelto exclusivamente desde la alerta
+    # normalizada.
     #
     assert state.resolved_parameters == [
         ResolvedParameter(
-            name="subscription_id",
-            value=SUBSCRIPTION_ID,
+            name=(
+                "subscription_id"
+            ),
+
+            value=(
+                SUBSCRIPTION_ID
+            ),
+
             source=(
                 "normalized_alert.subscription_id"
             ),
         )
     ]
+
+
+def test_runtime_preserves_other_azure_target_without_canonical_rule():
+    """
+    Una regla de canonicalización específica para
+    subscription no puede destruir otros targets
+    Azure concretos.
+
+    Este test protege la regresión observada cuando
+    Runtime sustituía cualquier target Azure por:
+
+        OperationalContext.resource_type
+    """
+
+    target_resource = (
+        "/subscriptions/sub-test/"
+        "resourceGroups/rg-lab-ia-copilot/"
+        "providers/Microsoft.Compute/"
+        "virtualMachines/vm-demo-01"
+    )
+
+    context = (
+        create_execution_context(
+            required_parameters=[],
+
+            target_resource=(
+                target_resource
+            ),
+        )
+    )
+
+    state = (
+        ProcedureRuntimeExecutor
+        ._build_runtime_state(
+            context
+        )
+    )
+
+    assert (
+        state.step.target_resource
+        == target_resource
+    )
+
+    assert (
+        state.resolved_parameters
+        == []
+    )
+
+
+def test_runtime_blocks_mismatched_subscription_target_before_hitl():
+    """
+    Si Procedure devuelve una suscripción distinta
+    de la que existe en OperationalContext, Runtime
+    debe bloquear antes del HITL.
+
+    No se normaliza silenciosamente un target
+    cognitivo incompatible.
+    """
+
+    context = (
+        create_execution_context(
+            required_parameters=[
+                "subscription_id",
+            ],
+
+            target_resource=(
+                "00000000-0000-0000-"
+                "0000-000000000000"
+            ),
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "target_resource incompatible"
+        ),
+    ):
+        (
+            ProcedureRuntimeExecutor
+            ._build_runtime_state(
+                context
+            )
+        )
 
 
 def test_runtime_blocks_missing_required_parameter_before_hitl():
@@ -385,6 +516,7 @@ def test_runtime_blocks_missing_required_parameter_before_hitl():
             required_parameters=[
                 "subscription_id",
             ],
+
             subscription_id=None,
         )
     )

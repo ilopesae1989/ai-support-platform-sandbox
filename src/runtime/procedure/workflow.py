@@ -125,6 +125,15 @@ def build_approved_procedure_step(
             "approval_id."
         )
 
+    if (
+        not state.step.description
+        or not state.step.description.strip()
+    ):
+        raise ValueError(
+            "El paso aprobado no contiene "
+            "description válida."
+        )
+
     _validate_parameter_binding(
         state
     )
@@ -164,6 +173,10 @@ def build_approved_procedure_step(
 
         step_id=(
             state.step.id
+        ),
+
+        description=(
+            state.step.description
         ),
 
         operation_domain=(
@@ -224,6 +237,15 @@ class ProcedureApprovalExecutor(Executor):
             raise ValueError(
                 "No puede construirse ApprovalRequest "
                 "sin approval_id."
+            )
+
+        if (
+            not state.step.description
+            or not state.step.description.strip()
+        ):
+            raise ValueError(
+                "No puede construirse ApprovalRequest "
+                "sin description válida."
             )
 
         return ApprovalRequest(

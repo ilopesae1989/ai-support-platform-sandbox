@@ -102,6 +102,9 @@ Paso:
 Número: {request.current_step}
 ID: {request.step_id}
 
+Operación exacta aprobada por el operador humano:
+{request.description}
+
 Operación:
 Dominio: {request.operation_domain}
 Tipo: {request.operation_kind.value}
@@ -116,6 +119,12 @@ Parámetros aprobados y resueltos:
 
 Restricciones obligatorias:
 
+- Ejecuta exclusivamente la operación descrita en
+  "Operación exacta aprobada por el operador humano".
+- No sustituyas esa operación por otra operación
+  aunque también sea de lectura.
+- No amplíes, generalices ni reinterpretas la
+  operación aprobada.
 - No cambies el operation_id.
 - No cambies el workflow.
 - No cambies la aprobación.
@@ -132,8 +141,9 @@ Restricciones obligatorias:
 - No cambies ningún parámetro aprobado.
 - No amplíes el alcance solicitado.
 - Utiliza exclusivamente los valores concretos aprobados.
-- Si una herramienta requiere argumentos distintos,
-  no ejecutes esa herramienta.
+- Si una herramienta no permite ejecutar exactamente
+  la operación aprobada utilizando exactamente los
+  parámetros autorizados, no ejecutes esa herramienta.
 """.strip()
 
     @staticmethod

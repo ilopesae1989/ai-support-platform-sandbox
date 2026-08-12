@@ -17,6 +17,14 @@ APPROVAL_ID = (
     "8111-111111111111"
 )
 
+READ_DESCRIPTION = (
+    "Consultar el Resource Group rg-test."
+)
+
+WRITE_DESCRIPTION = (
+    "Actualizar el Resource Group rg-test."
+)
+
 
 def create_step(
     *,
@@ -27,6 +35,9 @@ def create_step(
     ),
     next_action: NextAction = (
         NextAction.EXECUTE_STEP
+    ),
+    description: str = (
+        READ_DESCRIPTION
     ),
 ) -> ApprovedProcedureStep:
     return ApprovedProcedureStep(
@@ -49,6 +60,10 @@ def create_step(
         current_step=1,
 
         step_id="step-001",
+
+        description=(
+            description
+        ),
 
         operation_domain=domain,
 
@@ -137,6 +152,16 @@ def test_approved_azure_read_builds_request():
     )
 
     assert (
+        request.description
+        == READ_DESCRIPTION
+    )
+
+    assert (
+        request.description
+        == step.description
+    )
+
+    assert (
         request.operation_domain
         == "azure"
     )
@@ -185,6 +210,10 @@ def test_approved_azure_write_builds_request():
         operation_kind=(
             OperationKind.WRITE
         ),
+
+        description=(
+            WRITE_DESCRIPTION
+        ),
     )
 
     request = (
@@ -196,6 +225,11 @@ def test_approved_azure_write_builds_request():
     assert (
         request.operation_kind
         == OperationKind.WRITE
+    )
+
+    assert (
+        request.description
+        == WRITE_DESCRIPTION
     )
 
 

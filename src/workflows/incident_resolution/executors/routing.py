@@ -159,46 +159,74 @@ class KnowledgeReviewExecutor(Executor):
         triage = context.triage
 
         if (
-            triage.procedure_match != "partial"
-            or (
-                triage.recommended_next_step
-                != "knowledge_review"
-            )
+            triage.recommended_next_step
+            != "knowledge_review"
         ):
             raise ValueError(
                 "Knowledge Review requiere "
-                "procedure_match=partial y "
                 "recommended_next_step="
                 "knowledge_review."
             )
 
+        if (
+            triage.procedure_match
+            not in {
+                "exact",
+                "partial",
+            }
+        ):
+            raise ValueError(
+                "Knowledge Review requiere "
+                "procedure_match=partial o exact."
+            )
+
+        if triage.execution_eligible:
+            raise ValueError(
+                "Knowledge Review no acepta "
+                "contextos elegibles para ejecución."
+            )
+
+        if (
+            not triage.procedure_found
+            or triage.procedure is None
+        ):
+            raise ValueError(
+                "Knowledge Review requiere "
+                "un procedimiento identificado."
+            )
+
         procedure = triage.procedure
+
+        if (
+            triage.procedure_match
+            == "partial"
+        ):
+            reason = (
+                "partial_procedure_match"
+            )
+
+        else:
+            reason = (
+                "insufficient_knowledge"
+            )
 
         request = KnowledgeReviewRequest(
             alert_id=(
                 context.alert.alert_id
             ),
 
-            reason=(
-                "partial_procedure_match"
-            ),
+            reason=reason,
 
             procedure_id=(
                 procedure.id
-                if procedure is not None
-                else None
             ),
 
             procedure_name=(
                 procedure.name
-                if procedure is not None
-                else None
             ),
 
             procedure_version=(
                 procedure.version
-                if procedure is not None
-                else None
             ),
 
             affected_resource=(

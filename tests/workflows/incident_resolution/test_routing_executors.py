@@ -383,7 +383,7 @@ async def test_knowledge_review_executor_builds_request():
 
 
 @pytest.mark.asyncio
-async def test_knowledge_review_executor_rejects_non_partial():
+async def test_knowledge_review_executor_rejects_non_knowledge_review_context():
     executor = KnowledgeReviewExecutor()
     ctx = FakeWorkflowContext()
 
@@ -396,7 +396,38 @@ async def test_knowledge_review_executor_rejects_non_partial():
 
     with pytest.raises(
         ValueError,
-        match="procedure_match=partial",
+        match=(
+            "recommended_next_step="
+            "knowledge_review"
+        ),
+    ):
+        await executor.prepare_review(
+            context,
+            ctx,
+        )
+
+    assert ctx.messages == []
+    assert ctx.outputs == []
+
+
+@pytest.mark.asyncio
+async def test_knowledge_review_executor_rejects_eligible_context():
+    executor = KnowledgeReviewExecutor()
+    ctx = FakeWorkflowContext()
+
+    context = create_context(
+        procedure_match="exact",
+        execution_eligible=True,
+        recommended_next_step="knowledge_review",
+        procedure_found=True,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "no acepta contextos "
+            "elegibles para ejecución"
+        ),
     ):
         await executor.prepare_review(
             context,
@@ -529,3 +560,50 @@ async def test_manual_analysis_executor_rejects_execution_context():
 
     assert ctx.messages == []
     assert ctx.outputs == []
+@pytest.mark.asyncio
+async def test_knowledge_review_executor_supports_exact_but_non_eligible():
+    executor = KnowledgeReviewExecutor()
+
+    ctx = FakeWorkflowContext()
+
+    context = create_context(
+        procedure_match="exact",
+        execution_eligible=False,
+        recommended_next_step="knowledge_review",
+        procedure_found=True,
+        missing_context=[
+            "Falta contexto operacional requerido."
+        ],
+    )
+
+    await executor.prepare_review(
+        context,
+        ctx,
+    )
+
+    assert ctx.messages == []
+
+    assert len(
+        ctx.outputs
+    ) == 1
+
+    result = ctx.outputs[0]
+
+    assert isinstance(
+        result,
+        KnowledgeReviewRequest,
+    )
+
+    assert (
+        result.reason
+        == "insufficient_knowledge"
+    )
+
+    assert (
+        result.procedure_id
+        == "PROC-001"
+    )
+
+    assert result.missing_context == [
+        "Falta contexto operacional requerido."
+    ]

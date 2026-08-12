@@ -160,6 +160,31 @@ Resumen del conocimiento:
 Limitaciones de la recuperación:
 {limitations_text}
 
+Frontera de responsabilidad para execution_eligible:
+
+- Evalúa si existe un procedimiento corporativo aplicable a la
+    incidencia y si el contexto operacional requerido por dicho
+    procedimiento está disponible.
+
+- La autenticación y los permisos RBAC del backend de ejecución
+    no forman parte de la cobertura documental del procedimiento.
+
+- Si existe un procedimiento exacto que identifica la operación,
+    sus parámetros requeridos y su criterio de verificación, no
+    marques execution_eligible=false únicamente porque la
+    documentación no describa credenciales o roles RBAC.
+
+- La autorización técnica efectiva se valida posteriormente por
+    las capas deterministas de seguridad y por el backend autorizado.
+
+- Sí debes marcar execution_eligible=false cuando falte información
+    operacional que el propio procedimiento necesite para determinar
+    o parametrizar la operación, cuando exista un bloqueo explícito
+    de política, cuando no se pueda determinar el paso aplicable o
+    cuando el procedimiento no sea exacto.
+
+- No inventes credenciales, permisos, parámetros ni precondiciones.
+
 Clasifica la alerta utilizando exclusivamente los procedimientos
 y matrices corporativas disponibles.
 
