@@ -3,6 +3,7 @@ import pytest
 from src.runtime.procedure.models import (
     ApprovedProcedureStep,
     NextAction,
+    OperationAction,
     OperationKind,
     ResolvedParameter,
 )
@@ -33,6 +34,9 @@ def create_step(
     operation_kind: OperationKind = (
         OperationKind.READ
     ),
+    operation_action: OperationAction | None = None,
+    capability_id: str | None = None,
+    hitl_required: bool | None = None,
     next_action: NextAction = (
         NextAction.EXECUTE_STEP
     ),
@@ -68,6 +72,18 @@ def create_step(
         operation_domain=domain,
 
         operation_kind=operation_kind,
+
+        operation_action=(
+            operation_action
+        ),
+
+        capability_id=(
+            capability_id
+        ),
+
+        hitl_required=(
+            hitl_required
+        ),
 
         next_action=next_action,
 
@@ -211,6 +227,16 @@ def test_approved_azure_write_builds_request():
             OperationKind.WRITE
         ),
 
+        operation_action=(
+            OperationAction.VM_START
+        ),
+
+        capability_id=(
+            "azure.vm.start"
+        ),
+
+        hitl_required=True,
+
         description=(
             WRITE_DESCRIPTION
         ),
@@ -228,9 +254,106 @@ def test_approved_azure_write_builds_request():
     )
 
     assert (
+        request.operation_action
+        == OperationAction.VM_START
+    )
+
+    assert (
+        request.capability_id
+        == "azure.vm.start"
+    )
+
+    assert (
+        request.hitl_required
+        is True
+    )
+
+    assert (
         request.description
         == WRITE_DESCRIPTION
     )
+
+
+def test_write_without_capability_id_is_rejected():
+    step = create_step(
+        operation_kind=(
+            OperationKind.WRITE
+        ),
+
+        operation_action=(
+            OperationAction.VM_START
+        ),
+
+        hitl_required=True,
+
+        description=(
+            WRITE_DESCRIPTION
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="capability_id",
+    ):
+        build_azure_operation_request(
+            step
+        )
+
+
+def test_write_without_required_hitl_is_rejected():
+    step = create_step(
+        operation_kind=(
+            OperationKind.WRITE
+        ),
+
+        operation_action=(
+            OperationAction.VM_START
+        ),
+
+        capability_id=(
+            "azure.vm.start"
+        ),
+
+        hitl_required=False,
+
+        description=(
+            WRITE_DESCRIPTION
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="hitl_required=True",
+    ):
+        build_azure_operation_request(
+            step
+        )
+
+
+def test_write_without_operation_action_is_rejected():
+    step = create_step(
+        operation_kind=(
+            OperationKind.WRITE
+        ),
+
+        capability_id=(
+            "azure.vm.start"
+        ),
+
+        hitl_required=True,
+
+        description=(
+            WRITE_DESCRIPTION
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="operation_action",
+    ):
+        build_azure_operation_request(
+            step
+        )
 
 
 def test_unapproved_step_is_rejected():

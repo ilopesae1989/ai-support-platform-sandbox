@@ -27,6 +27,8 @@ CURRENT_OPERATION_RESULT_FIELDS = (
     "operation_domain",
     "operation_kind",
     "operation_action",
+    "capability_id",
+    "hitl_required",
     "next_action",
     "target_resource",
     "required_parameters",

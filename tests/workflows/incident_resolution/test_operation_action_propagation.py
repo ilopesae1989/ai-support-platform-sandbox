@@ -409,3 +409,113 @@ def test_operation_start_rejects_operation_action_different_from_runtime():
             tampered_verified,
             state,
         )
+
+
+def test_operation_start_rejects_capability_different_from_runtime():
+    state = create_runtime_state()
+
+    approved_step = (
+        build_approved_procedure_step(
+            state
+        )
+    )
+
+    candidate = (
+        build_azure_operation_request(
+            approved_step
+        )
+    )
+
+    verified = (
+        PreCallSecurityVerifier.verify(
+            approved_step=approved_step,
+            candidate=candidate,
+        )
+    )
+
+    payload = {
+        field_name: getattr(
+            verified,
+            field_name,
+        )
+        for field_name
+        in type(
+            verified
+        ).model_fields
+    }
+
+    payload[
+        "capability_id"
+    ] = "azure.vm.restart"
+
+    tampered_verified = (
+        type(
+            verified
+        ).model_construct(
+            **payload
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="capability_id",
+    ):
+        _validate_request_against_runtime(
+            tampered_verified,
+            state,
+        )
+
+
+def test_operation_start_rejects_hitl_policy_different_from_runtime():
+    state = create_runtime_state()
+
+    approved_step = (
+        build_approved_procedure_step(
+            state
+        )
+    )
+
+    candidate = (
+        build_azure_operation_request(
+            approved_step
+        )
+    )
+
+    verified = (
+        PreCallSecurityVerifier.verify(
+            approved_step=approved_step,
+            candidate=candidate,
+        )
+    )
+
+    payload = {
+        field_name: getattr(
+            verified,
+            field_name,
+        )
+        for field_name
+        in type(
+            verified
+        ).model_fields
+    }
+
+    payload[
+        "hitl_required"
+    ] = False
+
+    tampered_verified = (
+        type(
+            verified
+        ).model_construct(
+            **payload
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="hitl_required",
+    ):
+        _validate_request_against_runtime(
+            tampered_verified,
+            state,
+        )

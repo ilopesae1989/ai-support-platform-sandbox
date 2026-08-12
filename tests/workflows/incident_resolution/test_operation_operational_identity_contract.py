@@ -6,6 +6,7 @@ from pydantic import (
 
 from src.runtime.procedure.models import (
     NextAction,
+    OperationAction,
     OperationKind,
     ResolvedParameter,
 )
@@ -23,6 +24,9 @@ from src.workflows.incident_resolution.operation_models import (
 OPERATIONAL_FIELDS = (
     "operation_domain",
     "operation_kind",
+    "operation_action",
+    "capability_id",
+    "hitl_required",
     "next_action",
     "target_resource",
     "required_parameters",
@@ -203,6 +207,18 @@ def test_matching_operational_identity_is_accepted():
         (
             "operation_kind",
             OperationKind.WRITE,
+        ),
+        (
+            "operation_action",
+            OperationAction.VM_START,
+        ),
+        (
+            "capability_id",
+            "azure.vm.start",
+        ),
+        (
+            "hitl_required",
+            True,
         ),
         (
             "next_action",

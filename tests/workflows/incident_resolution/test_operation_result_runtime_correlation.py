@@ -11,6 +11,7 @@ from src.runtime.procedure.identity import (
 from src.runtime.procedure.models import (
     ApprovalStatus,
     NextAction,
+    OperationAction,
     OperationKind,
     ProcedureReference,
     ProcedureRuntimeState,
@@ -63,6 +64,19 @@ SUBSCRIPTION_ID = (
     "a9ae-e9e89b5ad172"
 )
 
+VM_NAME = "vm-icenter-sbx-demo-01"
+
+VM_RESOURCE_GROUP = (
+    "rg-icenter-sandbox-vm-demo"
+)
+
+VM_TARGET_RESOURCE = (
+    f"/subscriptions/{SUBSCRIPTION_ID}"
+    f"/resourceGroups/{VM_RESOURCE_GROUP}"
+    "/providers/Microsoft.Compute"
+    f"/virtualMachines/{VM_NAME}"
+)
+
 
 def get_validator():
     module = import_module(
@@ -91,6 +105,37 @@ def resolved_parameters(
             value=value,
             source=source,
         )
+    ]
+
+
+def vm_resolved_parameters():
+    return [
+        ResolvedParameter(
+            name="subscription_id",
+            value=SUBSCRIPTION_ID,
+            source=(
+                "normalized_alert."
+                "subscription_id"
+            ),
+        ),
+
+        ResolvedParameter(
+            name="resource_group",
+            value=VM_RESOURCE_GROUP,
+            source=(
+                "normalized_alert."
+                "resource_group"
+            ),
+        ),
+
+        ResolvedParameter(
+            name="vm_name",
+            value=VM_NAME,
+            source=(
+                "normalized_alert."
+                "vm_name"
+            ),
+        ),
     ]
 
 
@@ -331,6 +376,74 @@ def create_result(
     )
 
 
+def create_governed_write_runtime_state():
+    state = (
+        create_runtime_state()
+    )
+
+    state.step.operation_kind = (
+        OperationKind.WRITE
+    )
+
+    state.step.operation_action = (
+        OperationAction.VM_START
+    )
+
+    state.step.capability_id = (
+        "azure.vm.start"
+    )
+
+    state.step.hitl_required = True
+
+    state.step.target_resource = (
+        VM_TARGET_RESOURCE
+    )
+
+    state.step.required_parameters = [
+        "subscription_id",
+        "resource_group",
+        "vm_name",
+    ]
+
+    state.resolved_parameters = (
+        vm_resolved_parameters()
+    )
+
+    return state
+
+
+def create_governed_write_result():
+    return create_result(
+        updates={
+            "operation_kind":
+                OperationKind.WRITE,
+
+            "operation_action":
+                OperationAction.VM_START,
+
+            "capability_id":
+                "azure.vm.start",
+
+            "hitl_required":
+                True,
+
+            "target_resource":
+                VM_TARGET_RESOURCE,
+
+            "required_parameters": [
+                "subscription_id",
+                "resource_group",
+                "vm_name",
+            ],
+
+            "resolved_parameters":
+                vm_resolved_parameters(),
+        },
+
+        include_evidence=False,
+    )
+
+
 def test_matching_result_is_accepted_without_mutation():
     state = (
         create_runtime_state()
@@ -481,6 +594,57 @@ def test_result_for_different_operation_is_rejected(
     ):
         validator(
             result,
+            state,
+        )
+
+
+def test_result_correlation_rejects_capability_substitution():
+    state = (
+        create_governed_write_runtime_state()
+    )
+
+    result = (
+        create_governed_write_result()
+    )
+
+    tampered = result.model_copy(
+        update={
+            "capability_id":
+                "azure.vm.restart"
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="capability_id",
+    ):
+        get_validator()(
+            tampered,
+            state,
+        )
+
+
+def test_result_correlation_rejects_hitl_policy_substitution():
+    state = (
+        create_governed_write_runtime_state()
+    )
+
+    result = (
+        create_governed_write_result()
+    )
+
+    tampered = result.model_copy(
+        update={
+            "hitl_required": False
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="hitl_required",
+    ):
+        get_validator()(
+            tampered,
             state,
         )
 

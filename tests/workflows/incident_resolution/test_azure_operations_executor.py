@@ -7,6 +7,7 @@ from agent_framework import (
 from src.runtime.procedure.models import (
     ApprovedProcedureStep,
     NextAction,
+    OperationAction,
     OperationKind,
     ResolvedParameter,
 )
@@ -155,6 +156,127 @@ def create_verified_request(
 ) -> VerifiedAzureOperationRequest:
     step = (
         create_approved_step()
+    )
+
+    candidate = (
+        build_azure_operation_request(
+            step
+        )
+    )
+
+    return (
+        PreCallSecurityVerifier.verify(
+            approved_step=step,
+            candidate=candidate,
+        )
+    )
+
+
+def create_governed_write_step(
+) -> ApprovedProcedureStep:
+    return ApprovedProcedureStep(
+        workflow_id="wf-vm-start-001",
+
+        approval_id=(
+            APPROVAL_ID
+        ),
+
+        alert_id=(
+            "ALT-VM-START-001"
+        ),
+
+        correlation_id=(
+            "corr-vm-start-001"
+        ),
+
+        conversation_id=(
+            "conv-vm-start-001"
+        ),
+
+        procedure_id=(
+            "TEST-PROC-VM-START"
+        ),
+
+        procedure_version="1.0",
+
+        current_step=1,
+
+        step_id="1",
+
+        description=(
+            "Encender la máquina virtual "
+            "autorizada."
+        ),
+
+        operation_domain="azure",
+
+        operation_kind=(
+            OperationKind.WRITE
+        ),
+
+        operation_action=(
+            OperationAction.VM_START
+        ),
+
+        capability_id=(
+            "azure.vm.start"
+        ),
+
+        hitl_required=True,
+
+        next_action=(
+            NextAction.EXECUTE_STEP
+        ),
+
+        target_resource=(
+            "/subscriptions/sub-001/"
+            "resourceGroups/rg-demo/"
+            "providers/Microsoft.Compute/"
+            "virtualMachines/vm-demo"
+        ),
+
+        required_parameters=[
+            "subscription_id",
+            "resource_group",
+            "vm_name",
+        ],
+
+        resolved_parameters=[
+            ResolvedParameter(
+                name="subscription_id",
+                value="sub-001",
+                source=(
+                    "normalized_alert."
+                    "subscription_id"
+                ),
+            ),
+
+            ResolvedParameter(
+                name="resource_group",
+                value="rg-demo",
+                source=(
+                    "normalized_alert."
+                    "resource_group"
+                ),
+            ),
+
+            ResolvedParameter(
+                name="vm_name",
+                value="vm-demo",
+                source=(
+                    "normalized_alert."
+                    "vm_name"
+                ),
+            ),
+        ],
+
+        approved=True,
+    )
+
+
+def create_governed_write_verified_request():
+    step = (
+        create_governed_write_step()
     )
 
     candidate = (
@@ -440,6 +562,100 @@ async def test_executor_fails_closed_when_foundry_fails():
     assert (
         "Foundry unavailable"
         in result.error
+    )
+
+
+@pytest.mark.asyncio
+async def test_executor_preserves_governed_capability_identity_on_success():
+    agents = FakeFoundryAgents()
+
+    workflow = (
+        build_executor_workflow(
+            agents
+        )
+    )
+
+    request = (
+        create_governed_write_verified_request()
+    )
+
+    outputs = []
+
+    async for event in workflow.run(
+        request,
+        stream=True,
+    ):
+        if event.type == "output":
+            outputs.append(
+                event.data
+            )
+
+    assert len(outputs) == 1
+
+    result = outputs[0]
+
+    assert (
+        result.operation_action
+        == request.operation_action
+    )
+
+    assert (
+        result.capability_id
+        == request.capability_id
+    )
+
+    assert (
+        result.hitl_required
+        == request.hitl_required
+    )
+
+
+@pytest.mark.asyncio
+async def test_executor_preserves_governed_capability_identity_on_failure():
+    agents = (
+        FailingFoundryAgents()
+    )
+
+    workflow = (
+        build_executor_workflow(
+            agents
+        )
+    )
+
+    request = (
+        create_governed_write_verified_request()
+    )
+
+    outputs = []
+
+    async for event in workflow.run(
+        request,
+        stream=True,
+    ):
+        if event.type == "output":
+            outputs.append(
+                event.data
+            )
+
+    assert len(outputs) == 1
+
+    result = outputs[0]
+
+    assert result.success is False
+
+    assert (
+        result.operation_action
+        == request.operation_action
+    )
+
+    assert (
+        result.capability_id
+        == request.capability_id
+    )
+
+    assert (
+        result.hitl_required
+        == request.hitl_required
     )
 
 
