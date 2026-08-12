@@ -76,6 +76,14 @@ class OperationEvidence(
 
     operation_action: OperationAction | None = None
 
+    #
+    # Capability y policy exactas que originaron
+    # la operación aprobada.
+    #
+    capability_id: str | None = None
+
+    hitl_required: bool | None = None
+
     next_action: NextAction
 
     target_resource: str | None = None

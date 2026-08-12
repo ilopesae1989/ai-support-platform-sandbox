@@ -232,6 +232,16 @@ def validate_operation_result_against_runtime(
             validated_state.step.operation_action,
         ),
 
+        "capability_id": (
+            validated_result.capability_id,
+            validated_state.step.capability_id,
+        ),
+
+        "hitl_required": (
+            validated_result.hitl_required,
+            validated_state.step.hitl_required,
+        ),
+
         "next_action": (
             validated_result.next_action,
             NextAction.EXECUTE_STEP,

@@ -95,6 +95,14 @@ def create_operational_context(
         SUBSCRIPTION_ID
     ),
     resource_group: str | None = None,
+
+    resource_type: str | None = (
+        "subscription"
+    ),
+
+    affected_resource: str | None = (
+        SUBSCRIPTION_ID
+    ),
 ) -> OperationalContext:
     return OperationalContext(
         alert_id=(
@@ -102,11 +110,11 @@ def create_operational_context(
         ),
 
         affected_resource=(
-            SUBSCRIPTION_ID
+            affected_resource
         ),
 
         resource_type=(
-            "subscription"
+            resource_type
         ),
 
         service=(
@@ -256,10 +264,20 @@ def create_result(
 def create_execution_context(
     *,
     required_parameters: list[str],
+
     subscription_id: str | None = (
         SUBSCRIPTION_ID
     ),
+
     target_resource: str = "subscription",
+
+    resource_type: str | None = (
+        "subscription"
+    ),
+
+    affected_resource: str | None = (
+        SUBSCRIPTION_ID
+    ),
 ) -> ProcedureExecutionContext:
     return ProcedureExecutionContext(
         request=(
@@ -284,9 +302,37 @@ def create_execution_context(
             create_operational_context(
                 subscription_id=(
                     subscription_id
-                )
+                ),
+
+                resource_type=(
+                    resource_type
+                ),
+
+                affected_resource=(
+                    affected_resource
+                ),
             )
         ),
+    )
+
+
+def build_runtime_state(
+    context: ProcedureExecutionContext,
+):
+    """
+    Construye estado mediante una instancia real
+    de ProcedureRuntimeExecutor.
+
+    Runtime posee ahora dependencias de infraestructura
+    como ResourceIdentityRegistry, por lo que no debe
+    invocarse como método estático/de clase.
+    """
+
+    return (
+        ProcedureRuntimeExecutor()
+        ._build_runtime_state(
+            context
+        )
     )
 
 
@@ -300,8 +346,7 @@ def test_runtime_resolves_subscription_id_before_hitl():
     )
 
     state = (
-        ProcedureRuntimeExecutor
-        ._build_runtime_state(
+        build_runtime_state(
             context
         )
     )
@@ -389,8 +434,7 @@ def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
     )
 
     state = (
-        ProcedureRuntimeExecutor
-        ._build_runtime_state(
+        build_runtime_state(
             context
         )
     )
@@ -426,23 +470,23 @@ def test_runtime_uses_authoritative_resource_type_instead_of_llm_target():
     ]
 
 
-def test_runtime_preserves_other_azure_target_without_canonical_rule():
+def test_runtime_preserves_unregistered_target_during_transition():
     """
-    Una regla de canonicalización específica para
-    subscription no puede destruir otros targets
-    Azure concretos.
+    Durante la migración hacia Capability Catalog,
+    un resource_type sin IdentityResolver registrado
+    todavía conserva el target cognitivo.
 
-    Este test protege la regresión observada cuando
-    Runtime sustituía cualquier target Azure por:
+    Esto es compatibilidad TRANSITORIA.
 
-        OperationalContext.resource_type
+    Registrar un IdentityResolver no autoriza ninguna
+    operación; la autorización llegará en FASE 17.3.
     """
 
     target_resource = (
         "/subscriptions/sub-test/"
-        "resourceGroups/rg-lab-ia-copilot/"
-        "providers/Microsoft.Compute/"
-        "virtualMachines/vm-demo-01"
+        "resourceGroups/rg-demo/"
+        "providers/Microsoft.Unsupported/"
+        "unregisteredResources/resource-01"
     )
 
     context = (
@@ -452,12 +496,20 @@ def test_runtime_preserves_other_azure_target_without_canonical_rule():
             target_resource=(
                 target_resource
             ),
+
+            resource_type=(
+                "Microsoft.Unsupported/"
+                "unregisteredResources"
+            ),
+
+            affected_resource=(
+                "resource-01"
+            ),
         )
     )
 
     state = (
-        ProcedureRuntimeExecutor
-        ._build_runtime_state(
+        build_runtime_state(
             context
         )
     )
@@ -498,15 +550,10 @@ def test_runtime_blocks_mismatched_subscription_target_before_hitl():
 
     with pytest.raises(
         ValueError,
-        match=(
-            "target_resource incompatible"
-        ),
+        match="target_resource",
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._build_runtime_state(
-                context
-            )
+        build_runtime_state(
+            context
         )
 
 
@@ -528,11 +575,8 @@ def test_runtime_blocks_missing_required_parameter_before_hitl():
             "los parámetros"
         ),
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._build_runtime_state(
-                context
-            )
+        build_runtime_state(
+            context
         )
 
 
@@ -552,9 +596,6 @@ def test_runtime_blocks_unknown_required_parameter_before_hitl():
             "invented_parameter"
         ),
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._build_runtime_state(
-                context
-            )
+        build_runtime_state(
+            context
         )

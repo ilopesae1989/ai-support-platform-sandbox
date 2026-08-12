@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+from .operational_context import (
+    OperationalContext,
+)
+
+from .resource_identity import (
+    ResolvedResourceIdentity,
+    ResourceIdentityResolutionError,
+)
+
 
 class AzureResourceIdentityError(
     ValueError
@@ -116,3 +125,216 @@ def build_azure_vm_resource_id(
         "/providers/Microsoft.Compute"
         f"/virtualMachines/{vm_name}"
     )
+
+
+class AzureSubscriptionIdentityResolver:
+    """
+    Resolver autoritativo para operaciones Azure
+    cuyo scope operacional es una suscripción.
+
+    Es un adapter de identidad, no lógica de alerta.
+    """
+
+    operation_domain = "azure"
+
+    resource_type = "subscription"
+
+    required_parameters = (
+        "subscription_id",
+    )
+
+    def resolve(
+        self,
+        context: OperationalContext,
+    ) -> ResolvedResourceIdentity:
+
+        if (
+            context.resource_type
+            != self.resource_type
+        ):
+            raise (
+                ResourceIdentityResolutionError(
+                    "resource_type no corresponde "
+                    "al resolver de suscripción."
+                )
+            )
+
+        subscription_id = (
+            context.subscription_id
+        )
+
+        if (
+            subscription_id is None
+            or not subscription_id
+        ):
+            raise (
+                ResourceIdentityResolutionError(
+                    "La identidad de suscripción "
+                    "requiere subscription_id "
+                    "autoritativo."
+                )
+            )
+
+        return ResolvedResourceIdentity(
+            operation_domain=(
+                self.operation_domain
+            ),
+
+            resource_type=(
+                self.resource_type
+            ),
+
+            canonical_target_resource=(
+                "subscription"
+            ),
+
+            required_parameters=(
+                self.required_parameters
+            ),
+
+            allowed_cognitive_targets=(
+                "subscription",
+                subscription_id,
+            ),
+        )
+
+
+class AzureVirtualMachineIdentityResolver:
+    """
+    Adapter de identidad para:
+
+        Microsoft.Compute/virtualMachines
+
+    No contiene lógica de alertas ni de acciones.
+
+    Sirve igual para cualquier procedimiento/capability
+    que opere sobre una VM.
+    """
+
+    operation_domain = "azure"
+
+    resource_type = (
+        "Microsoft.Compute/"
+        "virtualMachines"
+    )
+
+    required_parameters = (
+        "subscription_id",
+        "resource_group",
+        "vm_name",
+    )
+
+    def resolve(
+        self,
+        context: OperationalContext,
+    ) -> ResolvedResourceIdentity:
+
+        if (
+            context.resource_type
+            != self.resource_type
+        ):
+            raise (
+                ResourceIdentityResolutionError(
+                    "resource_type no corresponde "
+                    "al resolver de Azure VM."
+                )
+            )
+
+        subscription_id = (
+            context.subscription_id
+        )
+
+        resource_group = (
+            context.resource_group
+        )
+
+        vm_name = (
+            context.vm_name
+        )
+
+        if (
+            subscription_id is None
+            or not subscription_id
+        ):
+            raise (
+                ResourceIdentityResolutionError(
+                    "La identidad VM requiere "
+                    "subscription_id autoritativo."
+                )
+            )
+
+        if (
+            resource_group is None
+            or not resource_group
+        ):
+            raise (
+                ResourceIdentityResolutionError(
+                    "La identidad VM requiere "
+                    "resource_group autoritativo."
+                )
+            )
+
+        if (
+            vm_name is None
+            or not vm_name
+        ):
+            raise (
+                ResourceIdentityResolutionError(
+                    "La identidad VM requiere "
+                    "vm_name autoritativo."
+                )
+            )
+
+        if (
+            context.affected_resource
+            is not None
+            and (
+                context.affected_resource
+                != vm_name
+            )
+        ):
+            raise (
+                ResourceIdentityResolutionError(
+                    "affected_resource no coincide "
+                    "con vm_name autoritativo."
+                )
+            )
+
+        canonical_resource_id = (
+            build_azure_vm_resource_id(
+                subscription_id=(
+                    subscription_id
+                ),
+
+                resource_group=(
+                    resource_group
+                ),
+
+                vm_name=(
+                    vm_name
+                ),
+            )
+        )
+
+        return ResolvedResourceIdentity(
+            operation_domain=(
+                self.operation_domain
+            ),
+
+            resource_type=(
+                self.resource_type
+            ),
+
+            canonical_target_resource=(
+                canonical_resource_id
+            ),
+
+            required_parameters=(
+                self.required_parameters
+            ),
+
+            allowed_cognitive_targets=(
+                vm_name,
+                canonical_resource_id,
+            ),
+        )

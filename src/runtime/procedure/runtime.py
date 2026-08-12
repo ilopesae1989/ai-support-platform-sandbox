@@ -31,15 +31,81 @@ class ProcedureRuntime:
         state: ProcedureRuntimeState,
     ) -> bool:
         """
-        Política actual de SANDBOX:
+        Política HITL determinista.
 
-        Toda operación externa requiere aprobación humana.
+        Existen dos capas:
 
-        Esta política está aquí deliberadamente y no en el
-        Procedure Execution Agent.
+        1. Policy de la capability gobernada.
+        2. Policy Sandbox global, actualmente más estricta.
+
+        Una capability puede exigir HITL adicional,
+        pero NO puede relajar la policy Sandbox.
+
+        En producción esta composición podrá migrar
+        posteriormente a un Policy Engine configurable.
         """
 
-        return state.step.operation_kind in {
+        step = (
+            state.step
+        )
+
+        #
+        # --------------------------------------------------
+        # Capability policy integrity
+        # --------------------------------------------------
+        #
+        if step.capability_id is not None:
+
+            if step.hitl_required is None:
+                raise ValueError(
+                    "Una capability gobernada requiere "
+                    "hitl_required explícito."
+                )
+
+            #
+            # Nuestro contrato actual no permite
+            # WRITE gobernado sin HITL.
+            #
+            if (
+                step.operation_kind
+                == OperationKind.WRITE
+                and step.hitl_required is not True
+            ):
+                raise ValueError(
+                    "Una capability WRITE gobernada "
+                    "requiere hitl_required=True."
+                )
+
+        elif step.hitl_required is not None:
+            #
+            # No aceptamos policy HITL desligada de una
+            # capability concreta.
+            #
+            raise ValueError(
+                "hitl_required no puede existir sin "
+                "capability_id."
+            )
+
+        #
+        # --------------------------------------------------
+        # Capability-specific mandatory HITL
+        # --------------------------------------------------
+        #
+        if step.hitl_required is True:
+            return True
+
+        #
+        # --------------------------------------------------
+        # Sandbox policy overlay
+        # --------------------------------------------------
+        #
+        # Conservamos la política histórica:
+        #
+        # READ / WRITE / HUMAN externos requieren HITL.
+        #
+        # La capability nunca puede reducir este control.
+        #
+        return step.operation_kind in {
             OperationKind.READ,
             OperationKind.WRITE,
             OperationKind.HUMAN,

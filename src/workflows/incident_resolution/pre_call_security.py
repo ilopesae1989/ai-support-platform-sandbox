@@ -36,6 +36,8 @@ class PreCallSecurityVerifier:
         "operation_domain",
         "operation_kind",
         "operation_action",
+        "capability_id",
+        "hitl_required",
         "next_action",
         "target_resource",
         "required_parameters",
@@ -157,6 +159,32 @@ class PreCallSecurityVerifier:
                 "un operation_kind no permitido."
             )
 
+        #
+        # Todo WRITE que alcanza PreCallSecurity debe
+        # proceder ya de una capability gobernada.
+        #
+        if (
+            step.operation_kind
+            == OperationKind.WRITE
+        ):
+            if not step.capability_id:
+                raise PreCallSecurityError(
+                    "ApprovedProcedureStep WRITE no contiene "
+                    "capability_id gobernado."
+                )
+
+            if step.hitl_required is not True:
+                raise PreCallSecurityError(
+                    "ApprovedProcedureStep WRITE requiere "
+                    "hitl_required=True."
+                )
+
+            if step.operation_action is None:
+                raise PreCallSecurityError(
+                    "ApprovedProcedureStep WRITE no contiene "
+                    "operation_action gobernada."
+                )
+
         cls._validate_parameter_binding(
             required_parameters=(
                 step.required_parameters
@@ -223,6 +251,28 @@ class PreCallSecurityVerifier:
                 "AzureOperationRequest contiene "
                 "un operation_kind no permitido."
             )
+
+        if (
+            candidate.operation_kind
+            == OperationKind.WRITE
+        ):
+            if not candidate.capability_id:
+                raise PreCallSecurityError(
+                    "AzureOperationRequest WRITE no contiene "
+                    "capability_id gobernado."
+                )
+
+            if candidate.hitl_required is not True:
+                raise PreCallSecurityError(
+                    "AzureOperationRequest WRITE requiere "
+                    "hitl_required=True."
+                )
+
+            if candidate.operation_action is None:
+                raise PreCallSecurityError(
+                    "AzureOperationRequest WRITE no contiene "
+                    "operation_action gobernada."
+                )
 
         cls._validate_parameter_binding(
             required_parameters=(
@@ -325,6 +375,14 @@ class PreCallSecurityVerifier:
 
             operation_action=(
                 step.operation_action
+            ),
+
+            capability_id=(
+                step.capability_id
+            ),
+
+            hitl_required=(
+                step.hitl_required
             ),
 
             next_action=(

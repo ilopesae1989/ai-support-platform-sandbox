@@ -7,6 +7,17 @@ from src.workflows.incident_resolution.executors.runtime import (
 )
 
 
+def resolve_target(
+    context,
+):
+    return (
+        ProcedureRuntimeExecutor()
+        ._resolve_authoritative_target_resource(
+            context
+        )
+    )
+
+
 SUBSCRIPTION_ID = (
     "557fdabc-f3b6-4c24-a9ae-e9e89b5ad172"
 )
@@ -97,8 +108,7 @@ def test_vm_name_becomes_canonical_arm_resource_id():
     )
 
     result = (
-        ProcedureRuntimeExecutor
-        ._resolve_authoritative_target_resource(
+        resolve_target(
             context
         )
     )
@@ -117,8 +127,7 @@ def test_exact_arm_resource_id_is_preserved_canonically():
     )
 
     result = (
-        ProcedureRuntimeExecutor
-        ._resolve_authoritative_target_resource(
+        resolve_target(
             context
         )
     )
@@ -140,11 +149,8 @@ def test_rejects_different_vm_target():
         ValueError,
         match="target_resource",
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._resolve_authoritative_target_resource(
-                context
-            )
+        resolve_target(
+            context
         )
 
 
@@ -157,11 +163,8 @@ def test_rejects_missing_target_resource():
         ValueError,
         match="target_resource",
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._resolve_authoritative_target_resource(
-                context
-            )
+        resolve_target(
+            context
         )
 
 
@@ -177,11 +180,8 @@ def test_rejects_incomplete_vm_parameter_contract():
         ValueError,
         match="required_parameters",
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._resolve_authoritative_target_resource(
-                context
-            )
+        resolve_target(
+            context
         )
 
 
@@ -198,11 +198,8 @@ def test_rejects_reordered_vm_parameter_contract():
         ValueError,
         match="required_parameters",
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._resolve_authoritative_target_resource(
-                context
-            )
+        resolve_target(
+            context
         )
 
 
@@ -217,11 +214,8 @@ def test_rejects_affected_resource_different_from_vm_name():
         ValueError,
         match="affected_resource",
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._resolve_authoritative_target_resource(
-                context
-            )
+        resolve_target(
+            context
         )
 
 
@@ -261,9 +255,6 @@ def test_rejects_missing_authoritative_vm_identity(
     with pytest.raises(
         ValueError,
     ):
-        (
-            ProcedureRuntimeExecutor
-            ._resolve_authoritative_target_resource(
-                context
-            )
+        resolve_target(
+            context
         )

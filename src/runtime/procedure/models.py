@@ -100,6 +100,16 @@ class ProcedureStep(BaseModel):
 
     operation_action: OperationAction | None = None
 
+    #
+    # Identidad y policy de la capability
+    # resueltas exclusivamente por Python.
+    #
+    # No proceden del Procedure Agent.
+    #
+    capability_id: str | None = None
+
+    hitl_required: bool | None = None
+
     target_resource: str | None = None
 
     required_parameters: list[str] = Field(
@@ -234,6 +244,16 @@ class ApprovedProcedureStep(BaseModel):
     operation_kind: OperationKind
 
     operation_action: OperationAction | None = None
+
+    #
+    # Capability exacta que autorizó este paso.
+    #
+    # Forma parte del snapshot aprobado y no debe
+    # reconstruirse después del HITL.
+    #
+    capability_id: str | None = None
+
+    hitl_required: bool | None = None
 
     next_action: NextAction
 

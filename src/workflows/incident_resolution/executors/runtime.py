@@ -13,8 +13,8 @@ from src.runtime.procedure.models import (
     ProcedureStep,
 )
 
-from src.workflows.incident_resolution.azure_resource_identity import (
-    build_azure_vm_resource_id,
+from src.workflows.incident_resolution.operational_capability import (
+    OperationalCapability,
 )
 
 from src.runtime.procedure.workflow_state import (
@@ -23,6 +23,20 @@ from src.runtime.procedure.workflow_state import (
 
 from src.workflows.incident_resolution.models import (
     ProcedureExecutionContext,
+)
+
+from src.workflows.incident_resolution.resource_identity import (
+    ResourceIdentityResolutionError,
+)
+
+from src.workflows.incident_resolution.resource_identity_registry import (
+    ResourceIdentityRegistry,
+    build_default_resource_identity_registry,
+)
+
+from src.workflows.incident_resolution.procedure_capability_registry import (
+    ProcedureCapabilityRegistry,
+    build_default_procedure_capability_registry,
 )
 
 from src.workflows.incident_resolution.parameter_resolution import (
@@ -46,9 +60,31 @@ class ProcedureRuntimeExecutor(Executor):
     producido por el agente.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+
+        resource_identity_registry: (
+            ResourceIdentityRegistry | None
+        ) = None,
+
+        procedure_capability_registry: (
+            ProcedureCapabilityRegistry | None
+        ) = None,
+    ) -> None:
         super().__init__(
             id="procedure_runtime"
+        )
+
+        self._resource_identity_registry = (
+            resource_identity_registry
+            or build_default_resource_identity_registry()
+        )
+
+        self._procedure_capability_registry = (
+            procedure_capability_registry
+            or (
+                build_default_procedure_capability_registry()
+            )
         )
 
     @staticmethod
@@ -129,52 +165,32 @@ class ProcedureRuntimeExecutor(Executor):
                 "a la versión solicitada."
             )
 
-    @staticmethod
     def _resolve_authoritative_target_resource(
+        self,
         context: ProcedureExecutionContext,
+        *,
+        require_registered_identity: bool = False,
+        authoritative_required_parameters: (
+            tuple[str, ...] | None
+        ) = None,
     ) -> str | None:
         """
-        Canonicaliza únicamente scopes Azure para los
-        que existe una regla operacional determinista.
+        Resuelve target_resource utilizando únicamente
+        resolvers registrados de identidad operacional.
 
-        Actualmente está definida la operación Azure
-        a nivel de suscripción:
+        Runtime no conoce tipos concretos de recursos.
 
-            operation_domain = azure
-            required_parameters = ["subscription_id"]
+        No conoce:
 
-        Para ese caso:
+        - Azure VM;
+        - Storage;
+        - SQL;
+        - Windows;
+        - Linux;
+        - nombres específicos de recursos.
 
-            target_resource = "subscription"
-
-        El UUID concreto autorizado permanece en:
-
-            resolved_parameters.subscription_id
-
-        y procede exclusivamente de
-        OperationalContext.
-
-        Procedure puede haber expresado cognitivamente
-        el target como:
-
-            "subscription"
-
-        o como:
-
-            "<subscription_id>"
-
-        Ambas representaciones sólo son aceptadas si
-        coinciden con el contexto operacional
-        autoritativo.
-
-        Para otros scopes Azure todavía no existe una
-        regla canónica general. En esos casos se
-        conserva el target preparado por Procedure para
-        que llegue exactamente al HITL y sea aprobado
-        como parte de la operación concreta.
-
-        No se intenta inferir, transformar ni
-        generalizar esos scopes.
+        La especialización pertenece exclusivamente
+        al ResourceIdentityRegistry y sus adapters.
         """
 
         result = context.result
@@ -189,218 +205,279 @@ class ProcedureRuntimeExecutor(Executor):
                 "no contiene step."
             )
 
-        if (
-            result.step.operation_domain
-            != "azure"
-        ):
+        resource_type = (
+            operational.resource_type
+        )
+
+        #
+        # Compatibilidad transitoria.
+        #
+        # Los dominios cuya identidad todavía no ha sido
+        # registrada conservan el target cognitivo.
+        #
+        # Esto NO concede permiso de ejecución.
+        #
+        # FASE 17.3 será quien exija Capability +
+        # Identity Resolver para adquirir autoridad
+        # operacional.
+        #
+        if resource_type is None:
             return (
                 result.step.target_resource
             )
 
-        required_parameters = list(
-            result.step.required_parameters
+        if not (
+            self
+            ._resource_identity_registry
+            .contains(
+                operation_domain=(
+                    result.step.operation_domain
+                ),
+                resource_type=(
+                    resource_type
+                ),
+            )
+        ):
+            if require_registered_identity:
+                raise (
+                    ResourceIdentityResolutionError(
+                        "Una capability gobernada "
+                        "requiere un "
+                        "ResourceIdentityResolver "
+                        "registrado para "
+                        "operation_domain="
+                        f"{result.step.operation_domain!r}, "
+                        "resource_type="
+                        f"{resource_type!r}."
+                    )
+                )
+
+            return (
+                result.step.target_resource
+            )
+
+        resolver = (
+            self
+            ._resource_identity_registry
+            .get_resolver(
+                operation_domain=(
+                    result.step.operation_domain
+                ),
+                resource_type=(
+                    resource_type
+                ),
+            )
         )
 
-        # --------------------------------------------------
-        # Azure Virtual Machine
-        # --------------------------------------------------
-        #
-        # Una VM queda identificada exclusivamente por:
-        #
-        #     subscription_id
-        #     resource_group
-        #     vm_name
-        #
-        # todos procedentes de OperationalContext.
-        #
-        # Procedure no construye la autoridad ARM.
-        #
         if (
-            operational.resource_type
-            == "Microsoft.Compute/virtualMachines"
+            authoritative_required_parameters
+            is None
         ):
-            expected_parameters = [
-                "subscription_id",
-                "resource_group",
-                "vm_name",
-            ]
-
-            if (
-                required_parameters
-                != expected_parameters
-            ):
-                raise ValueError(
-                    "Una operación Azure sobre una VM "
-                    "requiere exactamente "
-                    "required_parameters="
-                    "['subscription_id', "
-                    "'resource_group', "
-                    "'vm_name']."
-                )
-
-            subscription_id = (
-                operational.subscription_id
+            required_parameters = tuple(
+                result.step.required_parameters
             )
 
-            resource_group = (
-                operational.resource_group
+        else:
+            required_parameters = (
+                authoritative_required_parameters
             )
 
-            vm_name = (
-                operational.vm_name
-            )
-
-            if (
-                subscription_id is None
-                or not subscription_id
-            ):
-                raise ValueError(
-                    "La identidad VM requiere "
-                    "subscription_id autoritativo."
-                )
-
-            if (
-                resource_group is None
-                or not resource_group
-            ):
-                raise ValueError(
-                    "La identidad VM requiere "
-                    "resource_group autoritativo."
-                )
-
-            if (
-                vm_name is None
-                or not vm_name
-            ):
-                raise ValueError(
-                    "La identidad VM requiere "
-                    "vm_name autoritativo."
-                )
-
-            #
-            # Si affected_resource está presente,
-            # no puede contradecir vm_name.
-            #
-            if (
-                operational.affected_resource
-                is not None
-                and operational.affected_resource
-                != vm_name
-            ):
-                raise ValueError(
-                    "affected_resource no coincide "
-                    "con vm_name autoritativo."
-                )
-
-            canonical_resource_id = (
-                build_azure_vm_resource_id(
-                    subscription_id=(
-                        subscription_id
-                    ),
-                    resource_group=(
-                        resource_group
-                    ),
-                    vm_name=(
-                        vm_name
-                    ),
-                )
-            )
-
-            #
-            # Procedure puede expresar la VM:
-            #
-            # 1. por su nombre exacto; o
-            # 2. por el Resource ID exacto.
-            #
-            # Ninguna otra representación se acepta.
-            #
-            allowed_cognitive_targets = {
-                vm_name,
-                canonical_resource_id,
-            }
-
-            if (
-                result.step.target_resource
-                not in allowed_cognitive_targets
-            ):
-                raise ValueError(
-                    "Procedure Execution devolvió "
-                    "un target_resource incompatible "
-                    "con la VM autoritativa. "
-                    "target_resource="
-                    f"{result.step.target_resource!r}; "
-                    "VM autorizada="
-                    f"{vm_name!r}."
-                )
-
-            return canonical_resource_id
-
-        #
-        # Única regla canónica Azure definida
-        # actualmente:
-        #
-        # operación sobre una suscripción concreta.
-        #
         if (
             required_parameters
-            != ["subscription_id"]
+            != resolver.required_parameters
         ):
-            return (
-                result.step.target_resource
+            raise (
+                ResourceIdentityResolutionError(
+                    "required_parameters no coincide "
+                    "con el contrato exacto del "
+                    "resolver de identidad. "
+                    "recibidos="
+                    f"{required_parameters!r}; "
+                    "esperados="
+                    f"{resolver.required_parameters!r}."
+                )
+            )
+
+        identity = resolver.resolve(
+            operational
+        )
+
+        identity.validate_cognitive_target(
+            result.step.target_resource
+        )
+
+        return (
+            identity.canonical_target_resource
+        )
+
+    def _resolve_governed_capability(
+        self,
+        context: ProcedureExecutionContext,
+    ) -> OperationalCapability | None:
+        """
+        Resuelve la capability autorizada para el
+        procedure/version/step exacto.
+
+        Reglas:
+
+        1. Un WRITE requiere binding exacto.
+        2. Un READ todavía puede funcionar de forma
+           transitoria sin binding.
+        3. Si existe binding, la interpretación del
+           Procedure Agent debe coincidir exactamente
+           con la capability gobernada.
+        4. operation_action nunca procede del agente.
+        """
+
+        result = context.result
+
+        operational = (
+            context.operational_context
+        )
+
+        if result.step is None:
+            raise ValueError(
+                "ProcedureExecutionResult "
+                "no contiene step."
+            )
+
+        step = result.step
+
+        procedure_version = (
+            result.procedure.version
+        )
+
+        cognitive_operation_kind = (
+            OperationKind(
+                step.operation_kind
+            )
+        )
+
+        #
+        # No podemos hacer binding versionado
+        # sin versión exacta.
+        #
+        if procedure_version is None:
+            if (
+                cognitive_operation_kind
+                == OperationKind.WRITE
+            ):
+                raise ValueError(
+                    "Una operación WRITE requiere "
+                    "procedure_version exacta y "
+                    "capability binding gobernado."
+                )
+
+            return None
+
+        has_binding = (
+            self
+            ._procedure_capability_registry
+            .contains_binding(
+                procedure_id=(
+                    result.procedure.id
+                ),
+
+                procedure_version=(
+                    procedure_version
+                ),
+
+                step_id=(
+                    step.id
+                ),
+            )
+        )
+
+        #
+        # WRITE fail-closed.
+        #
+        if not has_binding:
+            if (
+                cognitive_operation_kind
+                == OperationKind.WRITE
+            ):
+                raise ValueError(
+                    "Una operación WRITE requiere "
+                    "un capability binding exacto "
+                    "antes del HITL."
+                )
+
+            #
+            # Compatibilidad transitoria para READ.
+            #
+            return None
+
+        capability = (
+            self
+            ._procedure_capability_registry
+            .resolve_capability(
+                procedure_id=(
+                    result.procedure.id
+                ),
+
+                procedure_version=(
+                    procedure_version
+                ),
+
+                step_id=(
+                    step.id
+                ),
+            )
+        )
+
+        #
+        # El agente puede interpretar estos campos,
+        # pero no convertirlos en autoridad.
+        #
+        if (
+            step.operation_domain
+            != capability.operation_domain
+        ):
+            raise ValueError(
+                "operation_domain cognitivo "
+                "no coincide con la capability "
+                "gobernada."
+            )
+
+        if (
+            cognitive_operation_kind
+            != capability.operation_kind
+        ):
+            raise ValueError(
+                "operation_kind cognitivo "
+                "no coincide con la capability "
+                "gobernada."
+            )
+
+        if (
+            tuple(
+                step.required_parameters
+            )
+            != capability.required_parameters
+        ):
+            raise ValueError(
+                "required_parameters cognitivos "
+                "no coinciden con la capability "
+                "gobernada."
             )
 
         if (
             operational.resource_type
-            != "subscription"
+            != capability.resource_type
         ):
             raise ValueError(
-                "Una operación Azure de suscripción "
-                "requiere resource_type=subscription "
-                "autoritativo en OperationalContext "
-                "antes del HITL."
+                "resource_type autoritativo "
+                "no coincide con la capability "
+                "gobernada."
             )
 
-        subscription_id = (
-            operational.subscription_id
-        )
+        return capability
 
-        if (
-            subscription_id is None
-            or not subscription_id.strip()
-        ):
-            raise ValueError(
-                "Una operación Azure de suscripción "
-                "requiere subscription_id autoritativo "
-                "antes del HITL."
-            )
-
-        allowed_cognitive_targets = {
-            "subscription",
-            subscription_id,
-        }
-
-        if (
-            result.step.target_resource
-            not in allowed_cognitive_targets
-        ):
-            raise ValueError(
-                "Procedure Execution devolvió un "
-                "target_resource incompatible con "
-                "la suscripción autoritativa. "
-                "target_resource="
-                f"{result.step.target_resource!r}; "
-                "valores admitidos="
-                f"{sorted(allowed_cognitive_targets)!r}."
-            )
-
-        return "subscription"
-
-    @classmethod
     def _build_runtime_state(
-        cls,
+        self,
         context: ProcedureExecutionContext,
     ) -> ProcedureRuntimeState:
-        cls._validate_execution_context(
+        self._validate_execution_context(
             context
         )
 
@@ -437,10 +514,29 @@ class ProcedureRuntimeExecutor(Executor):
                 "no contiene step."
             )
 
+        capability = (
+            self
+            ._resolve_governed_capability(
+                context
+            )
+        )
+
+        if capability is None:
+            authoritative_required_parameters = (
+                tuple(
+                    result.step.required_parameters
+                )
+            )
+
+        else:
+            authoritative_required_parameters = (
+                capability.required_parameters
+            )
+
         parameter_resolution = (
             resolve_required_parameters(
                 required_parameters=list(
-                    result.step.required_parameters
+                    authoritative_required_parameters
                 ),
 
                 context=(
@@ -461,9 +557,17 @@ class ProcedureRuntimeExecutor(Executor):
             )
 
         target_resource = (
-            cls
+            self
             ._resolve_authoritative_target_resource(
-                context
+                context,
+
+                require_registered_identity=(
+                    capability is not None
+                ),
+
+                authoritative_required_parameters=(
+                    authoritative_required_parameters
+                ),
             )
         )
 
@@ -510,13 +614,35 @@ class ProcedureRuntimeExecutor(Executor):
                 ),
 
                 operation_domain=(
-                    result.step.operation_domain
+                    capability.operation_domain
+                    if capability is not None
+                    else result.step.operation_domain
                 ),
 
                 operation_kind=(
-                    OperationKind(
+                    capability.operation_kind
+                    if capability is not None
+                    else OperationKind(
                         result.step.operation_kind
                     )
+                ),
+
+                operation_action=(
+                    capability.operation_action
+                    if capability is not None
+                    else None
+                ),
+
+                capability_id=(
+                    capability.capability_id
+                    if capability is not None
+                    else None
+                ),
+
+                hitl_required=(
+                    capability.hitl_required
+                    if capability is not None
+                    else None
                 ),
 
                 target_resource=(
@@ -524,7 +650,7 @@ class ProcedureRuntimeExecutor(Executor):
                 ),
 
                 required_parameters=list(
-                    result.step.required_parameters
+                    authoritative_required_parameters
                 ),
 
                 preconditions=list(

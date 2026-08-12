@@ -92,6 +92,16 @@ def create_runtime_state():
                 OperationAction.VM_START
             ),
 
+            #
+            # La operación WRITE de este test representa ya
+            # una capability gobernada por Python.
+            #
+            capability_id=(
+                "azure.vm.start"
+            ),
+
+            hitl_required=True,
+
             target_resource=TARGET_RESOURCE,
 
             required_parameters=[
@@ -157,6 +167,16 @@ def test_vm_start_action_survives_all_pre_dispatch_boundaries():
         == "vm_start"
     )
 
+    assert (
+        approval_request.capability_id
+        == "azure.vm.start"
+    )
+
+    assert (
+        approval_request.hitl_required
+        is True
+    )
+
     approved_step = (
         build_approved_procedure_step(
             state
@@ -168,6 +188,16 @@ def test_vm_start_action_survives_all_pre_dispatch_boundaries():
         == OperationAction.VM_START
     )
 
+    assert (
+        approved_step.capability_id
+        == "azure.vm.start"
+    )
+
+    assert (
+        approved_step.hitl_required
+        is True
+    )
+
     candidate = (
         build_azure_operation_request(
             approved_step
@@ -175,8 +205,28 @@ def test_vm_start_action_survives_all_pre_dispatch_boundaries():
     )
 
     assert (
+        candidate.capability_id
+        == approved_step.capability_id
+    )
+
+    assert (
+        candidate.hitl_required
+        == approved_step.hitl_required
+    )
+
+    assert (
         candidate.operation_action
         == OperationAction.VM_START
+    )
+
+    assert (
+        candidate.capability_id
+        == "azure.vm.start"
+    )
+
+    assert (
+        candidate.hitl_required
+        is True
     )
 
     verified = (
@@ -189,6 +239,26 @@ def test_vm_start_action_survives_all_pre_dispatch_boundaries():
     assert (
         verified.operation_action
         == OperationAction.VM_START
+    )
+
+    assert (
+        verified.capability_id
+        == "azure.vm.start"
+    )
+
+    assert (
+        verified.hitl_required
+        is True
+    )
+
+    assert (
+        verified.capability_id
+        == approved_step.capability_id
+    )
+
+    assert (
+        verified.hitl_required
+        == approved_step.hitl_required
     )
 
     _validate_request_against_runtime(

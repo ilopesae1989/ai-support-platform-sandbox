@@ -126,6 +126,33 @@ def build_azure_operation_request(
             "operaciones read o write."
         )
 
+    #
+    # --------------------------------------------------
+    # Governed WRITE integrity
+    # --------------------------------------------------
+    #
+    if (
+        step.operation_kind
+        == OperationKind.WRITE
+    ):
+        if not step.capability_id:
+            raise ValueError(
+                "Una operación Azure WRITE requiere "
+                "capability_id gobernado."
+            )
+
+        if step.hitl_required is not True:
+            raise ValueError(
+                "Una operación Azure WRITE requiere "
+                "hitl_required=True."
+            )
+
+        if step.operation_action is None:
+            raise ValueError(
+                "Una operación Azure WRITE requiere "
+                "operation_action gobernada."
+            )
+
     _validate_parameter_binding(
         step
     )
@@ -213,6 +240,14 @@ def build_azure_operation_request(
 
         operation_action=(
             step.operation_action
+        ),
+
+        capability_id=(
+            step.capability_id
+        ),
+
+        hitl_required=(
+            step.hitl_required
         ),
 
         next_action=(

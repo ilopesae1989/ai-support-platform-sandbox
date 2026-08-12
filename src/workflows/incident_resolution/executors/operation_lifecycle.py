@@ -166,6 +166,16 @@ def _validate_request_against_runtime(
             state.step.operation_action,
         ),
 
+        "capability_id": (
+            request.capability_id,
+            state.step.capability_id,
+        ),
+
+        "hitl_required": (
+            request.hitl_required,
+            state.step.hitl_required,
+        ),
+
         "next_action": (
             request.next_action,
             NextAction.EXECUTE_STEP,

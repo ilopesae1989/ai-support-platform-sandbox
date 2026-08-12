@@ -65,6 +65,17 @@ class OperationRequest(BaseModel):
 
     operation_action: OperationAction | None = None
 
+    #
+    # Identidad de la capability operacional gobernada.
+    #
+    # Para operaciones legacy READ pueden ser None.
+    # Para WRITE gobernado deben venir del Runtime
+    # y atravesar HITL sin reinterpretación.
+    #
+    capability_id: str | None = None
+
+    hitl_required: bool | None = None
+
     next_action: NextAction
 
     target_resource: str | None = None
@@ -120,6 +131,17 @@ class OperationResult(BaseModel):
     operation_kind: OperationKind
 
     operation_action: OperationAction | None = None
+
+    #
+    # Identidad de la capability operacional gobernada.
+    #
+    # Para operaciones legacy READ pueden ser None.
+    # Para WRITE gobernado deben venir del Runtime
+    # y atravesar HITL sin reinterpretación.
+    #
+    capability_id: str | None = None
+
+    hitl_required: bool | None = None
 
     next_action: NextAction
 
@@ -228,6 +250,8 @@ class OperationResult(BaseModel):
             "operation_domain",
             "operation_kind",
             "operation_action",
+            "capability_id",
+            "hitl_required",
             "next_action",
             "target_resource",
             "required_parameters",

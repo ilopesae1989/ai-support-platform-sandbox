@@ -77,6 +77,16 @@ from src.workflows.incident_resolution.operation_dispatch_ledger import (
     OperationDispatchLedger,
 )
 
+from src.workflows.incident_resolution.resource_identity_registry import (
+    ResourceIdentityRegistry,
+    build_default_resource_identity_registry,
+)
+
+from src.workflows.incident_resolution.procedure_capability_registry import (
+    ProcedureCapabilityRegistry,
+    build_default_procedure_capability_registry,
+)
+
 from src.workflows.incident_resolution.routing import (
     route_to_knowledge_review,
     route_to_manual_analysis,
@@ -96,8 +106,17 @@ from src.workflows.incident_resolution.routing_post_hitl import (
 
 def build_incident_resolution_workflow(
     agents: FoundryAgents | None = None,
+
     operation_dispatch_ledger: (
         OperationDispatchLedger | None
+    ) = None,
+
+    resource_identity_registry: (
+        ResourceIdentityRegistry | None
+    ) = None,
+
+    procedure_capability_registry: (
+        ProcedureCapabilityRegistry | None
     ) = None,
 ):
     """
@@ -199,6 +218,18 @@ def build_incident_resolution_workflow(
         or InMemoryOperationDispatchLedger()
     )
 
+    identity_registry = (
+        resource_identity_registry
+        or build_default_resource_identity_registry()
+    )
+
+    procedure_registry = (
+        procedure_capability_registry
+        or (
+            build_default_procedure_capability_registry()
+        )
+    )
+
     #
     # --------------------------------------------------
     # Cognitive pipeline
@@ -254,7 +285,15 @@ def build_incident_resolution_workflow(
     )
 
     runtime = (
-        ProcedureRuntimeExecutor()
+        ProcedureRuntimeExecutor(
+            resource_identity_registry=(
+                identity_registry
+            ),
+
+            procedure_capability_registry=(
+                procedure_registry
+            )
+        )
     )
 
     approval = (

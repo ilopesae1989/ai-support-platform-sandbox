@@ -175,6 +175,16 @@ def test_builder_creates_complete_candidate():
     )
 
     assert (
+        candidate.capability_id
+        is None
+    )
+
+    assert (
+        candidate.hitl_required
+        is None
+    )
+
+    assert (
         candidate.next_action
         == NextAction.EXECUTE_STEP
     )
@@ -237,6 +247,16 @@ def test_exact_candidate_becomes_verified_request():
     assert (
         verified.description
         == APPROVED_DESCRIPTION
+    )
+
+    assert (
+        verified.capability_id
+        is None
+    )
+
+    assert (
+        verified.hitl_required
+        is None
     )
 
     assert (
@@ -342,6 +362,14 @@ def test_candidate_does_not_share_resolved_parameter_object():
             "vm_stop",
         ),
         (
+            "capability_id",
+            "azure.vm.restart",
+        ),
+        (
+            "hitl_required",
+            False,
+        ),
+        (
             "next_action",
             NextAction.BLOCKED,
         ),
@@ -428,6 +456,61 @@ def test_pre_call_rejects_parameter_source_tampering():
     ):
         PreCallSecurityVerifier.verify(
             approved_step=step,
+            candidate=tampered,
+        )
+
+
+def test_rejects_tampered_capability_id():
+    approved_step = (
+        create_approved_step()
+    )
+
+    candidate = (
+        build_azure_operation_request(
+            approved_step
+        )
+    )
+
+    tampered = candidate.model_copy(
+        update={
+            "capability_id":
+                "azure.vm.restart"
+        }
+    )
+
+    with pytest.raises(
+        PreCallSecurityError,
+        match="capability_id",
+    ):
+        PreCallSecurityVerifier.verify(
+            approved_step=approved_step,
+            candidate=tampered,
+        )
+
+
+def test_rejects_tampered_hitl_required():
+    approved_step = (
+        create_approved_step()
+    )
+
+    candidate = (
+        build_azure_operation_request(
+            approved_step
+        )
+    )
+
+    tampered = candidate.model_copy(
+        update={
+            "hitl_required": False
+        }
+    )
+
+    with pytest.raises(
+        PreCallSecurityError,
+        match="hitl_required",
+    ):
+        PreCallSecurityVerifier.verify(
+            approved_step=approved_step,
             candidate=tampered,
         )
 

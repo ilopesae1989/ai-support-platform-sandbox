@@ -59,6 +59,10 @@ class ApprovalRequest:
 
     operation_action: str | None
 
+    capability_id: str | None
+
+    hitl_required: bool | None
+
     next_action: str
 
     target_resource: str | None
@@ -194,6 +198,14 @@ def build_approved_procedure_step(
             state.step.operation_action
         ),
 
+        capability_id=(
+            state.step.capability_id
+        ),
+
+        hitl_required=(
+            state.step.hitl_required
+        ),
+
         next_action=(
             NextAction.EXECUTE_STEP
         ),
@@ -311,6 +323,14 @@ class ProcedureApprovalExecutor(Executor):
                     is not None
                     else None
                 )
+            ),
+
+            capability_id=(
+                state.step.capability_id
+            ),
+
+            hitl_required=(
+                state.step.hitl_required
             ),
 
             next_action=(

@@ -842,6 +842,18 @@ Restricciones obligatorias:
                 request.operation_kind
             ),
 
+            operation_action=(
+                request.operation_action
+            ),
+
+            capability_id=(
+                request.capability_id
+            ),
+
+            hitl_required=(
+                request.hitl_required
+            ),
+
             next_action=(
                 request.next_action
             ),
@@ -1072,6 +1084,18 @@ Restricciones obligatorias:
                         request.operation_kind
                     ),
 
+                    operation_action=(
+                        request.operation_action
+                    ),
+
+                    capability_id=(
+                        request.capability_id
+                    ),
+
+                    hitl_required=(
+                        request.hitl_required
+                    ),
+
                     next_action=(
                         request.next_action
                     ),
@@ -1169,6 +1193,18 @@ Restricciones obligatorias:
 
                 operation_kind=(
                     request.operation_kind
+                ),
+
+                operation_action=(
+                    request.operation_action
+                ),
+
+                capability_id=(
+                    request.capability_id
+                ),
+
+                hitl_required=(
+                    request.hitl_required
                 ),
 
                 next_action=(
