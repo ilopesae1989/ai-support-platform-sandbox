@@ -191,6 +191,7 @@ def test_operation_evidence_contains_operational_identity():
             "step_id",
             "operation_domain",
             "operation_kind",
+            "operation_action",
             "next_action",
             "target_resource",
             "required_parameters",

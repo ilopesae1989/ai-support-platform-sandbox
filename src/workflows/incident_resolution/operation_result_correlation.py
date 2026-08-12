@@ -227,6 +227,11 @@ def validate_operation_result_against_runtime(
             validated_state.step.operation_kind,
         ),
 
+        "operation_action": (
+            validated_result.operation_action,
+            validated_state.step.operation_action,
+        ),
+
         "next_action": (
             validated_result.next_action,
             NextAction.EXECUTE_STEP,

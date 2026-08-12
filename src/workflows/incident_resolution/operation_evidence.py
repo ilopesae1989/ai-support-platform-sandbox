@@ -19,6 +19,7 @@ from pydantic import (
 
 from src.runtime.procedure.models import (
     NextAction,
+    OperationAction,
     OperationKind,
 )
 
@@ -72,6 +73,8 @@ class OperationEvidence(
 
     operation_domain: str
     operation_kind: OperationKind
+
+    operation_action: OperationAction | None = None
 
     next_action: NextAction
 
@@ -625,5 +628,3 @@ class OperationEvidence(
             )
         ):
             return True
-
-        return None

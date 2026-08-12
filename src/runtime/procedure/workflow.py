@@ -21,6 +21,7 @@ from .models import (
     ApprovalStatus,
     ApprovedProcedureStep,
     NextAction,
+    OperationAction,
     ProcedureRuntimeState,
     ResolvedParameter,
     StepStatus,
@@ -55,6 +56,8 @@ class ApprovalRequest:
 
     operation_domain: str
     operation_kind: str
+
+    operation_action: str | None
 
     next_action: str
 
@@ -187,6 +190,10 @@ def build_approved_procedure_step(
             state.step.operation_kind
         ),
 
+        operation_action=(
+            state.step.operation_action
+        ),
+
         next_action=(
             NextAction.EXECUTE_STEP
         ),
@@ -295,6 +302,15 @@ class ProcedureApprovalExecutor(Executor):
 
             operation_kind=(
                 state.step.operation_kind.value
+            ),
+
+            operation_action=(
+                (
+                    state.step.operation_action.value
+                    if state.step.operation_action
+                    is not None
+                    else None
+                )
             ),
 
             next_action=(

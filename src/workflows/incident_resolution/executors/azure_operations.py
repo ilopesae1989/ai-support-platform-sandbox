@@ -121,7 +121,15 @@ Operación exacta aprobada por el operador humano:
 Operación:
 Dominio: {request.operation_domain}
 Tipo: {request.operation_kind.value}
-Acción: {request.next_action.value}
+Acción operacional canónica: {
+    (
+        request.operation_action.value
+        if request.operation_action
+        is not None
+        else "none"
+    )
+}
+Acción del workflow: {request.next_action.value}
 Recurso objetivo: {request.target_resource or "unknown"}
 
 Parámetros requeridos:

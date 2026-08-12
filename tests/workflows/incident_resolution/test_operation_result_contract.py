@@ -26,6 +26,7 @@ CURRENT_OPERATION_RESULT_FIELDS = (
     "step_id",
     "operation_domain",
     "operation_kind",
+    "operation_action",
     "next_action",
     "target_resource",
     "required_parameters",

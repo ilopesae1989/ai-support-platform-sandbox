@@ -58,6 +58,22 @@ class OperationKind(str, Enum):
     NONE = "none"
 
 
+class OperationAction(str, Enum):
+    """
+    Acción operacional canónica gobernada por Python.
+
+    No representa routing del workflow.
+
+    No debe confundirse con NextAction.
+
+    Se ampliará progresivamente a medida que nuevas
+    acciones operativas sean autorizadas explícitamente
+    por la plataforma.
+    """
+
+    VM_START = "vm_start"
+
+
 class NextAction(str, Enum):
     EXECUTE_STEP = "execute_step"
     CONTINUE = "continue"
@@ -81,6 +97,8 @@ class ProcedureStep(BaseModel):
 
     operation_domain: str
     operation_kind: OperationKind
+
+    operation_action: OperationAction | None = None
 
     target_resource: str | None = None
 
@@ -214,6 +232,8 @@ class ApprovedProcedureStep(BaseModel):
 
     operation_domain: str
     operation_kind: OperationKind
+
+    operation_action: OperationAction | None = None
 
     next_action: NextAction
 

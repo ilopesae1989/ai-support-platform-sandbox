@@ -55,6 +55,8 @@ class NormalizedAlert(BaseModel):
 
     resource_group: str | None = None
 
+    vm_name: str | None = None
+
     tenant_id: str | None = None
 
     correlation_id: str | None = None

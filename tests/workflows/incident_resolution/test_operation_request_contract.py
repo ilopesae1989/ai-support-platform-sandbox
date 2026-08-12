@@ -75,6 +75,7 @@ COMMON_OPERATION_FIELDS = (
     "step_id",
     "operation_domain",
     "operation_kind",
+    "operation_action",
     "next_action",
     "target_resource",
     "required_parameters",
@@ -161,10 +162,13 @@ def create_approved_step() -> ApprovedProcedureStep:
 
 def test_operation_request_contains_exact_common_contract():
     """
-    FASE 15.2
+    FASE 15.2 / ampliado en FASE 17.1
 
     OperationRequest debe representar exactamente
     el contrato común actual.
+
+    FASE 17.1 añade operation_action como identidad
+    operacional vendor-neutral.
 
     No contiene marcadores de autorización ni
     campos específicos de Azure.

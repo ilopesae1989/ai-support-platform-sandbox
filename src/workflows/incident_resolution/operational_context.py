@@ -40,6 +40,7 @@ class OperationalContext(BaseModel):
 
     subscription_id: str | None = None
     resource_group: str | None = None
+    vm_name: str | None = None
     tenant_id: str | None = None
 
     correlation_id: str | None = None
@@ -109,6 +110,9 @@ def build_operational_context(
         ),
         resource_group=(
             alert.resource_group
+        ),
+        vm_name=(
+            alert.vm_name
         ),
         tenant_id=(
             alert.tenant_id

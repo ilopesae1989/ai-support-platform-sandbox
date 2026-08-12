@@ -1,0 +1,908 @@
+diff --git a/src/workflows/incident_resolution/executors/azure_operations.py b/src/workflows/incident_resolution/executors/azure_operations.py
+index f49c24b..09fa4f3 100644
+--- a/src/workflows/incident_resolution/executors/azure_operations.py
++++ b/src/workflows/incident_resolution/executors/azure_operations.py
+@@ -30,6 +30,11 @@ from ..mcp_evidence import (
+     McpCallEvidence,
+ )
+ 
++from ..operation_dispatch_ledger import (
++    InMemoryOperationDispatchLedger,
++    OperationDispatchLedger,
++)
++
+ from ..operation_evidence import (
+     OperationEvidence,
+ )
+@@ -49,6 +54,9 @@ class AzureOperationsExecutor(Executor):
+     def __init__(
+         self,
+         agents: FoundryAgents,
++        operation_dispatch_ledger: (
++            OperationDispatchLedger | None
++        ) = None,
+     ) -> None:
+         super().__init__(
+             id="azure_operations"
+@@ -56,6 +64,11 @@ class AzureOperationsExecutor(Executor):
+ 
+         self._agents = agents
+ 
++        self._operation_dispatch_ledger = (
++            operation_dispatch_ledger
++            or InMemoryOperationDispatchLedger()
++        )
++
+     @staticmethod
+     def _build_prompt(
+         request: VerifiedAzureOperationRequest,
+@@ -954,6 +967,37 @@ Restricciones obligatorias:
+                 "verificación inválido."
+             )
+ 
++        #
++        # --------------------------------------------------
++        # Monotonic dispatch gate
++        # --------------------------------------------------
++        #
++        # Esta autoridad NO pertenece al checkpoint
++        # del workflow.
++        #
++        # Una restauración histórica puede recuperar
++        # nuevamente:
++        #
++        #     VerifiedAzureOperationRequest
++        #
++        # pero no puede recuperar el derecho a
++        # despachar otra vez el mismo operation_id.
++        #
++        # El claim ocurre DESPUÉS de todas las
++        # verificaciones locales y ANTES de cualquier
++        # llamada a Foundry/MCP.
++        #
++        # Deliberadamente está fuera del try/except
++        # destinado a fallos de Foundry:
++        #
++        # un replay no es un AzureOperationResult
++        # fallido; es una violación de la frontera de
++        # dispatch y debe detener el workflow.
++        #
++        self._operation_dispatch_ledger.claim(
++            request.operation_id
++        )
++
+         prompt = (
+             self._build_prompt(
+                 request
+diff --git a/src/workflows/incident_resolution/executors/procedure.py b/src/workflows/incident_resolution/executors/procedure.py
+index c31dff7..be82b15 100644
+--- a/src/workflows/incident_resolution/executors/procedure.py
++++ b/src/workflows/incident_resolution/executors/procedure.py
+@@ -21,7 +21,7 @@ from src.workflows.incident_resolution.models import (
+ 
+ class ProcedureExecutionExecutor(Executor):
+     """
+-    Procedure v5 recibe únicamente el request
++    Procedure v6 recibe únicamente el request
+     cognitivo.
+ 
+     ExecutionIdentity y OperationalContext permanecen
+@@ -237,4 +237,4 @@ Incidencia:
+ 
+ Recupera el procedimiento corporativo indicado y devuelve únicamente
+ el paso que corresponde procesar.
+-""".strip()
+\ No newline at end of file
++""".strip()
+diff --git a/src/workflows/incident_resolution/executors/routing.py b/src/workflows/incident_resolution/executors/routing.py
+index 41cb679..ad1ab2a 100644
+--- a/src/workflows/incident_resolution/executors/routing.py
++++ b/src/workflows/incident_resolution/executors/routing.py
+@@ -31,7 +31,7 @@ class ProcedureRequestExecutor(Executor):
+ 
+     Aquí nace workflow_id.
+ 
+-    Se genera mediante Python antes de Procedure v5.
++    Se genera mediante Python antes de Procedure v6.
+     """
+ 
+     def __init__(self) -> None:
+@@ -317,4 +317,4 @@ class ManualAnalysisExecutor(Executor):
+ 
+         await ctx.yield_output(
+             request
+-        )
+\ No newline at end of file
++        )
+diff --git a/src/workflows/incident_resolution/models.py b/src/workflows/incident_resolution/models.py
+index 53f4980..a1c58e2 100644
+--- a/src/workflows/incident_resolution/models.py
++++ b/src/workflows/incident_resolution/models.py
+@@ -60,7 +60,7 @@ class ExecutionIdentity(BaseModel):
+ 
+ class ProcedureExecutionRequest(BaseModel):
+     """
+-    Solicitud cognitiva hacia Procedure v5.
++    Solicitud cognitiva hacia Procedure v6.
+ 
+     No contiene autoridad operacional.
+     """
+@@ -81,7 +81,7 @@ class ProcedureExecutionRequest(BaseModel):
+ 
+ class ProcedureExecutionInput(BaseModel):
+     """
+-    Envelope previo a Procedure v5.
++    Envelope previo a Procedure v6.
+ 
+     Mantiene separados:
+ 
+@@ -99,7 +99,7 @@ class ProcedureExecutionInput(BaseModel):
+ 
+ class ProcedureExecutionContext(BaseModel):
+     """
+-    Envelope posterior a Procedure v5.
++    Envelope posterior a Procedure v6.
+ 
+     execution_identity y operational_context
+     sobreviven en paralelo al agente.
+@@ -144,4 +144,4 @@ class ManualAnalysisRequest(BaseModel):
+ 
+     affected_resource: str | None = None
+ 
+-    missing_context: list[str]
+\ No newline at end of file
++    missing_context: list[str]
+diff --git a/src/workflows/incident_resolution/workflow.py b/src/workflows/incident_resolution/workflow.py
+index c4c6b79..0a972a9 100644
+--- a/src/workflows/incident_resolution/workflow.py
++++ b/src/workflows/incident_resolution/workflow.py
+@@ -72,6 +72,11 @@ from src.workflows.incident_resolution.executors.triage import (
+     AlertTriageExecutor,
+ )
+ 
++from src.workflows.incident_resolution.operation_dispatch_ledger import (
++    InMemoryOperationDispatchLedger,
++    OperationDispatchLedger,
++)
++
+ from src.workflows.incident_resolution.routing import (
+     route_to_knowledge_review,
+     route_to_manual_analysis,
+@@ -91,6 +96,9 @@ from src.workflows.incident_resolution.routing_post_hitl import (
+ 
+ def build_incident_resolution_workflow(
+     agents: FoundryAgents | None = None,
++    operation_dispatch_ledger: (
++        OperationDispatchLedger | None
++    ) = None,
+ ):
+     """
+     IncidentResolutionWorkflow.
+@@ -117,7 +125,7 @@ def build_incident_resolution_workflow(
+             ↓
+         Approval / HITL
+ 
+-        partial
++        partial / exact non-eligible
+             ↓
+         Knowledge Review
+ 
+@@ -139,11 +147,15 @@ def build_incident_resolution_workflow(
+             │     ↓
+             │ VerifiedAzureOperationRequest
+             │     ↓
++            │ OperationStartExecutor
++            │     ↓
+             │ AzureOperationsExecutor
+             │     ↓
+-            │ agent-azure-operations-sbx v11
++            │ OperationDispatchLedger
++            │     ↓
++            │ agent-azure-operations
+             │     ↓
+-            │ futuro MCP verification
++            │ Azure MCP
+             │
+             ├─ database
+             ├─ itsm
+@@ -153,13 +165,28 @@ def build_incident_resolution_workflow(
+             ├─ microsoft365
+             └─ Default → blocked
+ 
++    OperationDispatchLedger constituye una autoridad
++    monotónica externa al checkpoint del workflow.
++
++    Restaurar un checkpoint histórico no puede devolver
++    al estado "no consumido" un operation_id que ya fue
++    reclamado.
++
++    En ausencia de implementación inyectada se utiliza
++    InMemoryOperationDispatchLedger.
++
++    Esa implementación sirve para tests y sandbox de
++    proceso único. Producción deberá inyectar una
++    implementación durable y atómica.
++
+     Ningún LLM decide:
+ 
+     - el routing;
+     - la aprobación;
+     - el resource scope autorizado;
+     - los parámetros autorizados;
+-    - la verificación pre-call.
++    - la verificación pre-call;
++    - el consumo de operation_id.
+     """
+ 
+     foundry_agents = (
+@@ -167,6 +194,11 @@ def build_incident_resolution_workflow(
+         or FoundryAgents()
+     )
+ 
++    dispatch_ledger = (
++        operation_dispatch_ledger
++        or InMemoryOperationDispatchLedger()
++    )
++
+     #
+     # --------------------------------------------------
+     # Cognitive pipeline
+@@ -252,6 +284,9 @@ def build_incident_resolution_workflow(
+     azure_route = (
+         AzureOperationsExecutor(
+             agents=foundry_agents,
++            operation_dispatch_ledger=(
++                dispatch_ledger
++            ),
+         )
+     )
+ 
+@@ -407,11 +442,6 @@ def build_incident_resolution_workflow(
+                 #
+                 # Azure
+                 #
+-                # IMPORTANTE:
+-                #
+-                # La ruta Azure ya NO entra
+-                # directamente en Azure Operations.
+-                #
+                 Case(
+                     condition=(
+                         route_to_azure_operation
+@@ -505,9 +535,11 @@ def build_incident_resolution_workflow(
+         )
+ 
+         #
+-        # Pre-call verificado
++        # Verified pre-call
++        #     ↓
++        # deterministic lifecycle
+         #     ↓
+-        # lifecycle determinista
++        # monotonic dispatch gate
+         #     ↓
+         # Azure Operations
+         #
+@@ -529,12 +561,13 @@ def build_incident_resolution_workflow(
+         #
+         # AzureOperationResult
+         #     ↓
+-        # registro autoritativo
++        # authoritative registration
+         #     ↓
+-        # Procedure Validation v6
++        # Procedure Validation
+         #     ↓
+-        # Transition Gate determinista
++        # deterministic Transition Gate
+         #
++
+         .add_edge(
+             azure_route,
+             operation_result_registration,
+diff --git a/tests/workflows/incident_resolution/test_azure_operations_executor.py b/tests/workflows/incident_resolution/test_azure_operations_executor.py
+index d794a59..0402d9d 100644
+--- a/tests/workflows/incident_resolution/test_azure_operations_executor.py
++++ b/tests/workflows/incident_resolution/test_azure_operations_executor.py
+@@ -20,6 +20,11 @@ from src.workflows.incident_resolution.azure_operations_models import (
+     VerifiedAzureOperationRequest,
+ )
+ 
++from src.workflows.incident_resolution.operation_dispatch_ledger import (
++    InMemoryOperationDispatchLedger,
++    OperationAlreadyDispatchedError,
++)
++
+ from src.workflows.incident_resolution.executors.azure_operations import (
+     AzureOperationsExecutor,
+ )
+@@ -435,4 +440,199 @@ async def test_executor_fails_closed_when_foundry_fails():
+     assert (
+         "Foundry unavailable"
+         in result.error
++    )
++
++
++@pytest.mark.asyncio
++async def test_executor_claims_operation_before_foundry():
++    agents = (
++        FakeFoundryAgents()
++    )
++
++    ledger = (
++        InMemoryOperationDispatchLedger()
++    )
++
++    executor = (
++        AzureOperationsExecutor(
++            agents=agents,
++            operation_dispatch_ledger=ledger,
++        )
++    )
++
++    workflow = (
++        WorkflowBuilder(
++            start_executor=executor,
++
++            output_from=[
++                executor,
++            ],
++
++            name=(
++                "azure-operations-"
++                "dispatch-ledger-test"
++            ),
++        )
++        .build()
++    )
++
++    request = (
++        create_verified_request()
++    )
++
++    outputs = []
++
++    async for event in workflow.run(
++        request,
++        stream=True,
++    ):
++        if (
++            event.type
++            == "output"
++        ):
++            outputs.append(
++                event.data
++            )
++
++    assert (
++        ledger.contains(
++            request.operation_id
++        )
++        is True
++    )
++
++    assert (
++        ledger.count()
++        == 1
++    )
++
++    assert len(
++        agents.calls
++    ) == 1
++
++    assert len(
++        outputs
++    ) == 1
++
++
++@pytest.mark.asyncio
++async def test_executor_rejects_second_dispatch_of_same_operation_before_foundry():
++    agents = (
++        FakeFoundryAgents()
++    )
++
++    ledger = (
++        InMemoryOperationDispatchLedger()
++    )
++
++    request = (
++        create_verified_request()
++    )
++
++    #
++    # Primera ejecución autorizada.
++    #
++    first_executor = (
++        AzureOperationsExecutor(
++            agents=agents,
++            operation_dispatch_ledger=ledger,
++        )
++    )
++
++    first_workflow = (
++        WorkflowBuilder(
++            start_executor=first_executor,
++
++            output_from=[
++                first_executor,
++            ],
++
++            name=(
++                "azure-operations-"
++                "dispatch-first"
++            ),
++        )
++        .build()
++    )
++
++    first_outputs = []
++
++    async for event in first_workflow.run(
++        request,
++        stream=True,
++    ):
++        if (
++            event.type
++            == "output"
++        ):
++            first_outputs.append(
++                event.data
++            )
++
++    assert len(
++        first_outputs
++    ) == 1
++
++    assert len(
++        agents.calls
++    ) == 1
++
++    assert (
++        ledger.count()
++        == 1
++    )
++
++    #
++    # Segundo objeto Workflow + segundo Executor,
++    # pero MISMA autoridad monotónica.
++    #
++    # Reproduce la frontera relevante de un restart.
++    #
++    second_executor = (
++        AzureOperationsExecutor(
++            agents=agents,
++            operation_dispatch_ledger=ledger,
++        )
++    )
++
++    second_workflow = (
++        WorkflowBuilder(
++            start_executor=second_executor,
++
++            output_from=[
++                second_executor,
++            ],
++
++            name=(
++                "azure-operations-"
++                "dispatch-second"
++            ),
++        )
++        .build()
++    )
++
++    with pytest.raises(
++        OperationAlreadyDispatchedError,
++        match=(
++            "ya fue despachada"
++        ),
++    ):
++        async for _ in second_workflow.run(
++            request,
++            stream=True,
++        ):
++            pass
++
++    #
++    # CRÍTICO:
++    #
++    # La segunda ejecución no alcanza Foundry.
++    #
++    assert len(
++        agents.calls
++    ) == 1
++
++    assert (
++        ledger.count()
++        == 1
+     )
+\ No newline at end of file
+diff --git a/tests/workflows/incident_resolution/test_azure_pre_call_security_e2e.py b/tests/workflows/incident_resolution/test_azure_pre_call_security_e2e.py
+index 60c2184..92c15d5 100644
+--- a/tests/workflows/incident_resolution/test_azure_pre_call_security_e2e.py
++++ b/tests/workflows/incident_resolution/test_azure_pre_call_security_e2e.py
+@@ -37,7 +37,7 @@ class AzureWorkflowResolvedParameterFake(
+     porque forma parte de OperationalContext y
+     create_alert() ya proporciona su valor.
+ 
+-    El objetivo no es probar Procedure v5.
++    El objetivo no es probar Procedure v6.
+     El objetivo es conseguir que el recorrido E2E
+     llegue a HITL con un ResolvedParameter real.
+     """
+@@ -412,4 +412,4 @@ async def test_e2e_resolved_parameter_source_tampering_blocks_foundry(
+     assert (
+         agents.azure_operations_prompt
+         is None
+-    )
+\ No newline at end of file
++    )
+diff --git a/tests/workflows/incident_resolution/test_checkpoint_operation_resume.py b/tests/workflows/incident_resolution/test_checkpoint_operation_resume.py
+index 4508d77..400bc9b 100644
+--- a/tests/workflows/incident_resolution/test_checkpoint_operation_resume.py
++++ b/tests/workflows/incident_resolution/test_checkpoint_operation_resume.py
+@@ -7,6 +7,11 @@ from src.runtime.procedure.models import (
+     WorkflowStatus,
+ )
+ 
++from src.workflows.incident_resolution.operation_dispatch_ledger import (
++    InMemoryOperationDispatchLedger,
++    OperationDispatchLedger,
++)
++
+ from src.workflows.incident_resolution.workflow import (
+     build_incident_resolution_workflow,
+ )
+@@ -107,7 +112,11 @@ def assert_completed_runtime(
+     return state
+ 
+ 
+-async def create_completed_resumed_cycle():
++async def create_completed_resumed_cycle(
++    operation_dispatch_ledger: (
++        OperationDispatchLedger | None
++    ) = None,
++):
+     """
+     Crea:
+ 
+@@ -119,6 +128,10 @@ async def create_completed_resumed_cycle():
+ 
+     y devuelve todos los checkpoints de esa
+     rama para poder restaurar fronteras internas.
++
++    operation_dispatch_ledger permite compartir una
++    autoridad monotónica externa entre el workflow
++    original y posteriores restauraciones históricas.
+     """
+ 
+     (
+@@ -129,6 +142,11 @@ async def create_completed_resumed_cycle():
+         await create_checkpoint_with_pending_hitl()
+     )
+ 
++    dispatch_ledger = (
++        operation_dispatch_ledger
++        or InMemoryOperationDispatchLedger()
++    )
++
+     agents = (
+         AzureWorkflowFakeFoundryAgents()
+     )
+@@ -136,6 +154,9 @@ async def create_completed_resumed_cycle():
+     workflow = (
+         build_incident_resolution_workflow(
+             agents=agents,
++            operation_dispatch_ledger=(
++                dispatch_ledger
++            ),
+         )
+     )
+ 
+@@ -188,12 +209,24 @@ async def restore_checkpoint(
+     *,
+     storage,
+     checkpoint,
++    operation_dispatch_ledger: (
++        OperationDispatchLedger | None
++    ) = None,
+ ):
+     """
+     Simula restart real con nuevos agents y
+     nuevo objeto Workflow.
++
++    Si se proporciona operation_dispatch_ledger,
++    la nueva instancia comparte la misma autoridad
++    monotónica externa que la ejecución anterior.
+     """
+ 
++    dispatch_ledger = (
++        operation_dispatch_ledger
++        or InMemoryOperationDispatchLedger()
++    )
++
+     agents = (
+         AzureWorkflowFakeFoundryAgents()
+     )
+@@ -201,6 +234,9 @@ async def restore_checkpoint(
+     workflow = (
+         build_incident_resolution_workflow(
+             agents=agents,
++            operation_dispatch_ledger=(
++                dispatch_ledger
++            ),
+         )
+     )
+ 
+@@ -296,10 +332,6 @@ async def test_resume_hitl_with_response_executes_exactly_one_authorized_cycle()
+         )
+     )
+ 
+-    #
+-    # Restart no puede sustituir la autorización
+-    # que estaba pendiente en el checkpoint.
+-    #
+     assert (
+         final_state.approval_id
+         == hitl_state.approval_id
+@@ -350,12 +382,6 @@ async def test_resume_after_azure_does_not_execute_azure_twice():
+         )
+     )
+ 
+-    #
+-    # Estado exacto observado en el runtime:
+-    # la operación comenzó, Azure terminó,
+-    # pero Registration aún no consumió
+-    # el resultado.
+-    #
+     assert (
+         checkpoint_state.step_status
+         == StepStatus.RUNNING
+@@ -385,20 +411,11 @@ async def test_resume_after_azure_does_not_execute_azure_twice():
+         == []
+     )
+ 
+-    #
+-    # CRÍTICO:
+-    # Azure ya ocurrió antes del checkpoint.
+-    #
+     assert (
+         "azure_operations"
+         not in resumed_agents.calls
+     )
+ 
+-    #
+-    # Registration es Python.
+-    # Después sólo debe ejecutarse la validación
+-    # cognitiva pendiente.
+-    #
+     assert resumed_agents.calls == [
+         "procedure_validation",
+     ]
+@@ -571,9 +588,6 @@ async def test_resume_after_validation_does_not_revalidate_result():
+         == []
+     )
+ 
+-    #
+-    # Ya se consumieron ambas llamadas remotas.
+-    #
+     assert (
+         resumed_agents.calls
+         == []
+@@ -591,4 +605,4 @@ async def test_resume_after_validation_does_not_revalidate_result():
+ 
+     assert_completed_runtime(
+         outputs
+-    )
++    )
+\ No newline at end of file
+diff --git a/tests/workflows/incident_resolution/test_incident_workflow.py b/tests/workflows/incident_resolution/test_incident_workflow.py
+index 06365e8..e540c0a 100644
+--- a/tests/workflows/incident_resolution/test_incident_workflow.py
++++ b/tests/workflows/incident_resolution/test_incident_workflow.py
+@@ -27,7 +27,7 @@ class FakeFoundryAgents:
+     - agent-classification-sbx v7
+     - agent-knowledge-sbx v8
+     - agent-alert-triage-sbx v9
+-    - agent-procedure-execution-sbx v5
++    - agent-procedure-execution-sbx v6
+     """
+ 
+     def __init__(self) -> None:
+@@ -554,4 +554,4 @@ async def test_incident_workflow_procedure_receives_triage_selection():
+ 
+     assert "execution_eligible: true" in prompt
+ 
+-    assert "SQLPROD01" in prompt
+\ No newline at end of file
++    assert "SQLPROD01" in prompt
+diff --git a/tests/workflows/incident_resolution/test_incident_workflow_azure_live_e2e.py b/tests/workflows/incident_resolution/test_incident_workflow_azure_live_e2e.py
+index 8190cef..0961202 100644
+--- a/tests/workflows/incident_resolution/test_incident_workflow_azure_live_e2e.py
++++ b/tests/workflows/incident_resolution/test_incident_workflow_azure_live_e2e.py
+@@ -1476,24 +1476,149 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
+         )
+     )
+ 
+-    mcp_calls = (
++    native_mcp_calls = (
+         find_mcp_calls(
+             serialized_response
+         )
+     )
+ 
+     #
+-    # Este procedimiento sólo requiere una
+-    # operación MCP.
++    # La respuesta nativa puede exponer la misma
++    # mcp_call lógica en más de una rama interna de
++    # su representación serializable.
+     #
++    # La identidad autoritativa de una llamada MCP
++    # es su id/call id, no el número de apariciones
++    # del mismo objeto dentro del árbol nativo.
++    #
++
++    native_mcp_calls_by_id = {}
++
++    for native_call in native_mcp_calls:
++        native_call_id = (
++            native_call.get("id")
++        )
++
++        assert (
++            native_call_id
++            is not None
++        )
++
++        if (
++            native_call_id
++            in native_mcp_calls_by_id
++        ):
++            #
++            # Si aparece repetida la misma identidad,
++            # todas sus representaciones deben ser
++            # exactamente compatibles.
++            #
++            existing = (
++                native_mcp_calls_by_id[
++                    native_call_id
++                ]
++            )
++
++            assert (
++                native_call.get("name")
++                == existing.get("name")
++            )
++
++            assert (
++                native_call.get("arguments")
++                == existing.get("arguments")
++            )
++
++            continue
++
++        native_mcp_calls_by_id[
++            native_call_id
++        ] = native_call
+ 
++    #
++    # Contrato real:
++    #
++    # exactamente UNA identidad MCP distinta.
++    #
+     assert (
+-        len(mcp_calls)
++        len(
++            native_mcp_calls_by_id
++        )
+         == 1
++    ), (
++        "La respuesta nativa contiene más de una "
++        "identidad MCP distinta. "
++        f"ids={list(native_mcp_calls_by_id)!r}"
++    )
++
++    native_mcp_call = (
++        next(
++            iter(
++                native_mcp_calls_by_id.values()
++            )
++        )
++    )
++
++    assert (
++        native_mcp_call.get("name")
++        == "group_list"
++    )
++
++    native_arguments = (
++        native_mcp_call.get(
++            "arguments"
++        )
++    )
++
++    if isinstance(
++        native_arguments,
++        str,
++    ):
++        native_arguments = (
++            json.loads(
++                native_arguments
++            )
++        )
++
++    assert (
++        native_arguments
++        == {
++            "subscription":
++                SUBSCRIPTION_ID,
++        }
++    )
++
++    #
++    # Cruzamos además la identidad nativa con la
++    # evidencia normalizada que realmente utiliza
++    # nuestro runtime.
++    #
++    normalized_mcp_call = (
++        operation_result
++        .evidence
++        .mcp_calls[0]
++    )
++
++    assert (
++        normalized_mcp_call.tool_name
++        == "group_list"
++    )
++
++    assert (
++        normalized_mcp_call.arguments
++        == {
++            "subscription":
++                SUBSCRIPTION_ID,
++        }
++    )
++
++    assert (
++        normalized_mcp_call.mcp_call_id
++        in native_mcp_calls_by_id
+     )
+ 
+     mcp_call = (
+-        mcp_calls[0]
++        native_mcp_call
+     )
+ 
+     #
+diff --git a/tests/workflows/incident_resolution/test_incident_workflow_live.py b/tests/workflows/incident_resolution/test_incident_workflow_live.py
+index 71110ad..5b9e5bc 100644
+--- a/tests/workflows/incident_resolution/test_incident_workflow_live.py
++++ b/tests/workflows/incident_resolution/test_incident_workflow_live.py
+@@ -381,4 +381,4 @@ async def test_incident_workflow_live_reaches_hitl():
+     assert (
+         approval.target_resource
+         == "SQLPROD01"
+-    )
+\ No newline at end of file
++    )
+diff --git a/tests/workflows/incident_resolution/test_routing_executors.py b/tests/workflows/incident_resolution/test_routing_executors.py
+index e3c6ec3..df0f7de 100644
+--- a/tests/workflows/incident_resolution/test_routing_executors.py
++++ b/tests/workflows/incident_resolution/test_routing_executors.py
+@@ -252,7 +252,7 @@ async def test_procedure_request_executor_builds_request():
+ 
+     #
+     # La identidad de ejecución nace en Python
+-    # antes de Procedure v5.
++    # antes de Procedure v6.
+     #
+     assert (
+         result.execution_identity.workflow_id
+@@ -606,4 +606,4 @@ async def test_knowledge_review_executor_supports_exact_but_non_eligible():
+ 
+     assert result.missing_context == [
+         "Falta contexto operacional requerido."
+-    ]
+\ No newline at end of file
++    ]

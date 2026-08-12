@@ -13,6 +13,10 @@ from src.runtime.procedure.models import (
     ProcedureStep,
 )
 
+from src.workflows.incident_resolution.azure_resource_identity import (
+    build_azure_vm_resource_id,
+)
+
 from src.runtime.procedure.workflow_state import (
     store_procedure_runtime_state,
 )
@@ -196,6 +200,140 @@ class ProcedureRuntimeExecutor(Executor):
         required_parameters = list(
             result.step.required_parameters
         )
+
+        # --------------------------------------------------
+        # Azure Virtual Machine
+        # --------------------------------------------------
+        #
+        # Una VM queda identificada exclusivamente por:
+        #
+        #     subscription_id
+        #     resource_group
+        #     vm_name
+        #
+        # todos procedentes de OperationalContext.
+        #
+        # Procedure no construye la autoridad ARM.
+        #
+        if (
+            operational.resource_type
+            == "Microsoft.Compute/virtualMachines"
+        ):
+            expected_parameters = [
+                "subscription_id",
+                "resource_group",
+                "vm_name",
+            ]
+
+            if (
+                required_parameters
+                != expected_parameters
+            ):
+                raise ValueError(
+                    "Una operación Azure sobre una VM "
+                    "requiere exactamente "
+                    "required_parameters="
+                    "['subscription_id', "
+                    "'resource_group', "
+                    "'vm_name']."
+                )
+
+            subscription_id = (
+                operational.subscription_id
+            )
+
+            resource_group = (
+                operational.resource_group
+            )
+
+            vm_name = (
+                operational.vm_name
+            )
+
+            if (
+                subscription_id is None
+                or not subscription_id
+            ):
+                raise ValueError(
+                    "La identidad VM requiere "
+                    "subscription_id autoritativo."
+                )
+
+            if (
+                resource_group is None
+                or not resource_group
+            ):
+                raise ValueError(
+                    "La identidad VM requiere "
+                    "resource_group autoritativo."
+                )
+
+            if (
+                vm_name is None
+                or not vm_name
+            ):
+                raise ValueError(
+                    "La identidad VM requiere "
+                    "vm_name autoritativo."
+                )
+
+            #
+            # Si affected_resource está presente,
+            # no puede contradecir vm_name.
+            #
+            if (
+                operational.affected_resource
+                is not None
+                and operational.affected_resource
+                != vm_name
+            ):
+                raise ValueError(
+                    "affected_resource no coincide "
+                    "con vm_name autoritativo."
+                )
+
+            canonical_resource_id = (
+                build_azure_vm_resource_id(
+                    subscription_id=(
+                        subscription_id
+                    ),
+                    resource_group=(
+                        resource_group
+                    ),
+                    vm_name=(
+                        vm_name
+                    ),
+                )
+            )
+
+            #
+            # Procedure puede expresar la VM:
+            #
+            # 1. por su nombre exacto; o
+            # 2. por el Resource ID exacto.
+            #
+            # Ninguna otra representación se acepta.
+            #
+            allowed_cognitive_targets = {
+                vm_name,
+                canonical_resource_id,
+            }
+
+            if (
+                result.step.target_resource
+                not in allowed_cognitive_targets
+            ):
+                raise ValueError(
+                    "Procedure Execution devolvió "
+                    "un target_resource incompatible "
+                    "con la VM autoritativa. "
+                    "target_resource="
+                    f"{result.step.target_resource!r}; "
+                    "VM autorizada="
+                    f"{vm_name!r}."
+                )
+
+            return canonical_resource_id
 
         #
         # Única regla canónica Azure definida

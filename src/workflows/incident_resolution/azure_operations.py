@@ -211,6 +211,10 @@ def build_azure_operation_request(
             step.operation_kind
         ),
 
+        operation_action=(
+            step.operation_action
+        ),
+
         next_action=(
             step.next_action
         ),

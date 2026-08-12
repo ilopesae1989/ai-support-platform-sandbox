@@ -338,6 +338,10 @@ def test_candidate_does_not_share_resolved_parameter_object():
             OperationKind.WRITE,
         ),
         (
+            "operation_action",
+            "vm_stop",
+        ),
+        (
             "next_action",
             NextAction.BLOCKED,
         ),
@@ -546,7 +550,12 @@ def test_prompt_contains_exact_resolved_parameter():
     )
 
     assert (
-        "Acción: execute_step"
+        "Acción operacional canónica: none"
+        in prompt
+    )
+
+    assert (
+        "Acción del workflow: execute_step"
         in prompt
     )
 

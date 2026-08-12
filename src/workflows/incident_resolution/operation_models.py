@@ -17,6 +17,7 @@ from pydantic import (
 
 from src.runtime.procedure.models import (
     NextAction,
+    OperationAction,
     OperationKind,
     ResolvedParameter,
 )
@@ -61,6 +62,8 @@ class OperationRequest(BaseModel):
 
     operation_domain: str
     operation_kind: OperationKind
+
+    operation_action: OperationAction | None = None
 
     next_action: NextAction
 
@@ -115,6 +118,8 @@ class OperationResult(BaseModel):
 
     operation_domain: str
     operation_kind: OperationKind
+
+    operation_action: OperationAction | None = None
 
     next_action: NextAction
 
@@ -222,6 +227,7 @@ class OperationResult(BaseModel):
             "step_id",
             "operation_domain",
             "operation_kind",
+            "operation_action",
             "next_action",
             "target_resource",
             "required_parameters",

@@ -161,6 +161,11 @@ def _validate_request_against_runtime(
             state.step.operation_kind,
         ),
 
+        "operation_action": (
+            request.operation_action,
+            state.step.operation_action,
+        ),
+
         "next_action": (
             request.next_action,
             NextAction.EXECUTE_STEP,

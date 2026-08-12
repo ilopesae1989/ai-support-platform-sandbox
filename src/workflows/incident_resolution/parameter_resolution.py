@@ -38,30 +38,42 @@ _PARAMETER_SOURCES: dict[
         "subscription_id",
         "normalized_alert.subscription_id",
     ),
+
     "resource_group": (
         "resource_group",
         "normalized_alert.resource_group",
     ),
+
+    "vm_name": (
+        "vm_name",
+        "normalized_alert.vm_name",
+    ),
+
     "tenant_id": (
         "tenant_id",
         "normalized_alert.tenant_id",
     ),
+
     "affected_resource": (
         "affected_resource",
         "normalized_alert.affected_resource",
     ),
+
     "resource_type": (
         "resource_type",
         "normalized_alert.resource_type",
     ),
+
     "service": (
         "service",
         "normalized_alert.service",
     ),
+
     "environment": (
         "environment",
         "normalized_alert.environment",
     ),
+
     "correlation_id": (
         "correlation_id",
         "normalized_alert.correlation_id",

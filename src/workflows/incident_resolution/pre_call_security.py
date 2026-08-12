@@ -35,6 +35,7 @@ class PreCallSecurityVerifier:
         "description",
         "operation_domain",
         "operation_kind",
+        "operation_action",
         "next_action",
         "target_resource",
         "required_parameters",
@@ -320,6 +321,10 @@ class PreCallSecurityVerifier:
 
             operation_kind=(
                 step.operation_kind
+            ),
+
+            operation_action=(
+                step.operation_action
             ),
 
             next_action=(
