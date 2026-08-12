@@ -98,6 +98,69 @@ class AlertTriageExecutor(Executor):
             or "no especificada"
         )
 
+        operational_parameter_availability = {
+            "subscription_id": (
+                alert.subscription_id
+                is not None
+                and bool(
+                    alert.subscription_id.strip()
+                )
+            ),
+
+            "resource_group": (
+                alert.resource_group
+                is not None
+                and bool(
+                    alert.resource_group.strip()
+                )
+            ),
+
+            "vm_name": (
+                alert.vm_name
+                is not None
+                and bool(
+                    alert.vm_name.strip()
+                )
+            ),
+
+            "tenant_id": (
+                alert.tenant_id
+                is not None
+                and bool(
+                    alert.tenant_id.strip()
+                )
+            ),
+        }
+
+        available_operational_parameters = [
+            parameter_name
+            for parameter_name, available
+            in operational_parameter_availability.items()
+            if available
+        ]
+
+        missing_operational_parameters = [
+            parameter_name
+            for parameter_name, available
+            in operational_parameter_availability.items()
+            if not available
+        ]
+
+        available_operational_text = (
+            ", ".join(
+                available_operational_parameters
+            )
+            if available_operational_parameters
+            else "ninguno"
+        )
+
+        missing_operational_text = (
+            ", ".join(
+                missing_operational_parameters
+            )
+            if missing_operational_parameters
+            else "ninguno"
+        )
         documents_text = (
             "\n".join(
                 (
@@ -144,6 +207,25 @@ Recurso: {affected_resource}
 Tipo de recurso: {resource_type}
 Descripción: {alert.description}
 
+Disponibilidad de contexto operacional tipado:
+
+Parámetros disponibles:
+{available_operational_text}
+
+Parámetros no disponibles:
+{missing_operational_text}
+
+Reglas sobre este contexto:
+
+- Esta sección indica exclusivamente disponibilidad.
+- No contiene los valores operacionales autorizados.
+- No inventes valores para ningún parámetro.
+- No reconstruyas subscription_id, resource_group, vm_name ni tenant_id.
+- La resolución de los valores exactos se realiza posteriormente
+    mediante las capas deterministas Python.
+- Utiliza esta información únicamente para determinar si el contexto
+    requerido por el procedimiento está disponible.
+
 Clasificación previa:
 alert_classification: {classification.alert_classification}
 technical_domain: {classification.technical_domain}
@@ -176,6 +258,23 @@ Frontera de responsabilidad para execution_eligible:
 
 - La autorización técnica efectiva se valida posteriormente por
     las capas deterministas de seguridad y por el backend autorizado.
+
+- La aprobación humana HITL tampoco es un prerrequisito disponible
+    durante Triage. La aprobación se solicita posteriormente por el
+    workflow, después de preparar el procedimiento y antes de la
+    ejecución externa.
+
+- No marques execution_eligible=false únicamente porque todavía no
+    exista approval_id, ticket de aprobación, confirmación humana o
+    evidencia de aprobación.
+
+- Si el procedimiento exige aprobación humana antes de una operación
+    WRITE, interpreta esa exigencia como una barrera posterior de
+    ejecución gestionada por el workflow, no como missing_context de
+    Triage.
+
+- Un rechazo posterior del HITL impedirá la ejecución, pero no cambia
+    que el procedimiento pueda ser exacto y elegible en esta etapa.
 
 - Sí debes marcar execution_eligible=false cuando falte información
     operacional que el propio procedimiento necesite para determinar

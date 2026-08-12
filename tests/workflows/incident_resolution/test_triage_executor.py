@@ -94,6 +94,205 @@ class FakeFoundryAgents:
             }
         )
 
+def create_vm_context(
+) -> KnowledgeEnrichedAlertContext:
+    alert = NormalizedAlert(
+        alert_id="ALT-AZ-VM-001",
+        source="azure_monitor",
+        name="Azure VM stopped",
+        description=(
+            "La máquina virtual se encuentra "
+            "en PowerState/stopped."
+        ),
+        source_severity="Critical",
+
+        affected_resource=(
+            "vm-test-01"
+        ),
+
+        resource_type=(
+            "Microsoft.Compute/"
+            "virtualMachines"
+        ),
+
+        service=(
+            "Azure Virtual Machines"
+        ),
+
+        environment="sandbox",
+
+        subscription_id=(
+            "sub-test-001"
+        ),
+
+        resource_group=(
+            "rg-test"
+        ),
+
+        vm_name=(
+            "vm-test-01"
+        ),
+
+        tenant_id=None,
+
+        correlation_id=(
+            "corr-vm-001"
+        ),
+
+        raw_attributes={
+            "untrusted_subscription":
+                "must-not-leak"
+        },
+    )
+
+    classification = (
+        ClassificationResult.model_validate(
+            {
+                "alert_id":
+                    "ALT-AZ-VM-001",
+
+                "alert_classification":
+                    "azure_vm_stopped_allocated",
+
+                "technical_domain":
+                    "azure",
+
+                "affected_resource":
+                    "vm-test-01",
+
+                "affected_service":
+                    "Azure Virtual Machines",
+
+                "classification_summary":
+                    "VM stopped.",
+
+                "requires_clarification":
+                    False,
+
+                "missing_information":
+                    [],
+
+                "confidence":
+                    0.95,
+            }
+        )
+    )
+
+    knowledge = (
+        KnowledgeResult.model_validate(
+            {
+                "alert_id":
+                    "ALT-AZ-VM-001",
+
+                "knowledge_found":
+                    True,
+
+                "documents": [
+                    {
+                        "id":
+                            "NTTSY-SBX-AZ-VM-001",
+
+                        "name": (
+                            "Arranque de máquina "
+                            "virtual Azure en estado "
+                            "Stopped (Allocated)"
+                        ),
+
+                        "version":
+                            "1.0",
+
+                        "relevance_summary": (
+                            "Procedimiento exacto "
+                            "para VM stopped."
+                        ),
+                    },
+                ],
+
+                "knowledge_summary": (
+                    "Existe procedimiento "
+                    "operacional exacto."
+                ),
+
+                "limitations":
+                    [],
+
+                "confidence":
+                    0.9,
+            }
+        )
+    )
+
+    return KnowledgeEnrichedAlertContext(
+        alert=alert,
+        classification=classification,
+        knowledge=knowledge,
+    )
+
+def test_triage_prompt_exposes_only_operational_parameter_availability():
+    context = (
+        create_vm_context()
+    )
+
+    prompt = (
+        AlertTriageExecutor
+        ._build_prompt(
+            context
+        )
+    )
+
+    normalized_prompt = (
+        " ".join(
+            prompt.split()
+        )
+    )
+
+    assert (
+        "subscription_id"
+        in prompt
+    )
+
+    assert (
+        "resource_group"
+        in prompt
+    )
+
+    assert (
+        "vm_name"
+        in prompt
+    )
+
+    assert (
+        "tenant_id"
+        in prompt
+    )
+
+    assert (
+        "subscription_id, "
+        "resource_group, vm_name"
+        in normalized_prompt
+    )
+
+    assert (
+        "Parámetros no disponibles: "
+        "tenant_id"
+        in normalized_prompt
+    )
+
+    assert (
+        "sub-test-001"
+        not in prompt
+    )
+
+    assert (
+        "rg-test"
+        not in prompt
+    )
+
+    assert (
+        "must-not-leak"
+        not in prompt
+    )
+
 
 class FakeWorkflowContext:
     def __init__(self) -> None:
@@ -372,6 +571,31 @@ async def test_triage_executor_builds_expected_prompt():
     assert (
         "La autorización técnica efectiva "
         "se valida posteriormente"
+        in normalized_prompt
+    )
+
+    assert (
+        "La aprobación humana HITL"
+        in normalized_prompt
+    )
+
+    assert (
+        "prerrequisito"
+        in normalized_prompt
+    )
+
+    assert (
+        "durante Triage"
+        in normalized_prompt
+    )
+
+    assert (
+        "approval_id"
+        in normalized_prompt
+    )
+
+    assert (
+        "barrera posterior de ejecución"
         in normalized_prompt
     )
 
