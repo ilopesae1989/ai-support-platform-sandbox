@@ -252,7 +252,7 @@ async def test_procedure_request_executor_builds_request():
 
     #
     # La identidad de ejecución nace en Python
-    # antes de Procedure v5.
+    # antes de Procedure v6.
     #
     assert (
         result.execution_identity.workflow_id

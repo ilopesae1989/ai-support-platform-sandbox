@@ -7,6 +7,11 @@ from src.runtime.procedure.models import (
     WorkflowStatus,
 )
 
+from src.workflows.incident_resolution.operation_dispatch_ledger import (
+    InMemoryOperationDispatchLedger,
+    OperationDispatchLedger,
+)
+
 from src.workflows.incident_resolution.workflow import (
     build_incident_resolution_workflow,
 )
@@ -107,7 +112,11 @@ def assert_completed_runtime(
     return state
 
 
-async def create_completed_resumed_cycle():
+async def create_completed_resumed_cycle(
+    operation_dispatch_ledger: (
+        OperationDispatchLedger | None
+    ) = None,
+):
     """
     Crea:
 
@@ -119,6 +128,10 @@ async def create_completed_resumed_cycle():
 
     y devuelve todos los checkpoints de esa
     rama para poder restaurar fronteras internas.
+
+    operation_dispatch_ledger permite compartir una
+    autoridad monotónica externa entre el workflow
+    original y posteriores restauraciones históricas.
     """
 
     (
@@ -129,6 +142,11 @@ async def create_completed_resumed_cycle():
         await create_checkpoint_with_pending_hitl()
     )
 
+    dispatch_ledger = (
+        operation_dispatch_ledger
+        or InMemoryOperationDispatchLedger()
+    )
+
     agents = (
         AzureWorkflowFakeFoundryAgents()
     )
@@ -136,6 +154,9 @@ async def create_completed_resumed_cycle():
     workflow = (
         build_incident_resolution_workflow(
             agents=agents,
+            operation_dispatch_ledger=(
+                dispatch_ledger
+            ),
         )
     )
 
@@ -188,11 +209,23 @@ async def restore_checkpoint(
     *,
     storage,
     checkpoint,
+    operation_dispatch_ledger: (
+        OperationDispatchLedger | None
+    ) = None,
 ):
     """
     Simula restart real con nuevos agents y
     nuevo objeto Workflow.
+
+    Si se proporciona operation_dispatch_ledger,
+    la nueva instancia comparte la misma autoridad
+    monotónica externa que la ejecución anterior.
     """
+
+    dispatch_ledger = (
+        operation_dispatch_ledger
+        or InMemoryOperationDispatchLedger()
+    )
 
     agents = (
         AzureWorkflowFakeFoundryAgents()
@@ -201,6 +234,9 @@ async def restore_checkpoint(
     workflow = (
         build_incident_resolution_workflow(
             agents=agents,
+            operation_dispatch_ledger=(
+                dispatch_ledger
+            ),
         )
     )
 
@@ -296,10 +332,6 @@ async def test_resume_hitl_with_response_executes_exactly_one_authorized_cycle()
         )
     )
 
-    #
-    # Restart no puede sustituir la autorización
-    # que estaba pendiente en el checkpoint.
-    #
     assert (
         final_state.approval_id
         == hitl_state.approval_id
@@ -350,12 +382,6 @@ async def test_resume_after_azure_does_not_execute_azure_twice():
         )
     )
 
-    #
-    # Estado exacto observado en el runtime:
-    # la operación comenzó, Azure terminó,
-    # pero Registration aún no consumió
-    # el resultado.
-    #
     assert (
         checkpoint_state.step_status
         == StepStatus.RUNNING
@@ -385,20 +411,11 @@ async def test_resume_after_azure_does_not_execute_azure_twice():
         == []
     )
 
-    #
-    # CRÍTICO:
-    # Azure ya ocurrió antes del checkpoint.
-    #
     assert (
         "azure_operations"
         not in resumed_agents.calls
     )
 
-    #
-    # Registration es Python.
-    # Después sólo debe ejecutarse la validación
-    # cognitiva pendiente.
-    #
     assert resumed_agents.calls == [
         "procedure_validation",
     ]
@@ -571,9 +588,6 @@ async def test_resume_after_validation_does_not_revalidate_result():
         == []
     )
 
-    #
-    # Ya se consumieron ambas llamadas remotas.
-    #
     assert (
         resumed_agents.calls
         == []

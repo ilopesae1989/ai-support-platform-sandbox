@@ -37,7 +37,7 @@ class AzureWorkflowResolvedParameterFake(
     porque forma parte de OperationalContext y
     create_alert() ya proporciona su valor.
 
-    El objetivo no es probar Procedure v5.
+    El objetivo no es probar Procedure v6.
     El objetivo es conseguir que el recorrido E2E
     llegue a HITL con un ResolvedParameter real.
     """

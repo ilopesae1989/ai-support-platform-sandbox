@@ -72,6 +72,11 @@ from src.workflows.incident_resolution.executors.triage import (
     AlertTriageExecutor,
 )
 
+from src.workflows.incident_resolution.operation_dispatch_ledger import (
+    InMemoryOperationDispatchLedger,
+    OperationDispatchLedger,
+)
+
 from src.workflows.incident_resolution.routing import (
     route_to_knowledge_review,
     route_to_manual_analysis,
@@ -91,6 +96,9 @@ from src.workflows.incident_resolution.routing_post_hitl import (
 
 def build_incident_resolution_workflow(
     agents: FoundryAgents | None = None,
+    operation_dispatch_ledger: (
+        OperationDispatchLedger | None
+    ) = None,
 ):
     """
     IncidentResolutionWorkflow.
@@ -117,7 +125,7 @@ def build_incident_resolution_workflow(
             ↓
         Approval / HITL
 
-        partial
+        partial / exact non-eligible
             ↓
         Knowledge Review
 
@@ -139,11 +147,15 @@ def build_incident_resolution_workflow(
             │     ↓
             │ VerifiedAzureOperationRequest
             │     ↓
+            │ OperationStartExecutor
+            │     ↓
             │ AzureOperationsExecutor
             │     ↓
-            │ agent-azure-operations-sbx v11
+            │ OperationDispatchLedger
             │     ↓
-            │ futuro MCP verification
+            │ agent-azure-operations
+            │     ↓
+            │ Azure MCP
             │
             ├─ database
             ├─ itsm
@@ -153,18 +165,38 @@ def build_incident_resolution_workflow(
             ├─ microsoft365
             └─ Default → blocked
 
+    OperationDispatchLedger constituye una autoridad
+    monotónica externa al checkpoint del workflow.
+
+    Restaurar un checkpoint histórico no puede devolver
+    al estado "no consumido" un operation_id que ya fue
+    reclamado.
+
+    En ausencia de implementación inyectada se utiliza
+    InMemoryOperationDispatchLedger.
+
+    Esa implementación sirve para tests y sandbox de
+    proceso único. Producción deberá inyectar una
+    implementación durable y atómica.
+
     Ningún LLM decide:
 
     - el routing;
     - la aprobación;
     - el resource scope autorizado;
     - los parámetros autorizados;
-    - la verificación pre-call.
+    - la verificación pre-call;
+    - el consumo de operation_id.
     """
 
     foundry_agents = (
         agents
         or FoundryAgents()
+    )
+
+    dispatch_ledger = (
+        operation_dispatch_ledger
+        or InMemoryOperationDispatchLedger()
     )
 
     #
@@ -252,6 +284,9 @@ def build_incident_resolution_workflow(
     azure_route = (
         AzureOperationsExecutor(
             agents=foundry_agents,
+            operation_dispatch_ledger=(
+                dispatch_ledger
+            ),
         )
     )
 
@@ -407,11 +442,6 @@ def build_incident_resolution_workflow(
                 #
                 # Azure
                 #
-                # IMPORTANTE:
-                #
-                # La ruta Azure ya NO entra
-                # directamente en Azure Operations.
-                #
                 Case(
                     condition=(
                         route_to_azure_operation
@@ -505,9 +535,11 @@ def build_incident_resolution_workflow(
         )
 
         #
-        # Pre-call verificado
+        # Verified pre-call
         #     ↓
-        # lifecycle determinista
+        # deterministic lifecycle
+        #     ↓
+        # monotonic dispatch gate
         #     ↓
         # Azure Operations
         #
@@ -529,12 +561,13 @@ def build_incident_resolution_workflow(
         #
         # AzureOperationResult
         #     ↓
-        # registro autoritativo
+        # authoritative registration
         #     ↓
-        # Procedure Validation v6
+        # Procedure Validation
         #     ↓
-        # Transition Gate determinista
+        # deterministic Transition Gate
         #
+
         .add_edge(
             azure_route,
             operation_result_registration,

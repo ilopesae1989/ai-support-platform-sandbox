@@ -27,7 +27,7 @@ class FakeFoundryAgents:
     - agent-classification-sbx v7
     - agent-knowledge-sbx v8
     - agent-alert-triage-sbx v9
-    - agent-procedure-execution-sbx v5
+    - agent-procedure-execution-sbx v6
     """
 
     def __init__(self) -> None:

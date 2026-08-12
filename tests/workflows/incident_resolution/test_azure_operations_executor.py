@@ -20,6 +20,11 @@ from src.workflows.incident_resolution.azure_operations_models import (
     VerifiedAzureOperationRequest,
 )
 
+from src.workflows.incident_resolution.operation_dispatch_ledger import (
+    InMemoryOperationDispatchLedger,
+    OperationAlreadyDispatchedError,
+)
+
 from src.workflows.incident_resolution.executors.azure_operations import (
     AzureOperationsExecutor,
 )
@@ -435,4 +440,199 @@ async def test_executor_fails_closed_when_foundry_fails():
     assert (
         "Foundry unavailable"
         in result.error
+    )
+
+
+@pytest.mark.asyncio
+async def test_executor_claims_operation_before_foundry():
+    agents = (
+        FakeFoundryAgents()
+    )
+
+    ledger = (
+        InMemoryOperationDispatchLedger()
+    )
+
+    executor = (
+        AzureOperationsExecutor(
+            agents=agents,
+            operation_dispatch_ledger=ledger,
+        )
+    )
+
+    workflow = (
+        WorkflowBuilder(
+            start_executor=executor,
+
+            output_from=[
+                executor,
+            ],
+
+            name=(
+                "azure-operations-"
+                "dispatch-ledger-test"
+            ),
+        )
+        .build()
+    )
+
+    request = (
+        create_verified_request()
+    )
+
+    outputs = []
+
+    async for event in workflow.run(
+        request,
+        stream=True,
+    ):
+        if (
+            event.type
+            == "output"
+        ):
+            outputs.append(
+                event.data
+            )
+
+    assert (
+        ledger.contains(
+            request.operation_id
+        )
+        is True
+    )
+
+    assert (
+        ledger.count()
+        == 1
+    )
+
+    assert len(
+        agents.calls
+    ) == 1
+
+    assert len(
+        outputs
+    ) == 1
+
+
+@pytest.mark.asyncio
+async def test_executor_rejects_second_dispatch_of_same_operation_before_foundry():
+    agents = (
+        FakeFoundryAgents()
+    )
+
+    ledger = (
+        InMemoryOperationDispatchLedger()
+    )
+
+    request = (
+        create_verified_request()
+    )
+
+    #
+    # Primera ejecución autorizada.
+    #
+    first_executor = (
+        AzureOperationsExecutor(
+            agents=agents,
+            operation_dispatch_ledger=ledger,
+        )
+    )
+
+    first_workflow = (
+        WorkflowBuilder(
+            start_executor=first_executor,
+
+            output_from=[
+                first_executor,
+            ],
+
+            name=(
+                "azure-operations-"
+                "dispatch-first"
+            ),
+        )
+        .build()
+    )
+
+    first_outputs = []
+
+    async for event in first_workflow.run(
+        request,
+        stream=True,
+    ):
+        if (
+            event.type
+            == "output"
+        ):
+            first_outputs.append(
+                event.data
+            )
+
+    assert len(
+        first_outputs
+    ) == 1
+
+    assert len(
+        agents.calls
+    ) == 1
+
+    assert (
+        ledger.count()
+        == 1
+    )
+
+    #
+    # Segundo objeto Workflow + segundo Executor,
+    # pero MISMA autoridad monotónica.
+    #
+    # Reproduce la frontera relevante de un restart.
+    #
+    second_executor = (
+        AzureOperationsExecutor(
+            agents=agents,
+            operation_dispatch_ledger=ledger,
+        )
+    )
+
+    second_workflow = (
+        WorkflowBuilder(
+            start_executor=second_executor,
+
+            output_from=[
+                second_executor,
+            ],
+
+            name=(
+                "azure-operations-"
+                "dispatch-second"
+            ),
+        )
+        .build()
+    )
+
+    with pytest.raises(
+        OperationAlreadyDispatchedError,
+        match=(
+            "ya fue despachada"
+        ),
+    ):
+        async for _ in second_workflow.run(
+            request,
+            stream=True,
+        ):
+            pass
+
+    #
+    # CRÍTICO:
+    #
+    # La segunda ejecución no alcanza Foundry.
+    #
+    assert len(
+        agents.calls
+    ) == 1
+
+    assert (
+        ledger.count()
+        == 1
     )

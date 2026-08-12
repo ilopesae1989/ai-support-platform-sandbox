@@ -1476,24 +1476,149 @@ async def test_incident_workflow_live_hitl_to_real_azure_mcp():
         )
     )
 
-    mcp_calls = (
+    native_mcp_calls = (
         find_mcp_calls(
             serialized_response
         )
     )
 
     #
-    # Este procedimiento sólo requiere una
-    # operación MCP.
+    # La respuesta nativa puede exponer la misma
+    # mcp_call lógica en más de una rama interna de
+    # su representación serializable.
+    #
+    # La identidad autoritativa de una llamada MCP
+    # es su id/call id, no el número de apariciones
+    # del mismo objeto dentro del árbol nativo.
     #
 
+    native_mcp_calls_by_id = {}
+
+    for native_call in native_mcp_calls:
+        native_call_id = (
+            native_call.get("id")
+        )
+
+        assert (
+            native_call_id
+            is not None
+        )
+
+        if (
+            native_call_id
+            in native_mcp_calls_by_id
+        ):
+            #
+            # Si aparece repetida la misma identidad,
+            # todas sus representaciones deben ser
+            # exactamente compatibles.
+            #
+            existing = (
+                native_mcp_calls_by_id[
+                    native_call_id
+                ]
+            )
+
+            assert (
+                native_call.get("name")
+                == existing.get("name")
+            )
+
+            assert (
+                native_call.get("arguments")
+                == existing.get("arguments")
+            )
+
+            continue
+
+        native_mcp_calls_by_id[
+            native_call_id
+        ] = native_call
+
+    #
+    # Contrato real:
+    #
+    # exactamente UNA identidad MCP distinta.
+    #
     assert (
-        len(mcp_calls)
+        len(
+            native_mcp_calls_by_id
+        )
         == 1
+    ), (
+        "La respuesta nativa contiene más de una "
+        "identidad MCP distinta. "
+        f"ids={list(native_mcp_calls_by_id)!r}"
+    )
+
+    native_mcp_call = (
+        next(
+            iter(
+                native_mcp_calls_by_id.values()
+            )
+        )
+    )
+
+    assert (
+        native_mcp_call.get("name")
+        == "group_list"
+    )
+
+    native_arguments = (
+        native_mcp_call.get(
+            "arguments"
+        )
+    )
+
+    if isinstance(
+        native_arguments,
+        str,
+    ):
+        native_arguments = (
+            json.loads(
+                native_arguments
+            )
+        )
+
+    assert (
+        native_arguments
+        == {
+            "subscription":
+                SUBSCRIPTION_ID,
+        }
+    )
+
+    #
+    # Cruzamos además la identidad nativa con la
+    # evidencia normalizada que realmente utiliza
+    # nuestro runtime.
+    #
+    normalized_mcp_call = (
+        operation_result
+        .evidence
+        .mcp_calls[0]
+    )
+
+    assert (
+        normalized_mcp_call.tool_name
+        == "group_list"
+    )
+
+    assert (
+        normalized_mcp_call.arguments
+        == {
+            "subscription":
+                SUBSCRIPTION_ID,
+        }
+    )
+
+    assert (
+        normalized_mcp_call.mcp_call_id
+        in native_mcp_calls_by_id
     )
 
     mcp_call = (
-        mcp_calls[0]
+        native_mcp_call
     )
 
     #

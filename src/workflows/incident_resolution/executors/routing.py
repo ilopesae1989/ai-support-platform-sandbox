@@ -31,7 +31,7 @@ class ProcedureRequestExecutor(Executor):
 
     Aquí nace workflow_id.
 
-    Se genera mediante Python antes de Procedure v5.
+    Se genera mediante Python antes de Procedure v6.
     """
 
     def __init__(self) -> None:

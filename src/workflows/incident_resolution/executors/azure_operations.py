@@ -30,6 +30,11 @@ from ..mcp_evidence import (
     McpCallEvidence,
 )
 
+from ..operation_dispatch_ledger import (
+    InMemoryOperationDispatchLedger,
+    OperationDispatchLedger,
+)
+
 from ..operation_evidence import (
     OperationEvidence,
 )
@@ -49,12 +54,20 @@ class AzureOperationsExecutor(Executor):
     def __init__(
         self,
         agents: FoundryAgents,
+        operation_dispatch_ledger: (
+            OperationDispatchLedger | None
+        ) = None,
     ) -> None:
         super().__init__(
             id="azure_operations"
         )
 
         self._agents = agents
+
+        self._operation_dispatch_ledger = (
+            operation_dispatch_ledger
+            or InMemoryOperationDispatchLedger()
+        )
 
     @staticmethod
     def _build_prompt(
@@ -953,6 +966,37 @@ Restricciones obligatorias:
                 "solicitud con origen de "
                 "verificación inválido."
             )
+
+        #
+        # --------------------------------------------------
+        # Monotonic dispatch gate
+        # --------------------------------------------------
+        #
+        # Esta autoridad NO pertenece al checkpoint
+        # del workflow.
+        #
+        # Una restauración histórica puede recuperar
+        # nuevamente:
+        #
+        #     VerifiedAzureOperationRequest
+        #
+        # pero no puede recuperar el derecho a
+        # despachar otra vez el mismo operation_id.
+        #
+        # El claim ocurre DESPUÉS de todas las
+        # verificaciones locales y ANTES de cualquier
+        # llamada a Foundry/MCP.
+        #
+        # Deliberadamente está fuera del try/except
+        # destinado a fallos de Foundry:
+        #
+        # un replay no es un AzureOperationResult
+        # fallido; es una violación de la frontera de
+        # dispatch y debe detener el workflow.
+        #
+        self._operation_dispatch_ledger.claim(
+            request.operation_id
+        )
 
         prompt = (
             self._build_prompt(

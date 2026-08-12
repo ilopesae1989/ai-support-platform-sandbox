@@ -60,7 +60,7 @@ class ExecutionIdentity(BaseModel):
 
 class ProcedureExecutionRequest(BaseModel):
     """
-    Solicitud cognitiva hacia Procedure v5.
+    Solicitud cognitiva hacia Procedure v6.
 
     No contiene autoridad operacional.
     """
@@ -81,7 +81,7 @@ class ProcedureExecutionRequest(BaseModel):
 
 class ProcedureExecutionInput(BaseModel):
     """
-    Envelope previo a Procedure v5.
+    Envelope previo a Procedure v6.
 
     Mantiene separados:
 
@@ -99,7 +99,7 @@ class ProcedureExecutionInput(BaseModel):
 
 class ProcedureExecutionContext(BaseModel):
     """
-    Envelope posterior a Procedure v5.
+    Envelope posterior a Procedure v6.
 
     execution_identity y operational_context
     sobreviven en paralelo al agente.

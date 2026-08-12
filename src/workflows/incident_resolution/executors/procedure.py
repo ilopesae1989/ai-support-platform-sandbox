@@ -21,7 +21,7 @@ from src.workflows.incident_resolution.models import (
 
 class ProcedureExecutionExecutor(Executor):
     """
-    Procedure v5 recibe únicamente el request
+    Procedure v6 recibe únicamente el request
     cognitivo.
 
     ExecutionIdentity y OperationalContext permanecen
