@@ -623,3 +623,200 @@ async def test_pending_approval_survives_checkpoint(
             )
         ]
     )
+
+@pytest.mark.asyncio
+async def test_operation_action_vm_start_checkpoint_deserialization(
+    tmp_path,
+):
+    """
+    FASE 18.2.20.1 RED.
+
+    Demuestra que un workflow real que contiene:
+
+        ProcedureRuntimeState
+            -> ProcedureStep
+            -> OperationAction.VM_START
+
+    puede escribir sus checkpoints, pero todos los
+    checkpoints generados deben poder ser
+    deserializados posteriormente utilizando la
+    allowlist exacta de producción.
+
+    RED esperado actualmente:
+
+        WorkflowCheckpointException
+
+    causado por:
+
+        src.runtime.procedure.models:OperationAction
+
+    todavía ausente de _allowed_checkpoint_types().
+    """
+
+    from src.runtime.procedure.models import (
+        OperationAction,
+    )
+
+    from src.runtime.procedure.workflow import (
+        _allowed_checkpoint_types,
+    )
+
+    checkpoint_dir = (
+        tmp_path
+        / "operation-action-checkpoints"
+    )
+
+    workflow = (
+        build_procedure_approval_workflow(
+            str(checkpoint_dir)
+        )
+    )
+
+    state = ProcedureRuntimeState(
+        workflow_id=(
+            "wf-operation-action-checkpoint-red"
+        ),
+
+        alert_id=(
+            "ALT-AZ-VM-START-RED"
+        ),
+
+        correlation_id=(
+            "corr-operation-action-checkpoint-red"
+        ),
+
+        conversation_id=(
+            "conversation-operation-action-red"
+        ),
+
+        procedure=ProcedureReference(
+            id="NTTSY-SBX-AZ-VM-001",
+            name=(
+                "Arranque gobernado de "
+                "máquina virtual Azure"
+            ),
+            version="1.0",
+        ),
+
+        total_steps=1,
+        current_step=1,
+
+        step=ProcedureStep(
+            id="1",
+
+            description=(
+                "Encender la máquina virtual "
+                "autorizada."
+            ),
+
+            step_type="remediation",
+
+            operation_domain="azure",
+
+            operation_kind=(
+                OperationKind.WRITE
+            ),
+
+            operation_action=(
+                OperationAction.VM_START
+            ),
+
+            capability_id=(
+                "azure.vm.start"
+            ),
+
+            hitl_required=True,
+
+            target_resource=(
+                "/subscriptions/sub-test/"
+                "resourceGroups/rg-test/"
+                "providers/Microsoft.Compute/"
+                "virtualMachines/vm-test"
+            ),
+
+            required_parameters=[
+                "subscription_id",
+                "resource_group",
+                "vm_name",
+            ],
+        ),
+
+        resolved_parameters=[
+            ResolvedParameter(
+                name="subscription_id",
+                value="sub-test",
+                source="test.fixture",
+            ),
+
+            ResolvedParameter(
+                name="resource_group",
+                value="rg-test",
+                source="test.fixture",
+            ),
+
+            ResolvedParameter(
+                name="vm_name",
+                value="vm-test",
+                source="test.fixture",
+            ),
+        ],
+    )
+
+    request_event = None
+
+    async for event in workflow.run(
+        state,
+        stream=True,
+    ):
+        if (
+            event.type
+            == "request_info"
+        ):
+            request_event = event
+
+    assert (
+        request_event
+        is not None
+    )
+
+    assert isinstance(
+        request_event.data,
+        ApprovalRequest,
+    )
+
+    assert (
+        request_event.data.operation_action
+        == OperationAction.VM_START.value
+    )
+
+    checkpoint_files = sorted(
+        checkpoint_dir.glob(
+            "*.json"
+        )
+    )
+
+    assert checkpoint_files
+
+    storage = FileCheckpointStorage(
+        str(checkpoint_dir),
+
+        allowed_checkpoint_types=(
+            _allowed_checkpoint_types()
+        ),
+    )
+
+    loaded_checkpoints = []
+
+    for checkpoint_file in checkpoint_files:
+        checkpoint = await storage.load(
+            checkpoint_file.stem
+        )
+
+        loaded_checkpoints.append(
+            checkpoint
+        )
+
+    assert (
+        len(loaded_checkpoints)
+        == len(checkpoint_files)
+    )

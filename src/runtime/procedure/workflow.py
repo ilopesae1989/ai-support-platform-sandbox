@@ -599,6 +599,7 @@ def _allowed_checkpoint_types() -> set[str]:
         "src.runtime.procedure.models:WorkflowStatus",
         "src.runtime.procedure.models:ApprovalStatus",
         "src.runtime.procedure.models:OperationKind",
+        "src.runtime.procedure.models:OperationAction",
         "src.runtime.procedure.models:NextAction",
 
         "src.runtime.procedure.models:ProcedureReference",
