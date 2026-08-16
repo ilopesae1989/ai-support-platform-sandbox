@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.28/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.28",
+  "version": "1.0.0",
+  "id": "b2ce987d-d02b-4622-aa57-f11735da78d2",
+  "developer": {
+    "name": "NTT DATA Spain",
+    "websiteUrl": "https://es.nttdata.com/",
+    "privacyUrl": "https://es.nttdata.com/contact-us/privacy-policy",
+    "termsOfUseUrl": "https://es.nttdata.com/legal-notice"
+  },
+  "name": {
+    "short": "AI Support Platform SBX",
+    "full": "AI Support Platform Teams Sandbox"
+  },
+  "description": {
+    "short": "Canal Teams gobernado para AI Support Platform.",
+    "full": "Aplicación Microsoft Teams de sandbox para AI Support Platform. Permite interacción con el workflow gobernado, solicitudes de aprobación humana y seguimiento del estado de incidencias."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#FFFFFF",
+  "bots": [
+    {
+      "botId": "e89605d4-0a6e-49bb-ae00-4c42a002b6a5",
+      "scopes": [
+        "personal",
+        "team",
+        "groupChat"
+      ],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "supportsChannelFeatures": "tier1"
+}
