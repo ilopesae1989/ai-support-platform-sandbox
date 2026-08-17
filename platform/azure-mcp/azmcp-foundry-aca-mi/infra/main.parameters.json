@@ -6,13 +6,22 @@
       "value": "${AZURE_LOCATION}"
     },
     "entraAppDisplayName": {
-      "value": "Azure MCP Storage Server API"
+      "value": "Azure MCP Operations Server API"
     },
     "acaName": {
-      "value": "azure-mcp-storage-server"
+      "value": "azure-mcp-operations-server"
     },
-    "storageResourceId": {
-      "value": "${STORAGE_RESOURCE_ID}"
+    "targetVmResourceId": {
+      "value": "${TARGET_VM_RESOURCE_ID}"
+    },
+    "vmStartRoleDefinitionId": {
+      "value": "${VM_START_ROLE_DEFINITION_ID}"
+    },
+    "readerRoleAssignmentName": {
+      "value": "${READER_ROLE_ASSIGNMENT_NAME}"
+    },
+    "vmStartRoleAssignmentName": {
+      "value": "${VM_START_ROLE_ASSIGNMENT_NAME}"
     },
     "foundryProjectResourceId": {
       "value": "${FOUNDRY_PROJECT_RESOURCE_ID}"

@@ -34,28 +34,39 @@ param azureAdTenantId string
 @description('Azure AD Client ID')
 param azureAdClientId string
 
-@description('Azure MCP Server namespaces to enable. Must specify at least one namespace and no more than three.')
+@description('Exact Azure MCP Server tools to expose. Must specify at least one.')
 @minLength(1)
-@maxLength(3)
-param namespaces array
+param tools array
 
 var baseArgs = [
   '--transport'
   'http'
   '--outgoing-auth-strategy'
   'UseHostingEnvironmentIdentity'
-  '--mode'
-  'all'
-  // SECURITY NOTE: The MCP server is deployed with only readonly tools ('--read-only') enabled.
-  // Deleting '--read-only' will remove this restriction and enable tools that can create, modify, or delete Azure resources,
-  // do so with caution, and ensure that access is granted only to trusted agents.
-  '--read-only'
-  // SECURITY NOTE: Never add '--dangerously-disable-http-incoming-auth'.
-  // This flag disables Entra ID authentication for incoming requests, allowing unauthenticated access to the MCP server.
-  // This would permit anyone to execute Azure operations using the Container App's managed identity, bypassing all access controls.
 ]
-var namespaceArgs = [for ns in namespaces: ['--namespace', ns]]
-var serverArgs = flatten(concat([baseArgs], namespaceArgs))
+
+// SECURITY:
+// The server exposes only the explicitly governed tools below.
+// Do not replace this tool allowlist with broad namespace exposure.
+// The compute power-state tool is additionally constrained by:
+// - platform Capability Registry;
+// - HITL;
+// - PreCallSecurity;
+// - exact resolved parameters;
+// - Azure RBAC scoped to the authorized VM.
+var toolArgs = [
+  for tool in tools: [
+    '--tool'
+    tool
+  ]
+]
+
+var serverArgs = flatten(
+  concat(
+    [baseArgs],
+    toolArgs
+  )
+)
 
 resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: environmentName

@@ -7,8 +7,17 @@ param acaName string
 @description('Display name for the Entra App')
 param entraAppDisplayName string
 
-@description('Full resource ID of the Storage Account that the MCP server will have access to through storage tools')
-param storageResourceId string
+@description('Full resource ID of the exact Azure VM that Azure MCP is allowed to start')
+param targetVmResourceId string
+
+@description('Existing custom role definition GUID for the governed VM start capability')
+param vmStartRoleDefinitionId string
+
+@description('Existing subscription Reader role assignment GUID to adopt. Leave empty for a new environment.')
+param readerRoleAssignmentName string = ''
+
+@description('Existing VM Start role assignment GUID to adopt. Leave empty for a new environment.')
+param vmStartRoleAssignmentName string = ''
 
 @description('Microsoft Foundry project resource ID for assigning Entra App role to Foundry project managed identity')
 param foundryProjectResourceId string
@@ -19,16 +28,42 @@ param serviceManagementReference string = ''
 @description('Application Insights connection string. Use "DISABLED" to disable telemetry, or provide existing connection string. If omitted, new App Insights will be created.')
 param appInsightsConnectionString string = ''
 
-// Validate storageResourceId format
-// Expected: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}
-var storageIdLower = toLower(storageResourceId)
-var storageHasCorrectSegmentCount = length(split(storageResourceId, '/')) == 9
-var storageStartsWithSubscriptions = startsWith(storageIdLower, '/subscriptions/')
-var storageHasProvider = contains(storageIdLower, '/providers/microsoft.storage/storageaccounts/')
-var isValidStorageResourceId = storageHasCorrectSegmentCount && storageStartsWithSubscriptions && storageHasProvider
+// Validate targetVmResourceId format.
+// Expected:
+// /subscriptions/{sub}/resourceGroups/{rg}/providers/
+// Microsoft.Compute/virtualMachines/{vm}
+var targetVmIdLower = toLower(targetVmResourceId)
+var targetVmParts = split(targetVmResourceId, '/')
 
-// Expected format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Storage/storageAccounts/{name}
-assert storageResourceId_has_invalid_format = isValidStorageResourceId
+var targetVmHasCorrectSegmentCount = length(targetVmParts) == 9
+var targetVmStartsWithSubscriptions = startsWith(
+  targetVmIdLower,
+  '/subscriptions/'
+)
+var targetVmHasProvider = contains(
+  targetVmIdLower,
+  '/providers/microsoft.compute/virtualmachines/'
+)
+var targetVmSubscriptionMatches = (
+  toLower(targetVmParts[2])
+  == toLower(subscription().subscriptionId)
+)
+
+var isValidTargetVmResourceId = (
+  targetVmHasCorrectSegmentCount
+  && targetVmStartsWithSubscriptions
+  && targetVmHasProvider
+  && targetVmSubscriptionMatches
+)
+
+assert targetVmResourceId_has_invalid_format = isValidTargetVmResourceId
+
+var targetVmResourceGroupName = targetVmParts[4]
+
+var targetVmResourceGroupId = (
+  '/subscriptions/${subscription().subscriptionId}'
+  + '/resourceGroups/${targetVmResourceGroupName}'
+)
 
 // Validate foundryProjectResourceId format
 // Expected: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.CognitiveServices/accounts/{account}/projects/{project}
@@ -76,31 +111,53 @@ module acaInfrastructure 'modules/aca-infrastructure.bicep' = {
     azureMcpCollectTelemetry: string(!empty(appInsights.outputs.connectionString))
     azureAdTenantId: tenant().tenantId
     azureAdClientId: entraApp.outputs.entraAppClientId
-    namespaces: ['storage']
+    tools: [
+      'subscription_list'
+      'group_list'
+      'group_resource_list'
+      'advisor_recommendation_list'
+      'advisor_recommendation_summary'
+      'compute_vm-power-state'
+    ]
   }
 }
 
-// Storage role definitions (read-only roles for the --read-only Azure MCP Server flag)
-var storageBlobDataReaderRoleId = '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'
-var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
-
-// Deploy Storage Blob Data Reader role assignment for ACA
-module acaStorageBlobRoleAssignment './modules/aca-role-assignment-resource.bicep' = {
-  name: 'aca-storage-blob-role-assignment'
+// Governed Azure MCP RBAC.
+//
+// READ:
+// Reader at subscription scope supports the certified
+// subscription/resource-group/Advisor read tools.
+//
+// WRITE:
+// A custom role contains exactly VM start/action and can
+// be assigned only within the approved VM Resource Group.
+// The role assignment itself is scoped to targetVmResourceId.
+module vmStartRoleDefinition 'modules/vm-start-role-definition.bicep' = {
+  name: 'vm-start-role-definition-deployment'
+  scope: subscription()
   params: {
-    storageResourceId: storageResourceId
-    acaPrincipalId: acaInfrastructure.outputs.containerAppPrincipalId
-    roleDefinitionId: storageBlobDataReaderRoleId
+    roleDefinitionId: vmStartRoleDefinitionId
+    assignableResourceGroupId: targetVmResourceGroupId
   }
 }
 
-// Deploy Reader role assignment for ACA (read storage account properties)
-module acaStorageAccountRoleAssignment './modules/aca-role-assignment-resource.bicep' = {
-  name: 'aca-storage-account-role-assignment'
+module acaSubscriptionReader 'modules/aca-subscription-reader-role-assignment.bicep' = {
+  name: 'aca-subscription-reader-role-assignment'
+  scope: subscription()
   params: {
-    storageResourceId: storageResourceId
     acaPrincipalId: acaInfrastructure.outputs.containerAppPrincipalId
-    roleDefinitionId: readerRoleId
+    roleAssignmentName: readerRoleAssignmentName
+  }
+}
+
+module acaVmStartRoleAssignment 'modules/aca-vm-start-role-assignment.bicep' = {
+  name: 'aca-vm-start-role-assignment'
+  scope: resourceGroup(targetVmResourceGroupName)
+  params: {
+    targetVmResourceId: targetVmResourceId
+    acaPrincipalId: acaInfrastructure.outputs.containerAppPrincipalId
+    roleDefinitionResourceId: vmStartRoleDefinition.outputs.roleDefinitionResourceId
+    roleAssignmentName: vmStartRoleAssignmentName
   }
 }
 
@@ -131,6 +188,11 @@ output ENTRA_APP_IDENTIFIER_URI string = entraApp.outputs.entraAppIdentifierUri
 output CONTAINER_APP_URL string = acaInfrastructure.outputs.containerAppUrl
 output CONTAINER_APP_NAME string = acaInfrastructure.outputs.containerAppName
 output CONTAINER_APP_PRINCIPAL_ID string = acaInfrastructure.outputs.containerAppPrincipalId
+
+// Governed Azure MCP RBAC outputs
+output VM_START_ROLE_DEFINITION_ID string = vmStartRoleDefinition.outputs.roleDefinitionResourceId
+output READER_ROLE_ASSIGNMENT_ID string = acaSubscriptionReader.outputs.roleAssignmentId
+output VM_START_ROLE_ASSIGNMENT_ID string = acaVmStartRoleAssignment.outputs.roleAssignmentId
 output AZURE_CONTAINER_APP_ENVIRONMENT_ID string = acaInfrastructure.outputs.containerAppEnvironmentId
 
 // Application Insights outputs
