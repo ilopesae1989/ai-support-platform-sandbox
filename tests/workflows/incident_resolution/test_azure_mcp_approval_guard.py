@@ -1037,3 +1037,149 @@ async def test_executor_rejects_missing_native_user_input_request():
         outputs[0].success
         is False
     )
+
+
+def test_extract_mcp_approval_request_from_agent_framework_raw_representation():
+    """
+    Reproduce el shape observado LIVE con
+    Agent Framework 1.13.0:
+
+    AgentResponse
+      -> raw_representation: ChatResponse
+          -> raw_representation: OpenAI Response
+              -> output
+                  -> mcp_approval_request
+
+    El extractor gobernado debe alcanzar el
+    OpenAI Response real sin reconstruir ni
+    inventar identidad MCP.
+    """
+
+    raw_approval = SimpleNamespace(
+        type="mcp_approval_request",
+        id=APPROVAL_REQUEST_ID,
+        server_label=SERVER_LABEL,
+        name="compute_vm-power-state",
+        arguments=json.dumps(
+            {
+                "subscription": "sub-001",
+                "resource-group": "rg-demo",
+                "vm-name": "vm-demo",
+                "power-action": "start",
+            }
+        ),
+    )
+
+    openai_response = SimpleNamespace(
+        id=RESPONSE_ID,
+        output=[
+            raw_approval
+        ],
+    )
+
+    chat_response = SimpleNamespace(
+        raw_representation=(
+            openai_response
+        ),
+    )
+
+    agent_response = SimpleNamespace(
+        response_id=RESPONSE_ID,
+        raw_representation=(
+            chat_response
+        ),
+    )
+
+    approvals = (
+        AzureOperationsExecutor
+        ._extract_mcp_approval_requests(
+            agent_response
+        )
+    )
+
+    assert len(approvals) == 1
+
+    approval = approvals[0]
+
+    assert (
+        approval.approval_request_id
+        == APPROVAL_REQUEST_ID
+    )
+
+    assert (
+        approval.response_id
+        == RESPONSE_ID
+    )
+
+    assert (
+        approval.server_label
+        == SERVER_LABEL
+    )
+
+    assert (
+        approval.tool_name
+        == "compute_vm-power-state"
+    )
+
+    assert approval.arguments == {
+        "subscription": "sub-001",
+        "resource-group": "rg-demo",
+        "vm-name": "vm-demo",
+        "power-action": "start",
+    }
+
+
+def test_extract_mcp_approval_request_rejects_raw_representation_response_id_mismatch():
+    """
+    Agent Framework y OpenAI Response deben referirse
+    exactamente a la misma response.
+
+    Una discrepancia de identidad se rechaza
+    fail-closed antes de aprobar MCP.
+    """
+
+    raw_approval = SimpleNamespace(
+        type="mcp_approval_request",
+        id=APPROVAL_REQUEST_ID,
+        server_label=SERVER_LABEL,
+        name="compute_vm-power-state",
+        arguments=json.dumps(
+            {
+                "subscription": "sub-001",
+                "resource-group": "rg-demo",
+                "vm-name": "vm-demo",
+                "power-action": "start",
+            }
+        ),
+    )
+
+    openai_response = SimpleNamespace(
+        id="resp-raw-different",
+        output=[
+            raw_approval
+        ],
+    )
+
+    chat_response = SimpleNamespace(
+        raw_representation=(
+            openai_response
+        ),
+    )
+
+    agent_response = SimpleNamespace(
+        response_id=RESPONSE_ID,
+        raw_representation=(
+            chat_response
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="identidad de la response MCP",
+    ):
+        (
+            AzureOperationsExecutor
+            ._extract_mcp_approval_requests(
+                agent_response
+            )
+        )

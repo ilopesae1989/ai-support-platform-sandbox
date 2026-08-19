@@ -409,21 +409,77 @@ Restricciones obligatorias:
             None,
         )
 
-        response_source = (
-            raw_response
-            if raw_response is not None
-            else response
+        raw_representation = getattr(
+            response,
+            "raw_representation",
+            None,
         )
 
-        response_id = (
+        nested_raw_representation = (
+            getattr(
+                raw_representation,
+                "raw_representation",
+                None,
+            )
+            if raw_representation is not None
+            else None
+        )
+
+        # Agent Framework 1.13.0 observado LIVE:
+        #
+        # AgentResponse
+        #   -> raw_representation: ChatResponse
+        #       -> raw_representation: OpenAI Response
+        #           -> output
+        #
+        # raw_response se conserva como shape legacy
+        # utilizado por tests y adaptadores previos.
+        #
+        if raw_response is not None:
+            response_source = raw_response
+
+        elif nested_raw_representation is not None:
+            response_source = (
+                nested_raw_representation
+            )
+
+        elif raw_representation is not None:
+            response_source = (
+                raw_representation
+            )
+
+        else:
+            response_source = response
+
+        source_response_id = (
             cls._mcp_approval_field(
                 response_source,
                 "id",
             )
-            or cls._mcp_approval_field(
+        )
+
+        framework_response_id = (
+            cls._mcp_approval_field(
                 response,
                 "response_id",
             )
+        )
+
+        if (
+            source_response_id
+            and framework_response_id
+            and str(source_response_id)
+            != str(framework_response_id)
+        ):
+            raise ValueError(
+                "La identidad de la response MCP "
+                "no coincide entre Agent Framework "
+                "y la representación RAW."
+            )
+
+        response_id = (
+            source_response_id
+            or framework_response_id
         )
 
         output = (
