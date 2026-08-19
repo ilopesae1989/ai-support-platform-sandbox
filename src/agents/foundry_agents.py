@@ -1,7 +1,17 @@
 import json
 import logging
 import os
+
+from dataclasses import (
+    dataclass,
+)
+
 from typing import Mapping
+
+from agent_framework import (
+    ChatOptions,
+    Message,
+)
 
 from agent_framework.foundry import FoundryAgent
 from azure.identity import AzureCliCredential
@@ -24,6 +34,37 @@ from .contracts import (
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(
+    frozen=True
+)
+class AzureOperationsInvocation:
+    """
+    Contexto efímero de una única ejecución
+    Azure Operations que puede requerir una
+    continuación MCP.
+
+    Mantiene:
+
+    - la misma instancia de FoundryAgent;
+    - la misma AgentSession;
+    - la respuesta más reciente.
+
+    No representa autorización.
+
+    No es un checkpoint durable.
+
+    La autorización operacional continúa
+    perteneciendo al workflow y a
+    VerifiedAzureOperationRequest.
+    """
+
+    agent: object
+    session: object
+    response: object
+
+    owner_token: object
 
 
 class FoundryAgents:
@@ -87,6 +128,15 @@ class FoundryAgents:
         # por la identidad administrada correspondiente.
         #
         self._credential = AzureCliCredential()
+
+        #
+        # Contextos Azure Operations iniciados por esta
+        # instancia sólo pueden continuarse mediante
+        # esta misma instancia.
+        #
+        # No es una credencial ni se serializa.
+        #
+        self._azure_operations_owner_token = object()
 
         #
         # El catálogo efectivo se construye una sola vez
@@ -575,6 +625,180 @@ class FoundryAgents:
 
         return self._create_agent(
             definition
+        )
+
+    async def begin_azure_operations(
+        self,
+        message: str,
+    ) -> AzureOperationsInvocation:
+        """
+        Inicia una única ejecución Azure Operations
+        con una AgentSession dedicada.
+
+        La sesión permite continuar posteriormente
+        una solicitud de aprobación MCP sin crear
+        otra ejecución lógica desde cero.
+
+        Este método:
+
+        - NO aprueba ninguna tool;
+        - NO interpreta la respuesta;
+        - NO decide autorización;
+        - NO ejecuta PreCallSecurity.
+        """
+
+        definition = self.get_definition(
+            AgentKey.AZURE_OPERATIONS
+        )
+
+        self._register_invocation(
+            definition
+        )
+
+        agent = self._create_agent(
+            definition
+        )
+
+        session = agent.create_session()
+
+        if session is None:
+            raise RuntimeError(
+                "FoundryAgent no creó una "
+                "AgentSession válida."
+            )
+
+        response = await agent.run(
+            message,
+            session=session,
+            options=ChatOptions(
+                store=True
+            ),
+        )
+
+        return AzureOperationsInvocation(
+            agent=agent,
+            session=session,
+            response=response,
+            owner_token=(
+                self
+                ._azure_operations_owner_token
+            ),
+        )
+
+    async def continue_azure_operations(
+        self,
+        *,
+        invocation: AzureOperationsInvocation,
+        approval_request,
+        approved: bool,
+    ) -> AzureOperationsInvocation:
+        """
+        Continúa exactamente una ejecución Azure
+        Operations ya iniciada.
+
+        Reutiliza:
+
+        - la misma instancia de FoundryAgent;
+        - la misma AgentSession.
+
+        approval_request debe ser el Content nativo
+        devuelto por Agent Framework.
+
+        Este método NO decide si la solicitud debe
+        aprobarse. Recibe esa decisión después de
+        que la capa gobernante la haya validado.
+        """
+
+        if not isinstance(
+            invocation,
+            AzureOperationsInvocation,
+        ):
+            raise ValueError(
+                "Azure Operations continuation "
+                "requiere AzureOperationsInvocation."
+            )
+
+        if (
+            invocation.owner_token
+            is not self
+            ._azure_operations_owner_token
+        ):
+            raise ValueError(
+                "AzureOperationsInvocation no "
+                "pertenece a esta instancia "
+                "FoundryAgents."
+            )
+
+        if invocation.agent is None:
+            raise ValueError(
+                "AzureOperationsInvocation no "
+                "contiene agente."
+            )
+
+        if invocation.session is None:
+            raise ValueError(
+                "AzureOperationsInvocation no "
+                "contiene sesión."
+            )
+
+        if not isinstance(
+            approved,
+            bool,
+        ):
+            raise ValueError(
+                "approved debe ser bool."
+            )
+
+        approval_factory = getattr(
+            approval_request,
+            "to_function_approval_response",
+            None,
+        )
+
+        if not callable(
+            approval_factory
+        ):
+            raise ValueError(
+                "La solicitud no permite generar "
+                "una respuesta de aprobación "
+                "Agent Framework."
+            )
+
+        #
+        # IMPORTANTE:
+        # la conversión sólo ocurre DESPUÉS de
+        # validar el contexto de ejecución.
+        #
+        approval_response = (
+            approval_factory(
+                approved
+            )
+        )
+
+        approval_message = Message(
+            role="user",
+            contents=[
+                approval_response
+            ],
+        )
+
+        response = await invocation.agent.run(
+            [
+                approval_message
+            ],
+            session=invocation.session,
+            options=ChatOptions(
+                store=True
+            ),
+        )
+
+        return AzureOperationsInvocation(
+            agent=invocation.agent,
+            session=invocation.session,
+            response=response,
+            owner_token=(
+                invocation.owner_token
+            ),
         )
 
     async def run_azure_operations(
