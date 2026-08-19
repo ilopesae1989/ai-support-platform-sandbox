@@ -21,8 +21,6 @@ var targetVmIdLower = toLower(
   targetVmResourceId
 )
 
-var targetVmName = targetVmParts[8]
-
 var targetVmHasCorrectSegmentCount = length(targetVmParts) == 9
 
 var targetVmStartsWithSubscriptions = startsWith(
@@ -41,7 +39,16 @@ var targetVmResourceGroupMatches = toLower(targetVmParts[4]) == toLower(resource
 
 var validTargetVm = targetVmHasCorrectSegmentCount && targetVmStartsWithSubscriptions && targetVmHasComputeProvider && targetVmSubscriptionMatches && targetVmResourceGroupMatches
 
-assert targetVmResourceId_has_invalid_format = validTargetVm
+var validatedTargetVmResourceId = validTargetVm
+  ? targetVmResourceId
+  : fail('targetVmResourceId must identify a virtual machine in the current subscription and resource group.')
+
+var validatedTargetVmParts = split(
+  validatedTargetVmResourceId,
+  '/'
+)
+
+var targetVmName = validatedTargetVmParts[8]
 
 resource targetVm 'Microsoft.Compute/virtualMachines@2024-11-01' existing = {
   name: targetVmName

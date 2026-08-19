@@ -44,26 +44,22 @@ var targetVmHasProvider = contains(
   targetVmIdLower,
   '/providers/microsoft.compute/virtualmachines/'
 )
-var targetVmSubscriptionMatches = (
-  toLower(targetVmParts[2])
-  == toLower(subscription().subscriptionId)
+var targetVmSubscriptionMatches = toLower(targetVmParts[2]) == toLower(subscription().subscriptionId)
+
+var isValidTargetVmResourceId = targetVmHasCorrectSegmentCount && targetVmStartsWithSubscriptions && targetVmHasProvider && targetVmSubscriptionMatches
+
+var validatedTargetVmResourceId = isValidTargetVmResourceId
+  ? targetVmResourceId
+  : fail('targetVmResourceId must identify a virtual machine in the current subscription.')
+
+var validatedTargetVmParts = split(
+  validatedTargetVmResourceId,
+  '/'
 )
 
-var isValidTargetVmResourceId = (
-  targetVmHasCorrectSegmentCount
-  && targetVmStartsWithSubscriptions
-  && targetVmHasProvider
-  && targetVmSubscriptionMatches
-)
+var targetVmResourceGroupName = validatedTargetVmParts[4]
 
-assert targetVmResourceId_has_invalid_format = isValidTargetVmResourceId
-
-var targetVmResourceGroupName = targetVmParts[4]
-
-var targetVmResourceGroupId = (
-  '/subscriptions/${subscription().subscriptionId}'
-  + '/resourceGroups/${targetVmResourceGroupName}'
-)
+var targetVmResourceGroupId = '/subscriptions/${subscription().subscriptionId}/resourceGroups/${targetVmResourceGroupName}'
 
 // Validate foundryProjectResourceId format
 // Expected: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.CognitiveServices/accounts/{account}/projects/{project}
@@ -75,7 +71,9 @@ var hasProjectsSegment = contains(foundryIdLower, '/projects/')
 var isValidFoundryProjectResourceId = hasCorrectSegmentCount && startsWithSubscriptions && hasCognitiveServicesProvider && hasProjectsSegment
 
 // Expected format: /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.CognitiveServices/accounts/{account}/projects/{project}
-assert foundryProjectResourceId_has_invalid_format = isValidFoundryProjectResourceId
+var validatedFoundryProjectResourceId = isValidFoundryProjectResourceId
+  ? foundryProjectResourceId
+  : fail('foundryProjectResourceId does not match the required Microsoft Foundry project resource ID format.')
 
 // Deploy Application Insights if appInsightsConnectionString is empty and not DISABLED
 var appInsightsName = '${acaName}-insights'
@@ -154,7 +152,7 @@ module acaVmStartRoleAssignment 'modules/aca-vm-start-role-assignment.bicep' = {
   name: 'aca-vm-start-role-assignment'
   scope: resourceGroup(targetVmResourceGroupName)
   params: {
-    targetVmResourceId: targetVmResourceId
+    targetVmResourceId: validatedTargetVmResourceId
     acaPrincipalId: acaInfrastructure.outputs.containerAppPrincipalId
     roleDefinitionResourceId: vmStartRoleDefinition.outputs.roleDefinitionResourceId
     roleAssignmentName: vmStartRoleAssignmentName
@@ -165,7 +163,7 @@ module acaVmStartRoleAssignment 'modules/aca-vm-start-role-assignment.bicep' = {
 module foundryRoleAssignment './modules/foundry-role-assignment-entraapp.bicep' = {
   name: 'foundry-role-assignment'
   params: {
-    foundryProjectResourceId: foundryProjectResourceId
+    foundryProjectResourceId: validatedFoundryProjectResourceId
     entraAppServicePrincipalObjectId: entraApp.outputs.entraAppServicePrincipalObjectId
     entraAppRoleId: entraApp.outputs.entraAppRoleId
   }

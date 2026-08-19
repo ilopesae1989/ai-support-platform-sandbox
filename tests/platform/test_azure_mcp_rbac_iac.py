@@ -194,3 +194,78 @@ def _vm_assignment_module_block(
         return remainder
 
     return remainder[:next_module]
+
+
+def test_bicep_config_does_not_enable_experimental_assertions():
+    import json
+
+    config_path = INFRA / "bicepconfig.json"
+
+    config = json.loads(
+        _read(config_path)
+    )
+
+    experimental = config.get(
+        "experimentalFeaturesEnabled",
+        {}
+    )
+
+    assert (
+        experimental.get("assertions")
+        is not True
+    )
+
+
+def test_infra_contains_no_assert_declarations():
+    bicep_files = [
+        MAIN,
+        *MODULES.glob("*.bicep"),
+    ]
+
+    assert_lines = []
+
+    for path in bicep_files:
+        for line_number, line in enumerate(
+            _read(path).splitlines(),
+            start=1,
+        ):
+            if line.lstrip().startswith("assert "):
+                assert_lines.append(
+                    (
+                        str(path),
+                        line_number,
+                        line.strip(),
+                    )
+                )
+
+    assert assert_lines == [], (
+        "No se permiten declaraciones Bicep "
+        "assert experimentales. "
+        f"Encontradas: {assert_lines}"
+    )
+
+
+def test_iac_uses_supported_fail_closed_parameter_validation():
+    main_text = _read(MAIN)
+
+    vm_assignment_text = _read(
+        MODULES
+        / "aca-vm-start-role-assignment.bicep"
+    )
+
+    assert "validatedTargetVmResourceId" in main_text
+    assert "validatedFoundryProjectResourceId" in main_text
+
+    assert "fail(" in main_text
+    assert "fail(" in vm_assignment_text
+
+    assert (
+        "targetVmResourceId: validatedTargetVmResourceId"
+        in main_text
+    )
+
+    assert (
+        "foundryProjectResourceId: "
+        "validatedFoundryProjectResourceId"
+        in main_text
+    )
