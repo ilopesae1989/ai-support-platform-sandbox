@@ -20,6 +20,11 @@ AlertSource = Literal[
     "other",
 ]
 
+IncidentOrigin = Literal[
+    "observed",
+    "synthetic_demo",
+]
+
 
 class NormalizedAlert(BaseModel):
     """
@@ -32,6 +37,8 @@ class NormalizedAlert(BaseModel):
     alert_id: str
 
     source: AlertSource
+
+    incident_origin: IncidentOrigin = "observed"
 
     source_event_id: str | None = None
 
@@ -64,3 +71,35 @@ class NormalizedAlert(BaseModel):
     raw_attributes: dict[str, Any] = Field(
         default_factory=dict
     )
+
+    def __setstate__(
+        self,
+        state: dict[object, object],
+    ) -> None:
+        super().__setstate__(
+            state
+        )
+
+        values = self.__dict__
+
+        if "incident_origin" not in values:
+            values["incident_origin"] = "observed"
+            return
+
+        incident_origin = values["incident_origin"]
+
+        if (
+            not isinstance(
+                incident_origin,
+                str,
+            )
+            or incident_origin
+            not in (
+                "observed",
+                "synthetic_demo",
+            )
+        ):
+            raise ValueError(
+                "incident_origin rehidratado "
+                "no pertenece al contrato permitido."
+            )

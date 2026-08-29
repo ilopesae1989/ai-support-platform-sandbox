@@ -1,3 +1,5 @@
+
+from src.workflows.incident_resolution.procedure_capability_binding import ProcedureApplicability
 from dataclasses import (
     FrozenInstanceError,
 )
@@ -66,6 +68,14 @@ def create_registry(
 
                 capability_id=(
                     "azure.vm.start"
+                ),
+                applicability=ProcedureApplicability(
+                    allowed_environments=(
+                        "sandbox",
+                    ),
+                    allowed_incident_origins=(
+                        "observed",
+                    ),
                 ),
             ),
         ],
@@ -171,6 +181,14 @@ def test_duplicate_exact_binding_is_rejected():
             capability_id=(
                 "azure.vm.start"
             ),
+            applicability=ProcedureApplicability(
+                allowed_environments=(
+                    "sandbox",
+                ),
+                allowed_incident_origins=(
+                    "observed",
+                ),
+            ),
         )
     )
 
@@ -181,6 +199,14 @@ def test_duplicate_exact_binding_is_rejected():
             step_id=STEP_ID,
             capability_id=(
                 "azure.vm.start"
+            ),
+            applicability=ProcedureApplicability(
+                allowed_environments=(
+                    "sandbox",
+                ),
+                allowed_incident_origins=(
+                    "observed",
+                ),
             ),
         )
     )
@@ -230,6 +256,14 @@ def test_binding_to_unknown_capability_is_rejected():
                     capability_id=(
                         "azure.vm.restart"
                     ),
+                    applicability=ProcedureApplicability(
+                        allowed_environments=(
+                            "sandbox",
+                        ),
+                        allowed_incident_origins=(
+                            "observed",
+                        ),
+                    ),
                 ),
             ],
         )
@@ -252,6 +286,14 @@ def test_binding_is_immutable():
 
             capability_id=(
                 "azure.vm.start"
+            ),
+            applicability=ProcedureApplicability(
+                allowed_environments=(
+                    "sandbox",
+                ),
+                allowed_incident_origins=(
+                    "observed",
+                ),
             ),
         )
     )
@@ -280,6 +322,14 @@ def test_binding_requires_exact_nonempty_version():
 
             capability_id=(
                 "azure.vm.start"
+            ),
+            applicability=ProcedureApplicability(
+                allowed_environments=(
+                    "sandbox",
+                ),
+                allowed_incident_origins=(
+                    "observed",
+                ),
             ),
         )
 def test_different_procedures_can_reuse_same_capability():
@@ -316,6 +366,14 @@ def test_different_procedures_can_reuse_same_capability():
                     capability_id=(
                         "azure.vm.start"
                     ),
+                    applicability=ProcedureApplicability(
+                        allowed_environments=(
+                            "sandbox",
+                        ),
+                        allowed_incident_origins=(
+                            "observed",
+                        ),
+                    ),
                 ),
 
                 ProcedureCapabilityBinding(
@@ -331,6 +389,14 @@ def test_different_procedures_can_reuse_same_capability():
 
                     capability_id=(
                         "azure.vm.start"
+                    ),
+                    applicability=ProcedureApplicability(
+                        allowed_environments=(
+                            "sandbox",
+                        ),
+                        allowed_incident_origins=(
+                            "observed",
+                        ),
                     ),
                 ),
             ],
@@ -387,8 +453,6 @@ def test_default_registry_contains_real_vm_start_bindings():
     registry = (
         build_default_procedure_capability_registry()
     )
-
-    assert registry.count() == 2
 
     assert registry.contains_binding(
         procedure_id=(

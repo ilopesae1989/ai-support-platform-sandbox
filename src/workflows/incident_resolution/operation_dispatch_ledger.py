@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from contextlib import (
+    closing,
+)
+
 from dataclasses import (
     dataclass,
 )
@@ -12,6 +16,11 @@ from typing import (
     Protocol,
 )
 
+
+import sqlite3
+from pathlib import (
+    Path,
+)
 
 class OperationAlreadyDispatchedError(
     RuntimeError
@@ -62,6 +71,17 @@ class OperationDispatchLedger(
             OperationAlreadyDispatchedError
         """
 
+        ...
+
+    def contains(
+        self,
+        operation_id: str,
+    ) -> bool:
+        """
+        Observación read-only del consumo de operation_id.
+
+        No reclama ni libera ninguna operación.
+        """
         ...
 
 
@@ -189,3 +209,196 @@ class InMemoryOperationDispatchLedger:
             return len(
                 self._records
             )
+
+
+class SqliteOperationDispatchLedger:
+    """
+    Autoridad durable mínima de dispatch para
+    sandbox/MVP.
+
+    Propiedades:
+
+    - persistencia entre instancias/procesos;
+    - operation_id único;
+    - claim atómico;
+    - replay fail-closed;
+    - autoridad externa a checkpoints;
+    - ninguna operación de delete/reset/reopen.
+
+    Una fila persistida significa que la operación
+    ya fue despachada y no puede volver a reclamarse.
+    """
+
+    def __init__(
+        self,
+        database_path: str | Path,
+    ) -> None:
+        if not isinstance(
+            database_path,
+            (
+                str,
+                Path,
+            ),
+        ):
+            raise TypeError(
+                "database_path debe ser str o Path."
+            )
+
+        if isinstance(
+            database_path,
+            str,
+        ):
+            if (
+                not database_path
+                or not database_path.strip()
+                or (
+                    database_path
+                    != database_path.strip()
+                )
+            ):
+                raise ValueError(
+                    "database_path debe ser "
+                    "un path no vacío y exacto."
+                )
+
+        self._database_path = (
+            Path(
+                database_path
+            )
+        )
+
+        self._database_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        self._initialize()
+
+    def _connect(
+        self,
+    ) -> sqlite3.Connection:
+        return sqlite3.connect(
+            self._database_path,
+            timeout=30,
+        )
+
+    def _initialize(
+        self,
+    ) -> None:
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS
+                operation_dispatch_claims (
+                    operation_id TEXT PRIMARY KEY
+                )
+                """
+            )
+
+    @staticmethod
+    def _validate_operation_id(
+        operation_id: str,
+    ) -> None:
+        if (
+            not isinstance(
+                operation_id,
+                str,
+            )
+            or not operation_id.strip()
+        ):
+            raise ValueError(
+                "operation_id debe ser "
+                "un string no vacío."
+            )
+
+    def claim(
+        self,
+        operation_id: str,
+    ) -> None:
+        """
+        Reclama operation_id de forma durable
+        y atómica.
+
+        Sólo una ejecución puede insertar una fila
+        concreta.
+
+        Si la clave ya existe, el evento representa
+        replay y se transforma en
+        OperationAlreadyDispatchedError.
+        """
+
+        self._validate_operation_id(
+            operation_id
+        )
+
+        connection = (
+            self._connect()
+        )
+
+        try:
+            connection.execute(
+                "BEGIN IMMEDIATE"
+            )
+
+            connection.execute(
+                """
+                INSERT INTO operation_dispatch_claims (
+                    operation_id
+                )
+                VALUES (?)
+                """,
+                (
+                    operation_id,
+                ),
+            )
+
+            connection.commit()
+
+        except sqlite3.IntegrityError as exc:
+            connection.rollback()
+
+            raise (
+                OperationAlreadyDispatchedError(
+                    "La operación ya fue "
+                    "despachada anteriormente. "
+                    "operation_id="
+                    f"{operation_id!r}."
+                )
+            ) from exc
+
+        except Exception:
+            connection.rollback()
+            raise
+
+        finally:
+            connection.close()
+
+    def contains(
+        self,
+        operation_id: str,
+    ) -> bool:
+        """
+        Comprueba durablemente si operation_id
+        ya fue reclamado.
+
+        Es estrictamente read-only.
+        """
+
+        self._validate_operation_id(
+            operation_id
+        )
+
+        with closing(self._connect()) as connection, connection:
+            row = connection.execute(
+                """
+                SELECT 1
+                FROM operation_dispatch_claims
+                WHERE operation_id = ?
+                LIMIT 1
+                """,
+                (
+                    operation_id,
+                ),
+            ).fetchone()
+
+        return row is not None

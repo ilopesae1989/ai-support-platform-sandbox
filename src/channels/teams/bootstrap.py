@@ -23,14 +23,46 @@ from src.runtime.procedure.workflow import (
     build_procedure_approval_workflow,
 )
 
+from src.workflows.incident_resolution.checkpoint_storage import (
+    build_incident_checkpoint_storage,
+)
+
+from src.workflows.incident_resolution.operation_dispatch_ledger import (
+    SqliteOperationDispatchLedger,
+)
+
+from src.workflows.incident_resolution.workflow import (
+    build_incident_resolution_workflow,
+)
+
 from .approval_authorization import (
     ExactTeamsApprovalPolicy,
     TeamsApprovalPrincipal,
 )
 
-from .approval_handler import (
+from .incident_approval_handoff_handler import (
     TeamsApprovalHandlerDependencies,
     register_teams_approval_handler,
+)
+
+from .incident_approval_processor import (
+    process_authorized_teams_incident_approval,
+)
+
+from .incident_continuation_store import (
+    SqliteIncidentContinuationStore,
+)
+
+from .incident_continuation_worker import (
+    IncidentContinuationWorker,
+    IncidentContinuationWorkerDependencies,
+)
+
+from .incident_terminal_presenter import (
+    notify_teams_incident_terminal_result,
+)
+from .outbound_adapter import (
+    TeamsOutboundDependencies,
 )
 
 from .conversation_binding_store import (
@@ -102,6 +134,8 @@ class TeamsHitlSettings:
 
     checkpoint_path: Path
 
+    operation_dispatch_database_path: Path
+
     conversation_binding_database_path: Path
 
     messaging_endpoint: str = (
@@ -121,6 +155,12 @@ class TeamsHitlSettings:
         checkpoint_path = Path(
             _required_environment_value(
                 "TEAMS_HITL_CHECKPOINT_DIR"
+            )
+        )
+
+        operation_dispatch_database_path = Path(
+            _required_environment_value(
+                "TEAMS_OPERATION_DISPATCH_DB"
             )
         )
 
@@ -169,6 +209,10 @@ class TeamsHitlSettings:
                 checkpoint_path
             ),
 
+            operation_dispatch_database_path=(
+                operation_dispatch_database_path
+            ),
+
             conversation_binding_database_path=(
                 conversation_binding_database_path
             ),
@@ -196,6 +240,19 @@ class TeamsHitlBootstrap:
 
     store: SqlitePendingApprovalStore
 
+    checkpoint_storage: object
+
+    operation_dispatch_ledger: (
+        SqliteOperationDispatchLedger
+    )
+
+    continuation_store: (
+        SqliteIncidentContinuationStore
+    )
+
+    continuation_worker: (
+        IncidentContinuationWorker
+    )
     dependencies: TeamsApprovalHandlerDependencies
 
     conversation_store: (
@@ -205,6 +262,8 @@ class TeamsHitlBootstrap:
     conversation_dependencies: (
         TeamsConversationHandlerDependencies
     )
+
+    outbound: TeamsOutboundDependencies
 
 
 def build_teams_hitl_app(
@@ -263,9 +322,50 @@ def build_teams_hitl_app(
         )
     )
 
-    checkpoint_path = (
-        settings.checkpoint_path
+    continuation_store = (
+        SqliteIncidentContinuationStore(
+            settings.pending_database_path.parent
+            / "incident-continuations.db"
+        )
     )
+    checkpoint_storage = (
+        build_incident_checkpoint_storage(
+            settings.checkpoint_path
+        )
+    )
+
+    operation_dispatch_ledger = (
+        SqliteOperationDispatchLedger(
+            settings
+            .operation_dispatch_database_path
+        )
+    )
+
+    def workflow_factory():
+        return (
+            build_incident_resolution_workflow(
+                operation_dispatch_ledger=(
+                    operation_dispatch_ledger
+                ),
+            )
+        )
+
+    async def incident_processor(
+        *,
+        invocation,
+        store,
+        workflow,
+    ):
+        return await (
+            process_authorized_teams_incident_approval(
+                invocation=invocation,
+                store=store,
+                workflow=workflow,
+                checkpoint_storage=(
+                    checkpoint_storage
+                ),
+            )
+        )
 
     dependencies = (
         TeamsApprovalHandlerDependencies(
@@ -277,14 +377,15 @@ def build_teams_hitl_app(
                 store
             ),
 
+            continuation_store=(
+                continuation_store
+            ),
             workflow_factory=(
-                lambda: (
-                    build_procedure_approval_workflow(
-                        str(
-                            checkpoint_path
-                        )
-                    )
-                )
+                workflow_factory
+            ),
+
+            processor=(
+                incident_processor
             ),
         )
     )
@@ -326,6 +427,50 @@ def build_teams_hitl_app(
         ),
     )
 
+    outbound = (
+        TeamsOutboundDependencies(
+            app=app,
+            store=(
+                conversation_store
+            ),
+        )
+    )
+
+    async def terminal_notifier(
+        *,
+        invocation,
+        processed,
+    ):
+        return await (
+            notify_teams_incident_terminal_result(
+                invocation=invocation,
+                processed=processed,
+                outbound=outbound,
+            )
+        )
+
+    continuation_worker = (
+        IncidentContinuationWorker(
+            IncidentContinuationWorkerDependencies(
+                continuation_store=(
+                    continuation_store
+                ),
+                approval_store=store,
+                workflow_factory=(
+                    workflow_factory
+                ),
+                processor=(
+                    incident_processor
+                ),
+                terminal_notifier=(
+                    terminal_notifier
+                ),
+                worker_id=(
+                    "teams-incident-worker-sbx"
+                ),
+            )
+        )
+    )
     register_teams_approval_handler(
         app=app,
         dependencies=dependencies,
@@ -342,11 +487,26 @@ def build_teams_hitl_app(
         app=app,
         policy=policy,
         store=store,
+        checkpoint_storage=(
+            checkpoint_storage
+        ),
+        operation_dispatch_ledger=(
+            operation_dispatch_ledger
+        ),
+        continuation_store=(
+            continuation_store
+        ),
+        continuation_worker=(
+            continuation_worker
+        ),
         dependencies=dependencies,
         conversation_store=(
             conversation_store
         ),
         conversation_dependencies=(
             conversation_dependencies
+        ),
+        outbound=(
+            outbound
         ),
     )

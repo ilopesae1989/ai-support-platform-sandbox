@@ -14,7 +14,9 @@ from .operational_capability import (
 )
 
 from .procedure_capability_binding import (
+    ProcedureApplicability,
     ProcedureCapabilityBinding,
+    ProcedureCapabilityBindingError,
 )
 
 
@@ -188,6 +190,64 @@ class ProcedureCapabilityRegistry:
             )
         )
 
+    def resolve_applicable_capability(
+        self,
+        *,
+        procedure_id: str,
+        procedure_version: str,
+        step_id: str,
+        operational_context: object,
+    ) -> OperationalCapability:
+        """
+        Resuelve la capability sólo cuando el binding
+        exacto también resulta aplicable al contexto
+        operacional autoritativo.
+        """
+
+        from .operational_context import (
+            OperationalContext,
+        )
+
+        if not isinstance(
+            operational_context,
+            OperationalContext,
+        ):
+            raise ProcedureCapabilityBindingError(
+                "operational_context debe ser "
+                "OperationalContext."
+            )
+
+        binding = self.get_binding(
+            procedure_id=procedure_id,
+            procedure_version=procedure_version,
+            step_id=step_id,
+        )
+
+        applicability = binding.applicability
+
+        if (
+            operational_context.environment
+            not in applicability.allowed_environments
+        ):
+            raise ProcedureCapabilityBindingError(
+                "environment autoritativo no está "
+                "permitido por el capability binding."
+            )
+
+        if (
+            operational_context.incident_origin
+            not in applicability.allowed_incident_origins
+        ):
+            raise ProcedureCapabilityBindingError(
+                "incident_origin autoritativo no está "
+                "permitido por el capability binding."
+            )
+
+        return self._capability_registry.get(
+            binding.capability_id
+        )
+
+
     def contains_binding(
         self,
         *,
@@ -230,8 +290,12 @@ def build_default_procedure_capability_registry(
     Construye el registry gobernado de bindings
     actualmente publicados.
 
-    Los bindings representan exclusivamente
-    procedimientos corporativos reales y versionados.
+    Los bindings representan procedimientos
+    gobernados y versionados.
+
+    Los escenarios sintéticos deben quedar
+    restringidos explícitamente mediante
+    ProcedureApplicability.
 
     La resolución es exacta:
 
@@ -276,6 +340,14 @@ def build_default_procedure_capability_registry(
                 capability_id=(
                     "azure.vm.start"
                 ),
+                applicability=ProcedureApplicability(
+                    allowed_environments=(
+                        "sandbox",
+                    ),
+                    allowed_incident_origins=(
+                        "observed",
+                    ),
+                ),
             ),
 
             ProcedureCapabilityBinding(
@@ -293,6 +365,41 @@ def build_default_procedure_capability_registry(
 
                 capability_id=(
                     "azure.vm.start"
+                ),
+                applicability=ProcedureApplicability(
+                    allowed_environments=(
+                        "sandbox",
+                    ),
+                    allowed_incident_origins=(
+                        "observed",
+                    ),
+                ),
+            ),
+
+            ProcedureCapabilityBinding(
+                procedure_id=(
+                    "NTTSY-SBX-AZ-VM-DEMO-001"
+                ),
+
+                procedure_version=(
+                    "1.0"
+                ),
+
+                step_id=(
+                    "1"
+                ),
+
+                capability_id=(
+                    "azure.vm.start"
+                ),
+
+                applicability=ProcedureApplicability(
+                    allowed_environments=(
+                        "sandbox",
+                    ),
+                    allowed_incident_origins=(
+                        "synthetic_demo",
+                    ),
                 ),
             ),
         ],

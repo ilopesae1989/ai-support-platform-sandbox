@@ -70,7 +70,7 @@ _DEFAULT_AGENT_CATALOG: dict[
     AgentKey.AZURE_OPERATIONS: FoundryAgentDefinition(
         key=AgentKey.AZURE_OPERATIONS,
         name="agent-azure-operations-sbx",
-        version="11",
+        version="13",
     ),
     AgentKey.ITSM: FoundryAgentDefinition(
         key=AgentKey.ITSM,

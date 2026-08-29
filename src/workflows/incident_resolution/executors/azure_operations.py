@@ -725,7 +725,7 @@ Restricciones obligatorias:
                 "tool_name",
                 None,
             )
-            != "compute_vm-power-state"
+            != "compute_vm_power-state"
         ):
             raise ValueError(
                 "Tool MCP distinta de la tool "
@@ -885,6 +885,48 @@ Restricciones obligatorias:
                 "function_call."
             )
 
+        native_request_id = getattr(
+            native_request,
+            "id",
+            None,
+        )
+
+        if not native_request_id:
+            raise ValueError(
+                "El user_input_request MCP nativo "
+                "no contiene id."
+            )
+
+        function_call_id = getattr(
+            function_call,
+            "call_id",
+            None,
+        )
+
+        if not function_call_id:
+            raise ValueError(
+                "El function_call MCP nativo no "
+                "contiene call_id."
+            )
+
+        if (
+            str(native_request_id)
+            != approval.approval_request_id
+        ):
+            raise ValueError(
+                "Mismatch entre RAW y Agent "
+                "Framework: native id."
+            )
+
+        if (
+            str(function_call_id)
+            != approval.approval_request_id
+        ):
+            raise ValueError(
+                "Mismatch entre RAW y Agent "
+                "Framework: function_call call_id."
+            )
+
         native_tool_name = getattr(
             function_call,
             "name",
@@ -907,31 +949,33 @@ Restricciones obligatorias:
             )
         )
 
-        additional_properties = getattr(
-            native_request,
-            "additional_properties",
-            None,
+        function_call_additional_properties = (
+            getattr(
+                function_call,
+                "additional_properties",
+                None,
+            )
         )
 
         if not isinstance(
-            additional_properties,
+            function_call_additional_properties,
             dict,
         ):
             raise ValueError(
-                "El user_input_request MCP no "
+                "El function_call MCP nativo no "
                 "contiene additional_properties "
                 "válidas."
             )
 
         native_server_label = (
-            additional_properties.get(
+            function_call_additional_properties.get(
                 "server_label"
             )
         )
 
         if not native_server_label:
             raise ValueError(
-                "El user_input_request MCP no "
+                "El function_call MCP nativo no "
                 "contiene server_label."
             )
 

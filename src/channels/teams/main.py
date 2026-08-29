@@ -38,7 +38,24 @@ async def run_teams_hitl_app() -> None:
         )
     )
 
-    await bootstrap.app.start()
+    stop_event = asyncio.Event()
+
+    async def run_app() -> None:
+        try:
+            await bootstrap.app.start()
+        finally:
+            stop_event.set()
+
+    async with asyncio.TaskGroup() as task_group:
+        task_group.create_task(
+            bootstrap.continuation_worker.run(
+                stop_event=stop_event
+            )
+        )
+
+        task_group.create_task(
+            run_app()
+        )
 
 
 def main() -> None:

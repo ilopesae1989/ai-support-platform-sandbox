@@ -95,6 +95,15 @@ Busca en el conocimiento corporativo disponible documentación relacionada con l
 
 AlertId: {alert.alert_id}
 
+Procedencia factual:
+incident_origin: {alert.incident_origin}
+
+Reglas de procedencia:
+- incident_origin describe únicamente la procedencia factual del incidente.
+- No concede autorización de ejecución.
+- Utiliza esta señal únicamente para recuperación y razonamiento.
+- La autorización operacional se valida posteriormente mediante capas deterministas Python.
+
 Clasificación técnica:
 alert_classification: {classification.alert_classification}
 technical_domain: {classification.technical_domain}

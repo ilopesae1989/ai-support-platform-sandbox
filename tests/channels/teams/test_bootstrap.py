@@ -14,7 +14,7 @@ from src.channels.teams.approval_authorization import (
     ExactTeamsApprovalPolicy,
 )
 
-from src.channels.teams.approval_handler import (
+from src.channels.teams.incident_approval_handoff_handler import (
     TeamsApprovalHandlerDependencies,
 )
 
@@ -113,6 +113,14 @@ def configure_environment(
         ),
     )
 
+    monkeypatch.setenv(
+        "TEAMS_OPERATION_DISPATCH_DB",
+        str(
+            tmp_path
+            / "operation-dispatch.db"
+        ),
+    )
+
 
 def test_settings_are_loaded_from_environment(
     monkeypatch,
@@ -189,6 +197,7 @@ def test_settings_are_loaded_from_environment(
         "TEAMS_HITL_PENDING_DB",
         "TEAMS_HITL_CHECKPOINT_DIR",
         "TEAMS_CONVERSATION_BINDING_DB",
+        "TEAMS_OPERATION_DISPATCH_DB",
     ],
 )
 def test_missing_required_configuration_fails_closed(

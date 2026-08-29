@@ -38,12 +38,19 @@ param azureAdClientId string
 @minLength(1)
 param tools array
 
+@description('Disable Azure MCP Server elicitation only for trusted non-production automation with independent upstream approval controls. Safe default is false.')
+param azureMcpDangerouslyDisableElicitation bool = false
+
 var baseArgs = [
   '--transport'
   'http'
   '--outgoing-auth-strategy'
   'UseHostingEnvironmentIdentity'
 ]
+
+var elicitationArgs = azureMcpDangerouslyDisableElicitation ? [
+  '--dangerously-disable-elicitation'
+] : []
 
 // SECURITY:
 // The server exposes only the explicitly governed tools below.
@@ -64,6 +71,7 @@ var toolArgs = [
 var serverArgs = flatten(
   concat(
     [baseArgs],
+    [elicitationArgs],
     toolArgs
   )
 )
@@ -106,7 +114,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     template: {
       containers: [
         {
-          image: 'mcr.microsoft.com/azure-sdk/azure-mcp:latest'
+          image: 'mcr.microsoft.com/azure-sdk/azure-mcp@sha256:2c4387a13a925b38a2592bca1f16d7d13c377332419b2db020697138ccc41268'
           name: containerAppName
           command: []
           args: serverArgs

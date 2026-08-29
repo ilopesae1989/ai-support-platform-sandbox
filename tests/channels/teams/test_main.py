@@ -20,6 +20,19 @@ class FakeApp:
 
 
 @dataclass
+class FakeContinuationWorker:
+    run_called: bool = False
+
+    async def run(
+        self,
+        *,
+        stop_event,
+    ) -> None:
+        self.run_called = True
+
+        await stop_event.wait()
+
+@dataclass
 class FakeBootstrap:
     app: FakeApp
 
@@ -69,6 +82,14 @@ async def test_run_teams_hitl_app_starts_bootstrapped_app(
         fake_build,
     )
 
+    fake_worker = (
+        FakeContinuationWorker()
+    )
+
+    fake_bootstrap.continuation_worker = (
+        fake_worker
+    )
+
     await (
         teams_main
         .run_teams_hitl_app()
@@ -83,6 +104,11 @@ async def test_run_teams_hitl_app_starts_bootstrapped_app(
 
     assert (
         fake_app.start_called
+        is True
+    )
+
+    assert (
+        fake_worker.run_called
         is True
     )
 def test_main_uses_asyncio_run(

@@ -43,6 +43,10 @@ from src.workflows.incident_resolution.parameter_resolution import (
     resolve_required_parameters,
 )
 
+from src.workflows.incident_resolution.workflow_input import (
+    load_incident_conversation_id,
+)
+
 
 class ProcedureRuntimeExecutor(Executor):
     """
@@ -410,7 +414,7 @@ class ProcedureRuntimeExecutor(Executor):
         capability = (
             self
             ._procedure_capability_registry
-            .resolve_capability(
+            .resolve_applicable_capability(
                 procedure_id=(
                     result.procedure.id
                 ),
@@ -421,6 +425,10 @@ class ProcedureRuntimeExecutor(Executor):
 
                 step_id=(
                     step.id
+                ),
+
+                operational_context=(
+                    operational
                 ),
             )
         )
@@ -476,6 +484,8 @@ class ProcedureRuntimeExecutor(Executor):
     def _build_runtime_state(
         self,
         context: ProcedureExecutionContext,
+        *,
+        conversation_id: str | None = None,
     ) -> ProcedureRuntimeState:
         self._validate_execution_context(
             context
@@ -584,6 +594,10 @@ class ProcedureRuntimeExecutor(Executor):
                 identity.correlation_id
             ),
 
+            conversation_id=(
+                conversation_id
+            ),
+
             procedure=ProcedureReference(
                 id=result.procedure.id,
 
@@ -680,9 +694,18 @@ class ProcedureRuntimeExecutor(Executor):
             ProcedureRuntimeState
         ],
     ) -> None:
+        conversation_id = (
+            load_incident_conversation_id(
+                ctx
+            )
+        )
+
         state = (
             self._build_runtime_state(
-                context
+                context,
+                conversation_id=(
+                    conversation_id
+                ),
             )
         )
 

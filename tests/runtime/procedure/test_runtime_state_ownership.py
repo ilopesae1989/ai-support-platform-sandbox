@@ -197,7 +197,7 @@ async def test_runtime_executor_persists_authoritative_state_as_json_snapshot(
     monkeypatch.setattr(
         executor,
         "_build_runtime_state",
-        lambda _: state,
+        lambda _, *, conversation_id=None: state,
     )
 
     ctx = FakeWorkflowContext()

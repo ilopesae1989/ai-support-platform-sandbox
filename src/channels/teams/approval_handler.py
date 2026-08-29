@@ -94,6 +94,10 @@ class TeamsApprovalHandlerDependencies:
 
     workflow_factory: WorkflowFactory
 
+    processor: object = (
+        process_authorized_teams_approval
+    )
+
 
 def _build_error_response(
     *,
@@ -249,7 +253,7 @@ async def handle_teams_approval_action(
         )
 
         processed = (
-            await process_authorized_teams_approval(
+            await dependencies.processor(
                 invocation=(
                     authorized
                 ),

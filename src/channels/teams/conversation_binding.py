@@ -126,31 +126,59 @@ def build_teams_conversation_binding(
         )
     )
 
+    conversation_tenant_id = None
+
+    if conversation.tenant_id is not None:
+        conversation_tenant_id = (
+            _require_exact_string(
+                name="conversation_tenant_id",
+                value=conversation.tenant_id,
+            )
+        )
+
+    channel_tenant_id = None
+
     channel_data = (
         activity.channel_data
     )
 
-    if channel_data is None:
-        raise TeamsConversationBindingError(
-            "La actividad Teams no contiene "
-            "channel_data."
+    if channel_data is not None:
+        tenant = (
+            channel_data.tenant
         )
 
-    tenant = (
-        channel_data.tenant
-    )
+        if tenant is not None:
+            channel_tenant_id = (
+                _require_exact_string(
+                    name="channel_tenant_id",
+                    value=tenant.id,
+                )
+            )
 
-    if tenant is None:
+    if (
+        conversation_tenant_id is None
+        and channel_tenant_id is None
+    ):
         raise TeamsConversationBindingError(
             "La actividad Teams no contiene "
             "tenant autenticado."
         )
 
-    tenant_id = (
-        _require_exact_string(
-            name="tenant_id",
-            value=tenant.id,
+    if (
+        conversation_tenant_id is not None
+        and channel_tenant_id is not None
+        and conversation_tenant_id
+        != channel_tenant_id
+    ):
+        raise TeamsConversationBindingError(
+            "Las fuentes autenticadas de tenant "
+            "no coinciden."
         )
+
+    tenant_id = (
+        conversation_tenant_id
+        if conversation_tenant_id is not None
+        else channel_tenant_id
     )
 
     service_url = (

@@ -10,6 +10,7 @@ from src.runtime.procedure.models import (
 )
 
 from .alert_models import (
+    IncidentOrigin,
     NormalizedAlert,
 )
 
@@ -38,12 +39,46 @@ class OperationalContext(BaseModel):
     service: str | None = None
     environment: str | None = None
 
+    incident_origin: IncidentOrigin = "observed"
+
     subscription_id: str | None = None
     resource_group: str | None = None
     vm_name: str | None = None
     tenant_id: str | None = None
 
     correlation_id: str | None = None
+
+    def __setstate__(
+        self,
+        state: dict[object, object],
+    ) -> None:
+        super().__setstate__(
+            state
+        )
+
+        values = self.__dict__
+
+        if "incident_origin" not in values:
+            values["incident_origin"] = "observed"
+            return
+
+        incident_origin = values["incident_origin"]
+
+        if (
+            not isinstance(
+                incident_origin,
+                str,
+            )
+            or incident_origin
+            not in (
+                "observed",
+                "synthetic_demo",
+            )
+        ):
+            raise ValueError(
+                "incident_origin rehidratado "
+                "no pertenece al contrato permitido."
+            )
 
 
 class ParameterResolutionResult(BaseModel):
@@ -104,6 +139,9 @@ def build_operational_context(
         ),
         environment=(
             alert.environment
+        ),
+        incident_origin=(
+            alert.incident_origin
         ),
         subscription_id=(
             alert.subscription_id

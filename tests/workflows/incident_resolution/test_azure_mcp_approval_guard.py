@@ -131,7 +131,7 @@ def _verified_vm_start_request(
 def _approval(
     *,
     server_label=SERVER_LABEL,
-    tool_name="compute_vm-power-state",
+    tool_name="compute_vm_power-state",
     arguments=None,
 ):
     if arguments is None:
@@ -168,7 +168,7 @@ def _native_response(
                 "response_id": RESPONSE_ID,
                 "server_label": SERVER_LABEL,
                 "name": (
-                    "compute_vm-power-state"
+                    "compute_vm_power-state"
                 ),
                 "arguments": json.dumps(
                     {
@@ -230,7 +230,7 @@ def test_extract_mcp_approval_request_preserves_native_identity():
 
     assert (
         approval.tool_name
-        == "compute_vm-power-state"
+        == "compute_vm_power-state"
     )
 
     assert approval.arguments == {
@@ -249,7 +249,7 @@ def test_extract_rejects_invalid_approval_arguments_json():
                 "response_id": RESPONSE_ID,
                 "server_label": SERVER_LABEL,
                 "name": (
-                    "compute_vm-power-state"
+                    "compute_vm_power-state"
                 ),
                 "arguments": "{not-json",
             }
@@ -486,7 +486,7 @@ class _NativeApprovalRequest:
         self,
         *,
         server_label=SERVER_LABEL,
-        tool_name="compute_vm-power-state",
+        tool_name="compute_vm_power-state",
         arguments=None,
     ) -> None:
         if arguments is None:
@@ -497,25 +497,37 @@ class _NativeApprovalRequest:
                 "power-action": "start",
             }
 
+        self.id = (
+            APPROVAL_REQUEST_ID
+        )
+
+        self.call_id = None
+
+        self.raw_representation = None
+
+        self.additional_properties = {}
+
         self.function_call = (
             SimpleNamespace(
+                call_id=(
+                    APPROVAL_REQUEST_ID
+                ),
                 name=tool_name,
                 arguments=json.dumps(
                     arguments
                 ),
+                additional_properties={
+                    "server_label":
+                        server_label
+                },
             )
         )
-
-        self.additional_properties = {
-            "server_label":
-                server_label
-        }
 
 
 def _first_approval_response(
     *,
     raw_server_label=SERVER_LABEL,
-    raw_tool_name="compute_vm-power-state",
+    raw_tool_name="compute_vm_power-state",
     raw_arguments=None,
     native_server_label=None,
     native_tool_name=None,
@@ -931,7 +943,7 @@ async def test_executor_rejects_mismatch_between_raw_and_native_approval():
     ) = (
         _first_approval_response(
             raw_tool_name=(
-                "compute_vm-power-state"
+                "compute_vm_power-state"
             ),
 
             native_tool_name=(
@@ -1059,7 +1071,7 @@ def test_extract_mcp_approval_request_from_agent_framework_raw_representation():
         type="mcp_approval_request",
         id=APPROVAL_REQUEST_ID,
         server_label=SERVER_LABEL,
-        name="compute_vm-power-state",
+        name="compute_vm_power-state",
         arguments=json.dumps(
             {
                 "subscription": "sub-001",
@@ -1118,7 +1130,7 @@ def test_extract_mcp_approval_request_from_agent_framework_raw_representation():
 
     assert (
         approval.tool_name
-        == "compute_vm-power-state"
+        == "compute_vm_power-state"
     )
 
     assert approval.arguments == {
@@ -1142,7 +1154,7 @@ def test_extract_mcp_approval_request_rejects_raw_representation_response_id_mis
         type="mcp_approval_request",
         id=APPROVAL_REQUEST_ID,
         server_label=SERVER_LABEL,
-        name="compute_vm-power-state",
+        name="compute_vm_power-state",
         arguments=json.dumps(
             {
                 "subscription": "sub-001",
@@ -1181,5 +1193,177 @@ def test_extract_mcp_approval_request_rejects_raw_representation_response_id_mis
             AzureOperationsExecutor
             ._extract_mcp_approval_requests(
                 agent_response
+            )
+        )
+
+
+# ============================================================
+# TDD RED - Agent Framework 1.13.0 LIVE native MCP shape
+# ============================================================
+
+
+def _agent_framework_113_live_native_request(
+    *,
+    native_id=APPROVAL_REQUEST_ID,
+    function_call_id=APPROVAL_REQUEST_ID,
+    native_additional_properties=None,
+):
+    """
+    Shape observado LIVE con Agent Framework 1.13.0.
+
+    La identidad MCP está duplicada de forma
+    correlacionable en:
+
+        native.id
+        function_call.call_id
+
+    server_label pertenece al function_call:
+
+        function_call.additional_properties[
+            "server_label"
+        ]
+
+    No se reconstruye ningún dato ausente.
+    """
+
+    if native_additional_properties is None:
+        native_additional_properties = {}
+
+    arguments = {
+        "subscription": "sub-001",
+        "resource-group": "rg-demo",
+        "vm-name": "vm-demo",
+        "power-action": "start",
+    }
+
+    return SimpleNamespace(
+        id=native_id,
+
+        call_id=None,
+
+        raw_representation=None,
+
+        additional_properties=dict(
+            native_additional_properties
+        ),
+
+        function_call=SimpleNamespace(
+            call_id=function_call_id,
+
+            name="compute_vm_power-state",
+
+            arguments=json.dumps(
+                arguments
+            ),
+
+            additional_properties={
+                "server_label":
+                    SERVER_LABEL
+            },
+        ),
+    )
+
+
+def test_correlated_native_mcp_approval_supports_agent_framework_113_live_shape():
+    """
+    Reproduce exactamente el shape observado LIVE.
+
+    Debe correlacionar el Content nativo con la
+    propuesta RAW sin inventar server_label ni
+    ninguna identidad MCP.
+    """
+
+    approval = _approval(
+        tool_name="compute_vm_power-state"
+    )
+
+    native_request = (
+        _agent_framework_113_live_native_request()
+    )
+
+    response = SimpleNamespace(
+        user_input_requests=[
+            native_request
+        ]
+    )
+
+    correlated = (
+        AzureOperationsExecutor
+        ._extract_correlated_native_mcp_approval_request(
+            response,
+            approval,
+        )
+    )
+
+    assert correlated is native_request
+
+
+@pytest.mark.parametrize(
+    (
+        "native_id",
+        "function_call_id",
+    ),
+    [
+        (
+            "mcpr-native-mismatch",
+            APPROVAL_REQUEST_ID,
+        ),
+        (
+            APPROVAL_REQUEST_ID,
+            "mcpr-function-call-mismatch",
+        ),
+    ],
+)
+def test_correlated_native_mcp_approval_rejects_native_identity_mismatch(
+    native_id,
+    function_call_id,
+):
+    """
+    RAW approval_request_id, native.id y
+    function_call.call_id deben representar
+    exactamente la misma solicitud MCP.
+
+    Cualquier sustitución de identidad debe
+    rechazarse fail-closed.
+    """
+
+    approval = _approval(
+        tool_name="compute_vm_power-state"
+    )
+
+    native_request = (
+        _agent_framework_113_live_native_request(
+            native_id=native_id,
+            function_call_id=(
+                function_call_id
+            ),
+
+            # Permite que la implementación
+            # anterior alcance la comprobación
+            # de identidad en este TDD RED,
+            # evitando un falso GREEN causado
+            # únicamente por la ubicación legacy
+            # de server_label.
+            native_additional_properties={
+                "server_label":
+                    SERVER_LABEL
+            },
+        )
+    )
+
+    response = SimpleNamespace(
+        user_input_requests=[
+            native_request
+        ]
+    )
+
+    with pytest.raises(
+        ValueError
+    ):
+        (
+            AzureOperationsExecutor
+            ._extract_correlated_native_mcp_approval_request(
+                response,
+                approval,
             )
         )

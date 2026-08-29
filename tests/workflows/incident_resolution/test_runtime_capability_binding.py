@@ -1,3 +1,5 @@
+
+from src.workflows.incident_resolution.procedure_capability_binding import ProcedureApplicability
 import pytest
 
 from src.agents.contracts import (
@@ -423,6 +425,14 @@ def create_procedure_capability_registry(
 
                 capability_id=(
                     "azure.vm.start"
+                ),
+                applicability=ProcedureApplicability(
+                    allowed_environments=(
+                        "sandbox",
+                    ),
+                    allowed_incident_origins=(
+                        "observed",
+                    ),
                 ),
             )
         ],

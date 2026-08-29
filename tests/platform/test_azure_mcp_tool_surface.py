@@ -22,7 +22,7 @@ EXPECTED_TOOLS = {
     "group_resource_list",
     "advisor_recommendation_list",
     "advisor_recommendation_summary",
-    "compute_vm-power-state",
+    "compute_vm_power-state",
 }
 
 
@@ -126,7 +126,7 @@ def test_power_state_is_only_compute_write_surface():
     )
 
     assert (
-        "'compute_vm-power-state'"
+        "'compute_vm_power-state'"
         in text
     )
 

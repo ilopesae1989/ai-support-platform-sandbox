@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from contextlib import (
+    closing,
+)
+
 import sqlite3
 
 from pathlib import (
@@ -84,6 +88,23 @@ class PendingApprovalStore(
     ) -> None:
         ...
 
+    def get_consumption_record(
+        self,
+        approval_id: str,
+    ) -> tuple[str, bool | None]:
+        """
+        Observabilidad durable y read-only.
+
+        Devuelve exactamente:
+
+            consumption_status
+            approved_decision
+
+        No cambia estado.
+        No concede autoridad.
+        """
+        ...
+
 
 class SqlitePendingApprovalStore:
     """
@@ -137,7 +158,7 @@ class SqlitePendingApprovalStore:
     def _initialize(
         self,
     ) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS
@@ -211,7 +232,7 @@ class SqlitePendingApprovalStore:
             )
 
         try:
-            with self._connect() as connection:
+            with closing(self._connect()) as connection, connection:
                 connection.execute(
                     """
                     INSERT INTO pending_approvals (
@@ -248,7 +269,7 @@ class SqlitePendingApprovalStore:
             value=approval_id,
         )
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute(
                 """
                 SELECT
@@ -286,7 +307,7 @@ class SqlitePendingApprovalStore:
             value=request_id,
         )
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute(
                 """
                 SELECT
@@ -471,7 +492,7 @@ class SqlitePendingApprovalStore:
             value=approval_id,
         )
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             cursor = connection.execute(
                 """
                 UPDATE pending_approvals
@@ -513,7 +534,7 @@ class SqlitePendingApprovalStore:
             value=approval_id,
         )
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute(
                 """
                 SELECT consumption_status
@@ -536,4 +557,110 @@ class SqlitePendingApprovalStore:
 
         return str(
             row["consumption_status"]
+        )
+    def get_consumption_record(
+        self,
+        approval_id: str,
+    ) -> tuple[str, bool | None]:
+        """
+        Lee de forma durable y sin mutación:
+
+            consumption_status
+            approved_decision
+
+        Coherencia obligatoria:
+
+            pending
+                -> approved_decision is None
+
+            claimed/completed
+                -> approved_decision is bool
+
+        Cualquier estado inconsistente falla cerrado.
+        """
+
+        self._validate_lookup_id(
+            name="approval_id",
+            value=approval_id,
+        )
+
+        with closing(self._connect()) as connection, connection:
+            row = connection.execute(
+                """
+                SELECT
+                    consumption_status,
+                    approved_decision
+                FROM pending_approvals
+                WHERE approval_id = ?
+                """,
+                (
+                    approval_id,
+                ),
+            ).fetchone()
+
+        if row is None:
+            raise (
+                ApprovalCorrelationNotFoundError(
+                    "No existe aprobación para "
+                    f"approval_id={approval_id!r}."
+                )
+            )
+
+        status = str(
+            row["consumption_status"]
+        )
+
+        if status not in {
+            "pending",
+            "claimed",
+            "completed",
+        }:
+            raise RuntimeError(
+                "consumption_status durable "
+                f"no soportado: {status!r}."
+            )
+
+        raw_decision = (
+            row["approved_decision"]
+        )
+
+        if raw_decision is None:
+            approved = None
+
+        elif raw_decision == 1:
+            approved = True
+
+        elif raw_decision == 0:
+            approved = False
+
+        else:
+            raise RuntimeError(
+                "approved_decision durable "
+                "contiene un valor inválido."
+            )
+
+        if (
+            status == "pending"
+            and approved is not None
+        ):
+            raise RuntimeError(
+                "Una aprobación pending no puede "
+                "contener approved_decision."
+            )
+
+        if (
+            status in {
+                "claimed",
+                "completed",
+            }
+            and approved is None
+        ):
+            raise RuntimeError(
+                "Una aprobación consumida debe "
+                "conservar approved_decision."
+            )
+
+        return (
+            status,
+            approved,
         )

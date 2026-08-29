@@ -28,6 +28,9 @@ param serviceManagementReference string = ''
 @description('Application Insights connection string. Use "DISABLED" to disable telemetry, or provide existing connection string. If omitted, new App Insights will be created.')
 param appInsightsConnectionString string = ''
 
+@description('Disable Azure MCP Server elicitation only for trusted non-production automation with independent upstream approval controls. Safe default is false.')
+param azureMcpDangerouslyDisableElicitation bool = false
+
 // Validate targetVmResourceId format.
 // Expected:
 // /subscriptions/{sub}/resourceGroups/{rg}/providers/
@@ -109,13 +112,14 @@ module acaInfrastructure 'modules/aca-infrastructure.bicep' = {
     azureMcpCollectTelemetry: string(!empty(appInsights.outputs.connectionString))
     azureAdTenantId: tenant().tenantId
     azureAdClientId: entraApp.outputs.entraAppClientId
+    azureMcpDangerouslyDisableElicitation: azureMcpDangerouslyDisableElicitation
     tools: [
       'subscription_list'
       'group_list'
       'group_resource_list'
       'advisor_recommendation_list'
       'advisor_recommendation_summary'
-      'compute_vm-power-state'
+      'compute_vm_power-state'
     ]
   }
 }

@@ -227,7 +227,7 @@ class AzureWorkflowFakeFoundryAgents(
         """
         Simula:
 
-            agent-azure-operations-sbx v11
+            agent-azure-operations-sbx v13
                 ↓
             Azure MCP
 

@@ -77,3 +77,17 @@ __pycache__/
 # Local certificates
 .certs/
 
+
+# Local forensic / live recovery state - never commit
+.local-live-snapshots/
+.local-live-state/
+inventory-ai-agent-poc/
+inventory-ai-agent-poc.zip
+inventory-source-backend-poc/
+inventory-source-backend-poc.zip
+inventory-target-ai-agent-poc/
+inventory-target-ai-agent-poc.zip
+recovery-source-poc/
+recovery-source-poc.zip
+agent-azure-operations-v*.json
+*.bak

@@ -14,6 +14,11 @@ from src.workflows.incident_resolution.models import (
     ClassifiedAlertContext,
 )
 
+from src.workflows.incident_resolution.workflow_input import (
+    IncidentWorkflowInput,
+    store_incident_conversation_id,
+)
+
 
 class ClassificationExecutor(Executor):
     """
@@ -43,6 +48,35 @@ class ClassificationExecutor(Executor):
         )
 
         self._agents = agents
+
+    @handler
+    async def classify_workflow_input(
+        self,
+        workflow_input: IncidentWorkflowInput,
+        ctx: WorkflowContext[
+            ClassifiedAlertContext
+        ],
+    ) -> None:
+        """
+        Adapta el envelope replayable al pipeline
+        cognitivo existente.
+
+        conversation_id se guarda únicamente en
+        workflow state.
+
+        El agente continúa recibiendo sólo
+        NormalizedAlert.
+        """
+
+        store_incident_conversation_id(
+            ctx,
+            workflow_input.conversation_id,
+        )
+
+        await self.classify_alert(
+            workflow_input.alert,
+            ctx,
+        )
 
     @handler
     async def classify_alert(

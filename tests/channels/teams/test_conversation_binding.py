@@ -214,3 +214,203 @@ def test_requires_message_activity():
         build_teams_conversation_binding(
             object()
         )
+# ---------------------------------------------------------------------------
+# PHASE18_PERSONAL_CHAT_TENANT_CONTRACT
+#
+# LIVE Teams SDK 2.0.14:
+# personal MessageActivity puede aportar tenant_id en ConversationAccount
+# sin channel_data.
+#
+# Seguridad:
+# - una fuente exacta disponible -> aceptable;
+# - dos fuentes exactas iguales -> aceptable;
+# - dos fuentes diferentes -> fail closed;
+# - ninguna fuente -> fail closed.
+# ---------------------------------------------------------------------------
+
+
+def _phase18_personal_message_activity(
+    *,
+    conversation_tenant_id,
+    channel_data=None,
+):
+    from microsoft_teams.api import (
+        Account,
+        ConversationAccount,
+        MessageActivity,
+    )
+
+    return MessageActivity(
+        id="phase18-personal-binding-test",
+        serviceUrl=(
+            "https://smba.trafficmanager.net/"
+            "emea/"
+        ),
+        from_=Account(
+            id="29:phase18-test-user",
+            aadObjectId=(
+                "497a925f-15f1-4583-"
+                "9d15-29b65590bbcf"
+            ),
+            type="person",
+        ),
+        conversation=ConversationAccount(
+            id=(
+                "a:phase18-personal-"
+                "conversation"
+            ),
+            tenantId=conversation_tenant_id,
+            conversationType="personal",
+            isGroup=False,
+        ),
+        recipient=Account(
+            id=(
+                "28:"
+                "e89605d4-0a6e-49bb-"
+                "ae00-4c42a002b6a5"
+            ),
+            type="bot",
+        ),
+        text=(
+            "texto deliberadamente "
+            "irrelevante para autoridad"
+        ),
+        channelId="msteams",
+        channelData=channel_data,
+    )
+
+
+def test_personal_chat_without_channel_data_uses_conversation_tenant():
+    from src.channels.teams.conversation_binding import (
+        build_teams_conversation_binding,
+    )
+
+    tenant_id = (
+        "0cb40b2b-6cfc-4c63-"
+        "bf7b-da710ea390cb"
+    )
+
+    activity = (
+        _phase18_personal_message_activity(
+            conversation_tenant_id=tenant_id,
+            channel_data=None,
+        )
+    )
+
+    binding = (
+        build_teams_conversation_binding(
+            activity
+        )
+    )
+
+    assert (
+        binding.tenant_id
+        == tenant_id
+    )
+
+    assert (
+        binding.conversation_id
+        == (
+            "a:phase18-personal-"
+            "conversation"
+        )
+    )
+
+    assert (
+        binding.service_url
+        == (
+            "https://smba.trafficmanager.net/"
+            "emea/"
+        )
+    )
+
+
+def test_matching_tenant_sources_are_accepted():
+    from src.channels.teams.conversation_binding import (
+        build_teams_conversation_binding,
+    )
+
+    tenant_id = (
+        "0cb40b2b-6cfc-4c63-"
+        "bf7b-da710ea390cb"
+    )
+
+    activity = (
+        _phase18_personal_message_activity(
+            conversation_tenant_id=tenant_id,
+            channel_data={
+                "tenant": {
+                    "id": tenant_id,
+                },
+            },
+        )
+    )
+
+    binding = (
+        build_teams_conversation_binding(
+            activity
+        )
+    )
+
+    assert (
+        binding.tenant_id
+        == tenant_id
+    )
+
+
+def test_conflicting_authenticated_tenant_sources_fail_closed():
+    import pytest
+
+    from src.channels.teams.conversation_binding import (
+        TeamsConversationBindingError,
+        build_teams_conversation_binding,
+    )
+
+    activity = (
+        _phase18_personal_message_activity(
+            conversation_tenant_id=(
+                "0cb40b2b-6cfc-4c63-"
+                "bf7b-da710ea390cb"
+            ),
+            channel_data={
+                "tenant": {
+                    "id": (
+                        "11111111-1111-4111-"
+                        "8111-111111111111"
+                    ),
+                },
+            },
+        )
+    )
+
+    with pytest.raises(
+        TeamsConversationBindingError,
+        match="tenant",
+    ):
+        build_teams_conversation_binding(
+            activity
+        )
+
+
+def test_missing_all_tenant_sources_fails_closed():
+    import pytest
+
+    from src.channels.teams.conversation_binding import (
+        TeamsConversationBindingError,
+        build_teams_conversation_binding,
+    )
+
+    activity = (
+        _phase18_personal_message_activity(
+            conversation_tenant_id=None,
+            channel_data=None,
+        )
+    )
+
+    with pytest.raises(
+        TeamsConversationBindingError,
+        match="tenant",
+    ):
+        build_teams_conversation_binding(
+            activity
+        )

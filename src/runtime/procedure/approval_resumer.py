@@ -48,11 +48,12 @@ class ApprovalResumeMismatchError(
     pass
 
 
-async def _restore_and_verify_pending_request(
+async def restore_and_verify_pending_request(
     *,
     workflow: Any,
     instruction: ApprovalResumeInstruction,
     expected_conversation_id: str | None = None,
+    checkpoint_storage: Any | None = None,
 ) -> ApprovalRequest:
     """
     Restaura el checkpoint pero NO responde todavía.
@@ -77,12 +78,20 @@ async def _restore_and_verify_pending_request(
     pending_events = []
     unexpected_outputs = []
 
-    async for event in workflow.run(
-        checkpoint_id=(
+    run_kwargs = {
+        "checkpoint_id": (
             instruction.checkpoint_id
         ),
+        "stream": True,
+    }
 
-        stream=True,
+    if checkpoint_storage is not None:
+        run_kwargs[
+            "checkpoint_storage"
+        ] = checkpoint_storage
+
+    async for event in workflow.run(
+        **run_kwargs
     ):
         if (
             event.type
@@ -238,7 +247,7 @@ async def resume_approval_workflow(
             "ApprovalResumeInstruction."
         )
 
-    await _restore_and_verify_pending_request(
+    await restore_and_verify_pending_request(
         workflow=workflow,
         instruction=instruction,
         expected_conversation_id=(

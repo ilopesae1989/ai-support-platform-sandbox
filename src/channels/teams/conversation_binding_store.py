@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from contextlib import (
+    closing,
+)
+
 import sqlite3
 
 from pathlib import (
@@ -129,7 +133,7 @@ class SqliteTeamsConversationBindingStore:
     def _initialize(
         self,
     ) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS
@@ -181,7 +185,7 @@ class SqliteTeamsConversationBindingStore:
             binding
         )
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             connection.execute(
                 """
                 INSERT INTO
@@ -225,7 +229,7 @@ class SqliteTeamsConversationBindingStore:
             )
         )
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection, connection:
             row = connection.execute(
                 """
                 SELECT

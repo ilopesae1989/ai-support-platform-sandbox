@@ -54,7 +54,7 @@ async def test_run_azure_operations_uses_catalog_definition(
 
     assert (
         definition.version
-        == "11"
+        == "13"
     )
 
     fake_agent = FakeAgent()

@@ -28,7 +28,7 @@ async def test_azure_operations_live_read_resource_groups():
 
         FoundryAgents
             ↓
-        agent-azure-operations-sbx v11
+        agent-azure-operations-sbx v13
             ↓
         Azure MCP
             ↓
@@ -68,7 +68,7 @@ async def test_azure_operations_live_read_resource_groups():
         == "agent-azure-operations-sbx"
     )
 
-    assert definition.version == "11"
+    assert definition.version == "13"
 
     #
     # --------------------------------------------------

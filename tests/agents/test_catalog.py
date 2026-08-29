@@ -67,7 +67,7 @@ def test_catalog_uses_expected_sandbox_versions(
         catalog[
             AgentKey.AZURE_OPERATIONS
         ].version
-        == "11"
+        == "13"
     )
 
     assert (

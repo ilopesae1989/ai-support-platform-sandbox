@@ -17,6 +17,7 @@ from src.runtime.procedure.models import (
 
 from src.runtime.procedure.workflow import (
     ApprovalOutcome,
+    ApprovalRequest,
 )
 
 from .approval_authorization import (
@@ -295,6 +296,165 @@ def build_teams_approval_evidence(
 
         conversation_id=(
             invocation.operator.conversation_id
+        ),
+
+        authorization_policy_id=(
+            invocation.policy_id
+        ),
+
+        display_name=(
+            invocation.operator.display_name
+        ),
+
+        decided_at=None,
+    )
+
+def build_teams_approval_evidence_from_request(
+    *,
+    invocation: AuthorizedTeamsApprovalInvocation,
+    request: ApprovalRequest,
+) -> ApprovalDecisionEvidence:
+    """
+    Construye evidencia de una decisión HITL
+    a partir de la ApprovalRequest autoritativa
+    restaurada y la invocación Teams ya autorizada.
+
+    Este builder no interpreta ni valida el
+    resultado técnico posterior de la operación.
+
+    Debe invocarse únicamente después de que
+    el processor haya verificado y aceptado la
+    respuesta HITL en Agent Framework.
+    """
+
+    if not isinstance(
+        invocation,
+        AuthorizedTeamsApprovalInvocation,
+    ):
+        raise TypeError(
+            "invocation debe ser "
+            "AuthorizedTeamsApprovalInvocation."
+        )
+
+    if not isinstance(
+        request,
+        ApprovalRequest,
+    ):
+        raise TypeError(
+            "request debe ser ApprovalRequest."
+        )
+
+    if (
+        not isinstance(
+            request.workflow_id,
+            str,
+        )
+        or not request.workflow_id
+        or not request.workflow_id.strip()
+        or request.workflow_id
+        != request.workflow_id.strip()
+    ):
+        raise TeamsApprovalEvidenceError(
+            "ApprovalRequest no contiene "
+            "workflow_id exacto válido."
+        )
+
+    if (
+        not isinstance(
+            request.approval_id,
+            str,
+        )
+        or not request.approval_id
+        or not request.approval_id.strip()
+        or request.approval_id
+        != request.approval_id.strip()
+    ):
+        raise TeamsApprovalEvidenceError(
+            "ApprovalRequest no contiene "
+            "approval_id exacto válido."
+        )
+
+    if (
+        request.approval_id
+        != invocation.action.approval_id
+    ):
+        raise TeamsApprovalEvidenceError(
+            "approval_id de ApprovalRequest "
+            "no coincide con la decisión Teams."
+        )
+
+    if (
+        not isinstance(
+            request.conversation_id,
+            str,
+        )
+        or not request.conversation_id
+        or not request.conversation_id.strip()
+        or request.conversation_id
+        != request.conversation_id.strip()
+    ):
+        raise TeamsApprovalEvidenceError(
+            "ApprovalRequest no contiene "
+            "conversation_id exacto válido."
+        )
+
+    if (
+        request.conversation_id
+        != invocation.operator.conversation_id
+    ):
+        raise TeamsApprovalEvidenceError(
+            "conversation_id de ApprovalRequest "
+            "no coincide con la conversación "
+            "autenticada de Teams."
+        )
+
+    decision = (
+        invocation.action.decision
+    )
+
+    if decision not in (
+        ApprovalDecision.APPROVE,
+        ApprovalDecision.REJECT,
+    ):
+        raise TeamsApprovalEvidenceError(
+            "Decisión HITL no soportada."
+        )
+
+    return ApprovalDecisionEvidence(
+        workflow_id=(
+            request.workflow_id
+        ),
+
+        approval_id=(
+            request.approval_id
+        ),
+
+        decision=(
+            decision
+        ),
+
+        channel=(
+            "msteams"
+        ),
+
+        identity_scheme=(
+            "microsoft_entra_object_id"
+        ),
+
+        tenant_id=(
+            invocation.operator.tenant_id
+        ),
+
+        principal_id=(
+            invocation.operator.aad_object_id
+        ),
+
+        channel_user_id=(
+            invocation.operator.teams_user_id
+        ),
+
+        conversation_id=(
+            request.conversation_id
         ),
 
         authorization_policy_id=(

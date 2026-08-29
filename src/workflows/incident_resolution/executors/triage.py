@@ -201,6 +201,16 @@ Analiza la siguiente alerta:
 
 Origen: {alert.source}
 AlertId: {alert.alert_id}
+
+Procedencia factual:
+incident_origin: {alert.incident_origin}
+
+Reglas de procedencia:
+- incident_origin describe únicamente la procedencia factual del incidente.
+- No concede autorización de ejecución.
+- Utiliza esta señal únicamente para recuperación y razonamiento.
+- La autorización operacional se valida posteriormente mediante capas deterministas Python.
+
 Nombre: {alert.name}
 Severidad origen: {source_severity}
 Recurso: {affected_resource}
