@@ -184,6 +184,51 @@ def test_vm_resolver_rejects_resource_mismatch():
         )
 
 
+def test_vm_resolver_accepts_canonical_arm_id_as_affected_resource():
+    context = create_vm_context()
+
+    context.affected_resource = (
+        VM_RESOURCE_ID
+    )
+
+    identity = (
+        AzureVirtualMachineIdentityResolver()
+        .resolve(
+            context
+        )
+    )
+
+    assert (
+        identity.canonical_target_resource
+        == VM_RESOURCE_ID
+    )
+
+
+def test_vm_resolver_rejects_other_arm_id_as_affected_resource():
+    context = create_vm_context()
+
+    context.affected_resource = (
+        "/subscriptions/"
+        f"{SUBSCRIPTION_ID}"
+        "/resourceGroups/"
+        f"{RESOURCE_GROUP}"
+        "/providers/Microsoft.Compute/"
+        "virtualMachines/"
+        "vm-attacker-01"
+    )
+
+    with pytest.raises(
+        ResourceIdentityResolutionError,
+        match="affected_resource",
+    ):
+        (
+            AzureVirtualMachineIdentityResolver()
+            .resolve(
+                context
+            )
+        )
+
+
 def test_subscription_resolver_preserves_existing_semantics():
     context = OperationalContext(
         alert_id="ALT-SUB-001",

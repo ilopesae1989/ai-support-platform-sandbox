@@ -285,21 +285,6 @@ class AzureVirtualMachineIdentityResolver:
                 )
             )
 
-        if (
-            context.affected_resource
-            is not None
-            and (
-                context.affected_resource
-                != vm_name
-            )
-        ):
-            raise (
-                ResourceIdentityResolutionError(
-                    "affected_resource no coincide "
-                    "con vm_name autoritativo."
-                )
-            )
-
         canonical_resource_id = (
             build_azure_vm_resource_id(
                 subscription_id=(
@@ -315,6 +300,26 @@ class AzureVirtualMachineIdentityResolver:
                 ),
             )
         )
+
+        allowed_affected_resources = (
+            vm_name,
+            canonical_resource_id,
+        )
+
+        if (
+            context.affected_resource
+            is not None
+            and (
+                context.affected_resource
+                not in allowed_affected_resources
+            )
+        ):
+            raise (
+                ResourceIdentityResolutionError(
+                    "affected_resource no coincide "
+                    "con la identidad VM autoritativa."
+                )
+            )
 
         return ResolvedResourceIdentity(
             operation_domain=(
