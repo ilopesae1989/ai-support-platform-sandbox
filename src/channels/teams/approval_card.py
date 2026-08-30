@@ -263,6 +263,6 @@ def build_teams_approval_card(
     ]
 
     return AdaptiveCard(
-        version="1.6",
+        version="1.5",
         body=body,
     )

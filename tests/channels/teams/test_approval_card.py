@@ -153,6 +153,20 @@ def test_approval_card_is_real_adaptive_card():
     )
 
 
+def test_card_uses_teams_supported_adaptive_card_version_1_5():
+    payload = (
+        serialize_card(
+            build_teams_approval_card(
+                create_request()
+            )
+        )
+    )
+
+    assert (
+        payload["version"]
+        == "1.5"
+    )
+
 def test_card_contains_governed_snapshot_values():
     payload = (
         serialize_card(
