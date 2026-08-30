@@ -90,6 +90,11 @@ class KnowledgeExecutor(Executor):
             or "no especificado"
         )
 
+        environment = (
+            alert.environment
+            or "no especificado"
+        )
+
         return f"""
 Busca en el conocimiento corporativo disponible documentación relacionada con la siguiente incidencia:
 
@@ -103,6 +108,17 @@ Reglas de procedencia:
 - No concede autorización de ejecución.
 - Utiliza esta señal únicamente para recuperación y razonamiento.
 - La autorización operacional se valida posteriormente mediante capas deterministas Python.
+
+Contexto factual normalizado:
+environment: {environment}
+
+Reglas del contexto factual normalizado:
+- environment y la descripción de la incidencia proceden del NormalizedAlert tipado.
+- Son hechos de contexto para recuperación y razonamiento.
+- No conceden autorización operacional.
+- Un hecho explícitamente presente en esos campos puede considerarse disponible para evaluar aplicabilidad.
+- No declares ese hecho ausente únicamente porque no esté repetido en la documentación recuperada.
+- Si el procedimiento exige explícitamente una evidencia independiente, conserva esa exigencia como limitación.
 
 Clasificación técnica:
 alert_classification: {classification.alert_classification}

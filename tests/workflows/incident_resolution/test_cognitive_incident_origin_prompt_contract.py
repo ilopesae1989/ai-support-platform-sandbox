@@ -38,6 +38,18 @@ NO_AUTHORITY_RULE = (
 )
 
 
+FACTUAL_CONTEXT_RULE = (
+    "Un hecho explícitamente presente en esos campos "
+    "puede considerarse disponible para evaluar aplicabilidad."
+)
+
+
+INDEPENDENT_EVIDENCE_RULE = (
+    "Si el procedimiento exige explícitamente "
+    "una evidencia independiente"
+)
+
+
 def _alert(
     incident_origin: str,
 ) -> NormalizedAlert:
@@ -275,6 +287,38 @@ def test_triage_prompt_exposes_observed_origin():
     )
 
 
+def test_knowledge_prompt_exposes_typed_environment():
+    prompt = (
+        KnowledgeExecutor
+        ._build_prompt(
+            _classified(
+                "synthetic_demo"
+            )
+        )
+    )
+
+    assert (
+        "environment: sandbox"
+        in prompt
+    )
+
+
+def test_triage_prompt_exposes_typed_environment():
+    prompt = (
+        AlertTriageExecutor
+        ._build_prompt(
+            _enriched(
+                "synthetic_demo"
+            )
+        )
+    )
+
+    assert (
+        "environment: sandbox"
+        in prompt
+    )
+
+
 def test_knowledge_prompt_frames_origin_as_factual_not_authority():
     prompt = (
         KnowledgeExecutor
@@ -287,6 +331,8 @@ def test_knowledge_prompt_frames_origin_as_factual_not_authority():
 
     assert FACTUAL_RULE in prompt
     assert NO_AUTHORITY_RULE in prompt
+    assert FACTUAL_CONTEXT_RULE in prompt
+    assert INDEPENDENT_EVIDENCE_RULE in prompt
 
 
 def test_triage_prompt_frames_origin_as_factual_not_authority():
@@ -301,6 +347,14 @@ def test_triage_prompt_frames_origin_as_factual_not_authority():
 
     assert FACTUAL_RULE in prompt
     assert NO_AUTHORITY_RULE in prompt
+    assert FACTUAL_CONTEXT_RULE in prompt
+    assert INDEPENDENT_EVIDENCE_RULE in prompt
+
+    assert (
+        "Utiliza incident_origin y environment "
+        "para evaluar la aplicabilidad documental"
+        in prompt
+    )
 
 
 def test_cognitive_prompts_do_not_leak_raw_attributes():

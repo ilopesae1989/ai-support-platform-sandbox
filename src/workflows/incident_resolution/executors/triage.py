@@ -98,6 +98,11 @@ class AlertTriageExecutor(Executor):
             or "no especificada"
         )
 
+        environment = (
+            alert.environment
+            or "no especificado"
+        )
+
         operational_parameter_availability = {
             "subscription_id": (
                 alert.subscription_id
@@ -210,6 +215,18 @@ Reglas de procedencia:
 - No concede autorización de ejecución.
 - Utiliza esta señal únicamente para recuperación y razonamiento.
 - La autorización operacional se valida posteriormente mediante capas deterministas Python.
+
+Contexto factual normalizado:
+environment: {environment}
+
+Reglas del contexto factual normalizado:
+- environment y la descripción de la incidencia proceden del NormalizedAlert tipado.
+- Son hechos de contexto para recuperación y razonamiento.
+- No conceden autorización operacional.
+- Utiliza incident_origin y environment para evaluar la aplicabilidad documental cuando existan varios procedimientos.
+- Un hecho explícitamente presente en esos campos puede considerarse disponible para evaluar aplicabilidad.
+- No declares ese hecho ausente únicamente porque no esté repetido en la documentación recuperada.
+- Si el procedimiento exige explícitamente una evidencia independiente, conserva esa exigencia como missing_context.
 
 Nombre: {alert.name}
 Severidad origen: {source_severity}
