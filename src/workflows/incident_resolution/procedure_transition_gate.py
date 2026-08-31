@@ -386,14 +386,68 @@ def _validate_cognitive_result(
             )
 
 
+def _resolve_runtime_next_action(
+    *,
+    state: ProcedureRuntimeState,
+    context: ProcedureValidationContext,
+) -> NextAction:
+    """
+    Resuelve determinísticamente la transición efectiva.
+
+    Procedure Validation sólo propone una acción.
+
+    CONTINUE conserva su semántica normal cuando
+    existe un paso posterior.
+
+    Cuando:
+    - validation_status=satisfied;
+    - la propuesta cognitiva es CONTINUE;
+    - total_steps es positivo;
+    - current_step == total_steps;
+
+    no existe ningún paso posterior al que continuar.
+
+    En ese caso Python convierte la propuesta en
+    RESOLVED utilizando exclusivamente el estado
+    autoritativo del ProcedureRuntimeState.
+
+    No se infiere contenido del procedimiento.
+    No se llama al LLM.
+    """
+
+    result = context.result
+
+    proposed_next_action = NextAction(
+        result.proposed_next_action
+    )
+
+    if (
+        proposed_next_action
+        == NextAction.CONTINUE
+        and result.validation_status
+        == "satisfied"
+        and state.total_steps > 0
+        and state.current_step
+        == state.total_steps
+    ):
+        return NextAction.RESOLVED
+
+    return proposed_next_action
+
+
 def _build_runtime_decision(
+    *,
+    state: ProcedureRuntimeState,
     context: ProcedureValidationContext,
 ) -> ProcedureExecutionResult:
     result = context.result
 
     return ProcedureExecutionResult(
-        next_action=NextAction(
-            result.proposed_next_action
+        next_action=(
+            _resolve_runtime_next_action(
+                state=state,
+                context=context,
+            )
         ),
 
         escalation_required=(
@@ -527,7 +581,8 @@ def apply_procedure_validation_transition(
         trusted_state,
 
         _build_runtime_decision(
-            trusted_context
+            state=trusted_state,
+            context=trusted_context,
         ),
     )
 

@@ -2,10 +2,42 @@ from __future__ import annotations
 
 import asyncio
 
+from azure.identity import (
+    AzureCliCredential,
+)
+
+from src.workflows.incident_resolution.azure_vm_instance_view import (
+    AzureSdkVmPowerStateReader,
+    AzureVmPowerStateReader,
+)
+
 from .bootstrap import (
     TeamsHitlSettings,
     build_teams_hitl_app,
 )
+
+
+def build_local_azure_vm_power_state_reader(
+) -> AzureVmPowerStateReader:
+    """
+    Composition root local de la observación
+    read-only post-WRITE.
+
+    AzureCliCredential utiliza la sesión Azure CLI
+    del operador durante desarrollo/sandbox.
+
+    No solicita token ni realiza una llamada Azure
+    durante la construcción.
+
+    Un host Azure deberá sustituir esta credencial
+    por ManagedIdentityCredential.
+    """
+
+    credential = AzureCliCredential()
+
+    return AzureSdkVmPowerStateReader(
+        credential=credential
+    )
 
 
 async def run_teams_hitl_app() -> None:
@@ -32,9 +64,16 @@ async def run_teams_hitl_app() -> None:
         .from_environment()
     )
 
+    azure_vm_power_state_reader = (
+        build_local_azure_vm_power_state_reader()
+    )
+
     bootstrap = (
         build_teams_hitl_app(
-            settings
+            settings,
+            azure_vm_power_state_reader=(
+                azure_vm_power_state_reader
+            ),
         )
     )
 

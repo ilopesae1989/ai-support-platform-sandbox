@@ -550,3 +550,107 @@ async def test_wait_does_not_reexecute_operation():
         agents.validation_operation_id
         is not None
     )
+
+
+class FinalStepPhase17BoundaryFakeFoundryAgents(
+    Phase17BoundaryFakeFoundryAgents
+):
+    """
+    Variante del fake existente cuyo Procedure
+    Execution autoritativo representa un único paso.
+
+    No cambia ninguna operación ni invoca servicios.
+    """
+
+    async def run_procedure_execution(
+        self,
+        message: str,
+        *,
+        agent_version: str | None = None,
+    ):
+        result = await super().run_procedure_execution(
+            message,
+            agent_version=agent_version,
+        )
+
+        payload = result.model_dump(
+            mode="python"
+        )
+
+        payload["total_steps"] = 1
+        payload["current_step"] = 1
+
+        return type(result).model_validate(
+            payload
+        )
+
+
+@pytest.mark.asyncio
+async def test_final_step_satisfied_continue_resolves_without_new_cycle():
+    """
+    En el último paso, CONTINUE no puede dejar el
+    workflow RUNNING porque no existe un paso siguiente.
+
+    Python debe cerrar el procedimiento sin:
+    - nuevo HITL;
+    - nueva operación;
+    - nueva llamada cognitiva;
+    - avance automático a FASE 17.
+    """
+
+    agents = (
+        FinalStepPhase17BoundaryFakeFoundryAgents(
+            validation_status="satisfied",
+            proposed_next_action="continue",
+        )
+    )
+
+    (
+        outputs,
+        new_hitl_requests,
+    ) = await run_one_approved_operation_cycle(
+        agents
+    )
+
+    assert_single_operation_cycle(
+        agents
+    )
+
+    assert new_hitl_requests == []
+
+    assert len(outputs) == 1
+
+    state = outputs[0]
+
+    assert isinstance(
+        state,
+        ProcedureRuntimeState,
+    )
+
+    assert state.total_steps == 1
+    assert state.current_step == 1
+
+    assert (
+        state.step_status
+        == StepStatus.SUCCEEDED
+    )
+
+    assert (
+        state.workflow_status
+        == WorkflowStatus.RESOLVED
+    )
+
+    assert (
+        state.verification_result
+        is not None
+    )
+
+    assert (
+        state.verification_result.success
+        is True
+    )
+
+    # La operación autorizada y su evidencia
+    # siguen siendo el mismo ciclo.
+    assert state.approval_id is not None
+    assert state.operation_result is not None

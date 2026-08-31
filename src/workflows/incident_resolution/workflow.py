@@ -12,8 +12,16 @@ from src.runtime.procedure.workflow import (
     ProcedureApprovalExecutor,
 )
 
+from src.workflows.incident_resolution.azure_vm_instance_view import (
+    AzureVmPowerStateReader,
+)
+
 from src.workflows.incident_resolution.executors.azure_operations import (
     AzureOperationsExecutor,
+)
+
+from src.workflows.incident_resolution.executors.azure_vm_post_operation_observation import (
+    AzureVmPostOperationObservationExecutor,
 )
 
 from src.workflows.incident_resolution.executors.azure_pre_call import (
@@ -109,6 +117,10 @@ def build_incident_resolution_workflow(
 
     operation_dispatch_ledger: (
         OperationDispatchLedger | None
+    ) = None,
+
+    azure_vm_power_state_reader: (
+        AzureVmPowerStateReader | None
     ) = None,
 
     resource_identity_registry: (
@@ -331,6 +343,14 @@ def build_incident_resolution_workflow(
 
     operation_result_registration = (
         OperationResultRegistrationExecutor()
+    )
+
+    azure_vm_post_operation_observation = (
+        AzureVmPostOperationObservationExecutor(
+            reader=(
+                azure_vm_power_state_reader
+            ),
+        )
     )
 
     procedure_validation = (
@@ -602,6 +622,8 @@ def build_incident_resolution_workflow(
         #     ↓
         # authoritative registration
         #     ↓
+        # deterministic VM post-operation observation
+        #     ↓
         # Procedure Validation
         #     ↓
         # deterministic Transition Gate
@@ -614,6 +636,11 @@ def build_incident_resolution_workflow(
 
         .add_edge(
             operation_result_registration,
+            azure_vm_post_operation_observation,
+        )
+
+        .add_edge(
+            azure_vm_post_operation_observation,
             procedure_validation,
         )
 

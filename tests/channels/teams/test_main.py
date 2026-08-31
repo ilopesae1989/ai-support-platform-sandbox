@@ -42,6 +42,7 @@ async def test_run_teams_hitl_app_starts_bootstrapped_app(
     monkeypatch,
 ):
     fake_settings = object()
+    fake_reader = object()
 
     fake_app = (
         FakeApp()
@@ -63,13 +64,24 @@ async def test_run_teams_hitl_app_starts_bootstrapped_app(
         ),
     )
 
-    received_settings = []
+    monkeypatch.setattr(
+        teams_main,
+        "build_local_azure_vm_power_state_reader",
+        lambda: fake_reader,
+    )
+
+    received_composition = []
 
     def fake_build(
         settings,
+        *,
+        azure_vm_power_state_reader,
     ):
-        received_settings.append(
-            settings
+        received_composition.append(
+            (
+                settings,
+                azure_vm_power_state_reader,
+            )
         )
 
         return (
@@ -96,9 +108,12 @@ async def test_run_teams_hitl_app_starts_bootstrapped_app(
     )
 
     assert (
-        received_settings
+        received_composition
         == [
-            fake_settings
+            (
+                fake_settings,
+                fake_reader,
+            )
         ]
     )
 
@@ -150,3 +165,55 @@ def test_main_uses_asyncio_run(
         )
         == 1
     )
+
+
+def test_local_reader_factory_injects_azure_cli_credential(
+    monkeypatch,
+):
+    credential = object()
+    reader = object()
+
+    credential_calls = []
+    reader_calls = []
+
+    def fake_credential():
+        credential_calls.append(
+            True
+        )
+        return credential
+
+    def fake_reader(
+        *,
+        credential,
+    ):
+        reader_calls.append(
+            credential
+        )
+        return reader
+
+    monkeypatch.setattr(
+        teams_main,
+        "AzureCliCredential",
+        fake_credential,
+    )
+
+    monkeypatch.setattr(
+        teams_main,
+        "AzureSdkVmPowerStateReader",
+        fake_reader,
+    )
+
+    result = (
+        teams_main
+        .build_local_azure_vm_power_state_reader()
+    )
+
+    assert result is reader
+
+    assert credential_calls == [
+        True
+    ]
+
+    assert reader_calls == [
+        credential
+    ]

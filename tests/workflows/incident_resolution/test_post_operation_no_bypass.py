@@ -30,6 +30,15 @@ REGISTRATION_PATH = (
     / "operation_result_registration.py"
 )
 
+OBSERVATION_PATH = (
+    ROOT
+    / "src"
+    / "workflows"
+    / "incident_resolution"
+    / "executors"
+    / "azure_vm_post_operation_observation.py"
+)
+
 VALIDATION_PATH = (
     ROOT
     / "src"
@@ -359,6 +368,20 @@ def test_post_operation_graph_is_single_linear_chain():
         edges,
         "operation_result_registration",
     ) == [
+        "azure_vm_post_operation_observation",
+    ]
+
+    assert incoming(
+        edges,
+        "azure_vm_post_operation_observation",
+    ) == [
+        "operation_result_registration",
+    ]
+
+    assert outgoing(
+        edges,
+        "azure_vm_post_operation_observation",
+    ) == [
         "procedure_validation",
     ]
 
@@ -366,7 +389,7 @@ def test_post_operation_graph_is_single_linear_chain():
         edges,
         "procedure_validation",
     ) == [
-        "operation_result_registration",
+        "azure_vm_post_operation_observation",
     ]
 
     assert outgoing(
@@ -410,6 +433,7 @@ def test_only_transition_is_terminal_output_of_post_operation_chain():
         "operation_start",
         "azure_route",
         "operation_result_registration",
+        "azure_vm_post_operation_observation",
         "procedure_validation",
     }
 
@@ -449,6 +473,34 @@ def test_registration_and_validation_only_send_downstream():
         .func
         .attr
         == "send_message"
+    )
+
+    observation_tree = parse_file(
+        OBSERVATION_PATH
+    )
+
+    observation_handle = (
+        find_class_method(
+            observation_tree,
+            "AzureVmPostOperationObservationExecutor",
+            "handle",
+        )
+    )
+
+    observation_calls = context_calls(
+        observation_handle
+    )
+
+    assert len(
+        observation_calls
+    ) >= 1
+
+    assert all(
+        (
+            call.func.attr
+            == "send_message"
+        )
+        for call in observation_calls
     )
 
     validation_tree = parse_file(
@@ -569,3 +621,63 @@ def test_azure_operations_emits_same_result_to_both_surfaces():
             argument.id
             == "result"
         )
+
+
+def test_workflow_injects_reader_only_into_observation_executor():
+    tree = parse_file(
+        WORKFLOW_PATH
+    )
+
+    function = find_function(
+        tree,
+        "build_incident_resolution_workflow",
+    )
+
+    calls = [
+        node
+        for node in ast.walk(
+            function
+        )
+        if (
+            isinstance(
+                node,
+                ast.Call,
+            )
+            and isinstance(
+                node.func,
+                ast.Name,
+            )
+            and node.func.id
+            == "AzureVmPostOperationObservationExecutor"
+        )
+    ]
+
+    assert len(calls) == 1
+
+    call = calls[0]
+
+    reader_keywords = [
+        keyword
+        for keyword in call.keywords
+        if keyword.arg == "reader"
+    ]
+
+    assert len(
+        reader_keywords
+    ) == 1
+
+    value = (
+        reader_keywords[0]
+        .value
+    )
+
+    # reader=(azure_vm_power_state_reader)
+    assert isinstance(
+        value,
+        ast.Name,
+    )
+
+    assert (
+        value.id
+        == "azure_vm_power_state_reader"
+    )

@@ -511,3 +511,58 @@ def test_repeat_invalidates_old_operation_identity():
     assert result.resolved_parameters == []
 
     assert result.retry_count == 1
+
+
+def test_final_step_satisfied_continue_is_normalized_to_resolved():
+    state = make_state()
+
+    state.total_steps = 1
+    state.current_step = 1
+
+    original = (
+        state.model_dump(
+            mode="python"
+        )
+    )
+
+    result = (
+        apply_procedure_validation_transition(
+            state=state,
+            context=make_context(
+                validation_status="satisfied",
+                proposed_next_action="continue",
+            ),
+        )
+    )
+
+    assert result.total_steps == 1
+    assert result.current_step == 1
+
+    assert (
+        result.step_status
+        == StepStatus.SUCCEEDED
+    )
+
+    assert (
+        result.workflow_status
+        == WorkflowStatus.RESOLVED
+    )
+
+    assert (
+        result.verification_result
+        is not None
+    )
+
+    assert (
+        result.verification_result.success
+        is True
+    )
+
+    # El gate continúa trabajando sobre
+    # una copia revalidada.
+    assert (
+        state.model_dump(
+            mode="python"
+        )
+        == original
+    )

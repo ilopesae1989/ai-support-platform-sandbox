@@ -41,6 +41,7 @@ def install_future_component_fakes(*, monkeypatch):
         "checkpoint_paths": [],
         "ledger_paths": [],
         "incident_ledgers": [],
+        "incident_readers": [],
         "incident_processor": [],
         "legacy_workflow": [],
     }
@@ -56,10 +57,16 @@ def install_future_component_fakes(*, monkeypatch):
     def fake_incident_workflow_builder(
         *,
         operation_dispatch_ledger,
+        azure_vm_power_state_reader,
     ):
         calls["incident_ledgers"].append(
             operation_dispatch_ledger
         )
+
+        calls["incident_readers"].append(
+            azure_vm_power_state_reader
+        )
+
         return incident_workflow
 
     async def fake_incident_processor(
@@ -155,8 +162,11 @@ def test_workflow_factory_builds_full_incident_workflow_with_durable_ledger(
         monkeypatch=monkeypatch,
     )
 
+    reader = object()
+
     bootstrap = teams_bootstrap.build_teams_hitl_app(
-        create_settings(tmp_path)
+        create_settings(tmp_path),
+        azure_vm_power_state_reader=reader,
     )
 
     workflow = bootstrap.dependencies.workflow_factory()
@@ -165,6 +175,10 @@ def test_workflow_factory_builds_full_incident_workflow_with_durable_ledger(
 
     assert fakes["calls"]["incident_ledgers"] == [
         fakes["dispatch_ledger"]
+    ]
+
+    assert fakes["calls"]["incident_readers"] == [
+        reader
     ]
 
     assert fakes["calls"]["legacy_workflow"] == []

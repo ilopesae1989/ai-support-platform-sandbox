@@ -37,8 +37,23 @@ _INCIDENT_ADDITIONAL_CHECKPOINT_TYPES = frozenset(
         "src.workflows.incident_resolution.azure_operations_models:"
         "VerifiedAzureOperationRequest",
 
+        "src.workflows.incident_resolution.azure_operations_models:"
+        "VerifiedResolvedParameter",
+
+        "src.workflows.incident_resolution.immutable_snapshot:"
+        "FrozenDict",
+
         "src.workflows.incident_resolution.immutable_snapshot:"
         "FrozenList",
+
+        "src.workflows.incident_resolution.immutable_snapshot:"
+        "FrozenResolvedParameter",
+
+        "src.workflows.incident_resolution.mcp_evidence:"
+        "McpCallEvidence",
+
+        "src.workflows.incident_resolution.operation_evidence:"
+        "OperationEvidence",
 
         "src.workflows.incident_resolution.models:"
         "ClassifiedAlertContext",
@@ -66,6 +81,21 @@ _INCIDENT_ADDITIONAL_CHECKPOINT_TYPES = frozenset(
 
         "src.workflows.incident_resolution.operational_context:"
         "OperationalContext",
+
+        "src.workflows.incident_resolution.technical_evidence:"
+        "McpResultEvidence",
+
+        "src.workflows.incident_resolution.technical_evidence:"
+        "ResponseErrorEvidence",
+
+        "src.workflows.incident_resolution.technical_evidence:"
+        "ToolResultEvidence",
+
+        "src.workflows.incident_resolution.tool_evidence:"
+        "ToolCallEvidence",
+
+        "src.workflows.incident_resolution.post_operation_observation:"
+        "AzureVmPowerStateObservation",
 
         "src.workflows.incident_resolution.procedure_validation_models:"
         "ProcedureValidationContext",

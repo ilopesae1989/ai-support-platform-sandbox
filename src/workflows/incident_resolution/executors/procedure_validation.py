@@ -108,9 +108,25 @@ class ProcedureValidationExecutor(
                 )
             ),
 
+            "post_operation_observation": (
+                request
+                .post_operation_observation
+                .model_dump(
+                    mode="json"
+                )
+                if (
+                    request
+                    .post_operation_observation
+                    is not None
+                )
+                else None
+            ),
+
             "constraints": [
                 "Interpret only according to the procedure.",
                 "Foundry IQ knowledge retrieval is allowed.",
+                "Treat post_operation_observation as trusted read-only evidence when present.",
+                "A completed WRITE does not by itself prove current resource state.",
                 "Do not execute operational actions.",
                 "Do not modify workflow state.",
                 "Do not authorize any operation.",

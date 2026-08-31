@@ -28,7 +28,18 @@ EXPECTED_ADDITIONAL_TYPES = {
     "src.workflows.incident_resolution.azure_operations_models:"
     "VerifiedAzureOperationRequest",
 
+    "src.workflows.incident_resolution.azure_operations_models:"
+    "VerifiedResolvedParameter",
+
+    "src.workflows.incident_resolution.immutable_snapshot:FrozenDict",
     "src.workflows.incident_resolution.immutable_snapshot:FrozenList",
+    "src.workflows.incident_resolution.immutable_snapshot:"
+    "FrozenResolvedParameter",
+
+    "src.workflows.incident_resolution.mcp_evidence:McpCallEvidence",
+
+    "src.workflows.incident_resolution.operation_evidence:"
+    "OperationEvidence",
 
     "src.workflows.incident_resolution.models:ClassifiedAlertContext",
     "src.workflows.incident_resolution.models:ExecutionIdentity",
@@ -43,6 +54,21 @@ EXPECTED_ADDITIONAL_TYPES = {
 
     "src.workflows.incident_resolution.operational_context:"
     "OperationalContext",
+
+    "src.workflows.incident_resolution.technical_evidence:"
+    "McpResultEvidence",
+
+    "src.workflows.incident_resolution.technical_evidence:"
+    "ResponseErrorEvidence",
+
+    "src.workflows.incident_resolution.technical_evidence:"
+    "ToolResultEvidence",
+
+    "src.workflows.incident_resolution.tool_evidence:"
+    "ToolCallEvidence",
+
+    "src.workflows.incident_resolution.post_operation_observation:"
+    "AzureVmPowerStateObservation",
 
     "src.workflows.incident_resolution.procedure_validation_models:"
     "ProcedureValidationContext",
@@ -110,9 +136,9 @@ def test_incident_allowlist_extends_existing_contract_exactly():
 
     assert len(
         EXPECTED_ADDITIONAL_TYPES
-    ) == 28
+    ) == 38
 
-    assert len(allowed) == 43
+    assert len(allowed) == 53
 
     assert (
         "src.runtime.procedure.workflow:"
@@ -129,7 +155,7 @@ def test_every_incident_allowlist_entry_resolves_to_real_type():
         .incident_checkpoint_allowed_types()
     )
 
-    assert len(allowed) == 43
+    assert len(allowed) == 53
 
     for token in allowed:
         resolved = resolve_type_token(
@@ -210,8 +236,8 @@ def test_builder_passes_exact_allowlist_to_file_checkpoint_storage(
         captured[
             "allowed_checkpoint_types"
         ]
-    ) == 43
+    ) == 53
 
-# TDD_PHASE18_INCIDENT_CHECKPOINT_ADDITIONAL_28
+# TDD_PHASE18_INCIDENT_CHECKPOINT_ADDITIONAL_38
 
-# TDD_PHASE18_INCIDENT_CHECKPOINT_TOTAL_43
+# TDD_PHASE18_INCIDENT_CHECKPOINT_TOTAL_53

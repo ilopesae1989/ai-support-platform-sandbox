@@ -517,6 +517,15 @@ async def test_registered_validation_boundary_accepts_exact_context():
         )
     )
 
+    # La fixture autoritativa utilizada por este
+    # control positivo representa un procedimiento
+    # de un único paso: current_step=1/total_steps=1.
+    #
+    # Tras FIX 3, satisfied + continue en el último
+    # paso se normaliza determinísticamente a RESOLVED.
+    assert state.total_steps == 1
+    assert state.current_step == 1
+
     assert (
         transitioned.step_status
         == StepStatus.SUCCEEDED
@@ -524,12 +533,17 @@ async def test_registered_validation_boundary_accepts_exact_context():
 
     assert (
         transitioned.workflow_status
-        == WorkflowStatus.RUNNING
+        == WorkflowStatus.RESOLVED
     )
 
     assert (
         transitioned.verification_result
         is not None
+    )
+
+    assert (
+        transitioned.verification_result.success
+        is True
     )
 
 

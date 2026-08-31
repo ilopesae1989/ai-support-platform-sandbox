@@ -441,6 +441,7 @@ def test_validation_request_uses_common_operation_result_without_duplicate_evide
     ) == (
         "operation_result",
         "step",
+        "post_operation_observation",
     )
 
     assert (
@@ -466,6 +467,12 @@ def test_validation_request_uses_common_operation_result_without_duplicate_evide
         .operation_result
         .evidence
         is not None
+    )
+
+    assert (
+        request
+        .post_operation_observation
+        is None
     )
 
 

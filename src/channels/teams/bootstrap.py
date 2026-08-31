@@ -23,6 +23,10 @@ from src.runtime.procedure.workflow import (
     build_procedure_approval_workflow,
 )
 
+from src.workflows.incident_resolution.azure_vm_instance_view import (
+    AzureVmPowerStateReader,
+)
+
 from src.workflows.incident_resolution.checkpoint_storage import (
     build_incident_checkpoint_storage,
 )
@@ -268,6 +272,10 @@ class TeamsHitlBootstrap:
 
 def build_teams_hitl_app(
     settings: TeamsHitlSettings,
+    *,
+    azure_vm_power_state_reader: (
+        AzureVmPowerStateReader | None
+    ) = None,
 ) -> TeamsHitlBootstrap:
     """
     Construye la aplicación Teams y registra
@@ -346,6 +354,9 @@ def build_teams_hitl_app(
             build_incident_resolution_workflow(
                 operation_dispatch_ledger=(
                     operation_dispatch_ledger
+                ),
+                azure_vm_power_state_reader=(
+                    azure_vm_power_state_reader
                 ),
             )
         )
