@@ -9,3 +9,4 @@ microsoft-teams-cards==2.0.14
 microsoft-teams-apps==2.0.14
 azure-mgmt-compute
 azure-functions==2.3.0
+mssql-python==1.14.0

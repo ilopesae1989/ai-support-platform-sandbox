@@ -11,6 +11,10 @@ import time
 from enum import Enum
 from pathlib import Path
 
+from typing import (
+    Protocol,
+)
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -177,6 +181,56 @@ class IncidentContinuationJob(
 
         return self
 
+
+class IncidentContinuationStore(
+    Protocol
+):
+    def enqueue(
+        self,
+        invocation: (
+            AuthorizedTeamsApprovalInvocation
+        ),
+    ) -> IncidentContinuationJob:
+        ...
+
+    def get(
+        self,
+        approval_id: str,
+    ) -> IncidentContinuationJob:
+        ...
+
+    def claim_next(
+        self,
+        *,
+        worker_id: str,
+    ) -> IncidentContinuationJob | None:
+        ...
+
+    def complete(
+        self,
+        *,
+        approval_id: str,
+        worker_id: str,
+    ) -> IncidentContinuationJob:
+        ...
+
+    def fail(
+        self,
+        *,
+        approval_id: str,
+        worker_id: str,
+        error: str,
+    ) -> IncidentContinuationJob:
+        ...
+
+    def recover_claimed_before_approval(
+        self,
+        *,
+        approval_id: str,
+        worker_id: str,
+        approval_store: object,
+    ) -> IncidentContinuationJob:
+        ...
 
 class SqliteIncidentContinuationStore:
     """

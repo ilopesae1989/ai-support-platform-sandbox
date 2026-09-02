@@ -16,6 +16,7 @@ from microsoft_teams.apps import (
 )
 
 from src.runtime.procedure.approval_store import (
+    PendingApprovalStore,
     SqlitePendingApprovalStore,
 )
 
@@ -32,6 +33,7 @@ from src.workflows.incident_resolution.checkpoint_storage import (
 )
 
 from src.workflows.incident_resolution.operation_dispatch_ledger import (
+    OperationDispatchLedger,
     SqliteOperationDispatchLedger,
 )
 
@@ -54,6 +56,7 @@ from .incident_approval_processor import (
 )
 
 from .incident_continuation_store import (
+    IncidentContinuationStore,
     SqliteIncidentContinuationStore,
 )
 
@@ -70,6 +73,7 @@ from .outbound_adapter import (
 )
 
 from .conversation_binding_store import (
+    TeamsConversationBindingStore,
     SqliteTeamsConversationBindingStore,
 )
 
@@ -226,6 +230,26 @@ class TeamsHitlSettings:
 @dataclass(
     frozen=True
 )
+class TeamsHitlPersistence:
+    store: PendingApprovalStore
+
+    checkpoint_storage: object
+
+    operation_dispatch_ledger: (
+        OperationDispatchLedger
+    )
+
+    continuation_store: (
+        IncidentContinuationStore
+    )
+
+    conversation_store: (
+        TeamsConversationBindingStore
+    )
+
+@dataclass(
+    frozen=True
+)
 class TeamsHitlBootstrap:
     """
     Componentes del boundary Teams.
@@ -242,16 +266,16 @@ class TeamsHitlBootstrap:
 
     policy: ExactTeamsApprovalPolicy
 
-    store: SqlitePendingApprovalStore
+    store: PendingApprovalStore
 
     checkpoint_storage: object
 
     operation_dispatch_ledger: (
-        SqliteOperationDispatchLedger
+        OperationDispatchLedger
     )
 
     continuation_store: (
-        SqliteIncidentContinuationStore
+        IncidentContinuationStore
     )
 
     continuation_worker: (
@@ -260,7 +284,7 @@ class TeamsHitlBootstrap:
     dependencies: TeamsApprovalHandlerDependencies
 
     conversation_store: (
-        SqliteTeamsConversationBindingStore
+        TeamsConversationBindingStore
     )
 
     conversation_dependencies: (
@@ -270,9 +294,70 @@ class TeamsHitlBootstrap:
     outbound: TeamsOutboundDependencies
 
 
+def build_local_teams_hitl_persistence(
+    settings: TeamsHitlSettings,
+) -> TeamsHitlPersistence:
+    if not isinstance(
+        settings,
+        TeamsHitlSettings,
+    ):
+        raise TypeError(
+            "settings debe ser TeamsHitlSettings."
+        )
+
+    store = (
+        SqlitePendingApprovalStore(
+            settings.pending_database_path
+        )
+    )
+
+    checkpoint_storage = (
+        build_incident_checkpoint_storage(
+            settings.checkpoint_path
+        )
+    )
+
+    operation_dispatch_ledger = (
+        SqliteOperationDispatchLedger(
+            settings.operation_dispatch_database_path
+        )
+    )
+
+    continuation_store = (
+        SqliteIncidentContinuationStore(
+            settings.pending_database_path.parent
+            / "incident-continuations.db"
+        )
+    )
+
+    conversation_store = (
+        SqliteTeamsConversationBindingStore(
+            settings.conversation_binding_database_path
+        )
+    )
+
+    return TeamsHitlPersistence(
+        store=store,
+        checkpoint_storage=(
+            checkpoint_storage
+        ),
+        operation_dispatch_ledger=(
+            operation_dispatch_ledger
+        ),
+        continuation_store=(
+            continuation_store
+        ),
+        conversation_store=(
+            conversation_store
+        ),
+    )
+
 def build_teams_hitl_app(
     settings: TeamsHitlSettings,
     *,
+    persistence: (
+        TeamsHitlPersistence | None
+    ) = None,
     azure_vm_power_state_reader: (
         AzureVmPowerStateReader | None
     ) = None,
@@ -302,6 +387,39 @@ def build_teams_hitl_app(
             "settings debe ser TeamsHitlSettings."
         )
 
+    if persistence is None:
+        persistence = (
+            build_local_teams_hitl_persistence(
+                settings
+            )
+        )
+
+    elif not isinstance(
+        persistence,
+        TeamsHitlPersistence,
+    ):
+        raise TypeError(
+            "persistence debe ser TeamsHitlPersistence."
+        )
+
+    store = persistence.store
+
+    checkpoint_storage = (
+        persistence.checkpoint_storage
+    )
+
+    operation_dispatch_ledger = (
+        persistence.operation_dispatch_ledger
+    )
+
+    continuation_store = (
+        persistence.continuation_store
+    )
+
+    conversation_store = (
+        persistence.conversation_store
+    )
+
     policy = (
         ExactTeamsApprovalPolicy(
             policy_id=(
@@ -323,31 +441,8 @@ def build_teams_hitl_app(
         )
     )
 
-    store = (
-        SqlitePendingApprovalStore(
-            settings
-            .pending_database_path
-        )
-    )
 
-    continuation_store = (
-        SqliteIncidentContinuationStore(
-            settings.pending_database_path.parent
-            / "incident-continuations.db"
-        )
-    )
-    checkpoint_storage = (
-        build_incident_checkpoint_storage(
-            settings.checkpoint_path
-        )
-    )
 
-    operation_dispatch_ledger = (
-        SqliteOperationDispatchLedger(
-            settings
-            .operation_dispatch_database_path
-        )
-    )
 
     def workflow_factory():
         return (
@@ -401,12 +496,6 @@ def build_teams_hitl_app(
         )
     )
 
-    conversation_store = (
-        SqliteTeamsConversationBindingStore(
-            settings
-            .conversation_binding_database_path
-        )
-    )
 
     conversation_dependencies = (
         TeamsConversationHandlerDependencies(

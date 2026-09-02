@@ -23,7 +23,7 @@ from src.runtime.procedure.approval_store import (
 
 from .incident_continuation_store import (
     IncidentContinuationClaimError,
-    SqliteIncidentContinuationStore,
+    IncidentContinuationStore,
 )
 
 
@@ -72,7 +72,7 @@ class IncidentContinuationWorkerDependencies:
     """
 
     continuation_store: (
-        SqliteIncidentContinuationStore
+        IncidentContinuationStore
     )
 
     approval_store: PendingApprovalStore
@@ -295,7 +295,7 @@ class IncidentContinuationWorker:
         El loop no constituye persistencia.
 
         La persistencia reside exclusivamente
-        en SqliteIncidentContinuationStore.
+        en IncidentContinuationStore.
         """
 
         if not isinstance(

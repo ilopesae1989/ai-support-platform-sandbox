@@ -54,7 +54,7 @@ from .approval_invocation import (
 
 from .incident_continuation_store import (
     IncidentContinuationConflictError,
-    SqliteIncidentContinuationStore,
+    IncidentContinuationStore,
 )
 
 
@@ -98,7 +98,7 @@ class TeamsApprovalHandlerDependencies:
     store: PendingApprovalStore
 
     continuation_store: (
-        SqliteIncidentContinuationStore
+        IncidentContinuationStore
     )
 
     workflow_factory: WorkflowFactory
@@ -111,7 +111,7 @@ def enqueue_authorized_teams_incident_approval(
     invocation: AuthorizedTeamsApprovalInvocation,
     store: PendingApprovalStore,
     continuation_store: (
-        SqliteIncidentContinuationStore
+        IncidentContinuationStore
     ),
 ) -> bool:
     """
