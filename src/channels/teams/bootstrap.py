@@ -113,6 +113,79 @@ def _required_environment_value(
 @dataclass(
     frozen=True
 )
+class TeamsHitlAppSettings:
+    """
+    Configuración del boundary de aplicación Teams.
+
+    Contiene exclusivamente configuración de:
+
+    - autenticación/transporte Teams;
+    - tenant del canal;
+    - principal HITL autorizado;
+    - endpoint HTTP de mensajería.
+
+    No contiene configuración de persistencia.
+
+    La persistencia debe ser inyectada
+    explícitamente cuando se use este contrato.
+    """
+
+    client_id: str
+
+    client_secret: str = field(
+        repr=False
+    )
+
+    bot_tenant_id: str
+
+    teams_channel_tenant_id: str
+
+    approver_aad_object_id: str
+
+    messaging_endpoint: str = (
+        "/api/messages"
+    )
+
+    @classmethod
+    def from_environment(
+        cls,
+    ) -> "TeamsHitlAppSettings":
+        return cls(
+            client_id=(
+                _required_environment_value(
+                    "CLIENT_ID"
+                )
+            ),
+
+            client_secret=(
+                _required_environment_value(
+                    "CLIENT_SECRET"
+                )
+            ),
+
+            bot_tenant_id=(
+                _required_environment_value(
+                    "TENANT_ID"
+                )
+            ),
+
+            teams_channel_tenant_id=(
+                _required_environment_value(
+                    "TEAMS_CHANNEL_TENANT_ID"
+                )
+            ),
+
+            approver_aad_object_id=(
+                _required_environment_value(
+                    "TEAMS_HITL_APPROVER_AAD_OBJECT_ID"
+                )
+            ),
+        )
+
+
+@dataclass(
+    frozen=True
+)
 class TeamsHitlSettings:
     """
     Configuración del boundary Teams de sandbox.
@@ -353,7 +426,10 @@ def build_local_teams_hitl_persistence(
     )
 
 def build_teams_hitl_app(
-    settings: TeamsHitlSettings,
+    settings: (
+        TeamsHitlSettings
+        | TeamsHitlAppSettings
+    ),
     *,
     persistence: (
         TeamsHitlPersistence | None
@@ -381,13 +457,26 @@ def build_teams_hitl_app(
 
     if not isinstance(
         settings,
-        TeamsHitlSettings,
+        (
+            TeamsHitlSettings,
+            TeamsHitlAppSettings,
+        ),
     ):
         raise TypeError(
-            "settings debe ser TeamsHitlSettings."
+            "settings debe ser TeamsHitlSettings "
+            "o TeamsHitlAppSettings."
         )
 
     if persistence is None:
+        if not isinstance(
+            settings,
+            TeamsHitlSettings,
+        ):
+            raise TeamsHitlConfigurationError(
+                "TeamsHitlAppSettings requiere "
+                "persistence inyectada explícitamente."
+            )
+
         persistence = (
             build_local_teams_hitl_persistence(
                 settings
