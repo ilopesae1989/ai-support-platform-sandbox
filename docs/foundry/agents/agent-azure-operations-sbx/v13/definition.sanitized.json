@@ -1,0 +1,37 @@
+{
+  "instructions": "<OMITTED_FROM_PUBLIC_REPOSITORY:SHA256=07BF121B4631E61DAC2C435D9E8D0B610CD91B4359F8C361D6A0C5DD3E01D42B>",
+  "kind": "prompt",
+  "model": "gpt-5-mini-sbx",
+  "reasoning": {
+    "effort": "low"
+  },
+  "tools": [
+    {
+      "allowed_tools": {
+        "tool_names": [
+          "subscription_list",
+          "group_list",
+          "group_resource_list",
+          "advisor_recommendation_list",
+          "advisor_recommendation_summary",
+          "compute_vm_power-state"
+        ]
+      },
+      "project_connection_id": "<REDACTED:project_connection_id>",
+      "require_approval": {
+        "never": {
+          "tool_names": [
+            "subscription_list",
+            "group_list",
+            "group_resource_list",
+            "advisor_recommendation_list",
+            "advisor_recommendation_summary"
+          ]
+        }
+      },
+      "server_label": "<REDACTED:server_label>",
+      "server_url": "<REDACTED:server_url>",
+      "type": "mcp"
+    }
+  ]
+}

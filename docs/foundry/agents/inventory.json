@@ -1,0 +1,261 @@
+{
+  "agents": [
+    {
+      "agent_key": "classification",
+      "agent_name": "agent-classification-sbx",
+      "authorization_schemes": [
+        {
+          "type": "Entra"
+        }
+      ],
+      "draft_or_nonpublished_count": 0,
+      "effective_is_latest_published": true,
+      "effective_version": "7",
+      "endpoint_version_selector": "@latest",
+      "has_draft_or_nonpublished": false,
+      "instructions_sha256": "3F8F50E21692CD07DA7C6D10C81E6616D0BF5976631860675A4DA9EA4EDA08E1",
+      "latest_any_version": "7",
+      "latest_published_version": "7",
+      "model": "gpt-5-mini-sbx",
+      "protocols": [
+        "responses"
+      ],
+      "publish_approval_status": "not_published",
+      "reasoning": {
+        "effort": "low"
+      },
+      "snapshot_definition_sha256": "65B79B0FEFA557491E25B28F64E5F52F2D35A42E63BDECD15505751941A0CD6F",
+      "snapshot_path": "agent-classification-sbx/v7",
+      "status": "active",
+      "tool_count": 0,
+      "tools": [],
+      "version_env_var": "FOUNDRY_AGENT_CLASSIFICATION_VERSION"
+    },
+    {
+      "agent_key": "knowledge",
+      "agent_name": "agent-knowledge-sbx",
+      "authorization_schemes": [
+        {
+          "type": "Entra"
+        }
+      ],
+      "draft_or_nonpublished_count": 0,
+      "effective_is_latest_published": true,
+      "effective_version": "8",
+      "endpoint_version_selector": "@latest",
+      "has_draft_or_nonpublished": false,
+      "instructions_sha256": "586E6B49A14A621C0D3E3785E2880D7402578B597822B15DE060C0A9E18AD9B6",
+      "latest_any_version": "8",
+      "latest_published_version": "8",
+      "model": "gpt-5-mini-sbx",
+      "protocols": [
+        "responses"
+      ],
+      "publish_approval_status": "not_published",
+      "reasoning": {
+        "effort": "low"
+      },
+      "snapshot_definition_sha256": "D18D09D720D9A21334D82C948FF2280D4ACD60ED6154280E7082E915D143270F",
+      "snapshot_path": "agent-knowledge-sbx/v8",
+      "status": "active",
+      "tool_count": 1,
+      "tools": [
+        {
+          "project_connection_id": "<REDACTED:project_connection_id>",
+          "require_approval": "never",
+          "server_label": "<REDACTED:server_label>",
+          "server_url": "<REDACTED:server_url>",
+          "type": "mcp"
+        }
+      ],
+      "version_env_var": "FOUNDRY_AGENT_KNOWLEDGE_VERSION"
+    },
+    {
+      "agent_key": "alert_triage",
+      "agent_name": "agent-alert-triage-sbx",
+      "authorization_schemes": [
+        {
+          "type": "Entra"
+        }
+      ],
+      "draft_or_nonpublished_count": 0,
+      "effective_is_latest_published": true,
+      "effective_version": "10",
+      "endpoint_version_selector": "@latest",
+      "has_draft_or_nonpublished": false,
+      "instructions_sha256": "CE5E43F2DD67787CB5704485D92F025A47DEE6FE1C85123D1990DA4E6FE82D6F",
+      "latest_any_version": "10",
+      "latest_published_version": "10",
+      "model": "gpt-5-mini-sbx",
+      "protocols": [
+        "responses"
+      ],
+      "publish_approval_status": "not_published",
+      "reasoning": {
+        "effort": "low"
+      },
+      "snapshot_definition_sha256": "28B081209E8B9C4F262476301084095E22834D827C1CD42C920E4B2AB139DEB3",
+      "snapshot_path": "agent-alert-triage-sbx/v10",
+      "status": "active",
+      "tool_count": 1,
+      "tools": [
+        {
+          "project_connection_id": "<REDACTED:project_connection_id>",
+          "require_approval": "never",
+          "server_label": "<REDACTED:server_label>",
+          "server_url": "<REDACTED:server_url>",
+          "type": "mcp"
+        }
+      ],
+      "version_env_var": "FOUNDRY_AGENT_ALERT_TRIAGE_VERSION"
+    },
+    {
+      "agent_key": "procedure_execution",
+      "agent_name": "agent-procedure-execution-sbx",
+      "authorization_schemes": [
+        {
+          "type": "Entra"
+        }
+      ],
+      "draft_or_nonpublished_count": 0,
+      "effective_is_latest_published": true,
+      "effective_version": "6",
+      "endpoint_version_selector": "@latest",
+      "has_draft_or_nonpublished": false,
+      "instructions_sha256": "B29B9B983237D0A0E75AC8507F54E6EEEA012A3C3B0C7497167A5C853F08117B",
+      "latest_any_version": "6",
+      "latest_published_version": "6",
+      "model": "gpt-5-mini-sbx",
+      "protocols": [
+        "responses"
+      ],
+      "publish_approval_status": "not_published",
+      "reasoning": {
+        "effort": "low"
+      },
+      "snapshot_definition_sha256": "2808AC17EE807079560C5E51EDFB733925522EBB545552B2C1A37D12FF1D1195",
+      "snapshot_path": "agent-procedure-execution-sbx/v6",
+      "status": "active",
+      "tool_count": 1,
+      "tools": [
+        {
+          "project_connection_id": "<REDACTED:project_connection_id>",
+          "require_approval": "never",
+          "server_label": "<REDACTED:server_label>",
+          "server_url": "<REDACTED:server_url>",
+          "type": "mcp"
+        }
+      ],
+      "version_env_var": "FOUNDRY_AGENT_PROCEDURE_EXECUTION_VERSION"
+    },
+    {
+      "agent_key": "azure_operations",
+      "agent_name": "agent-azure-operations-sbx",
+      "authorization_schemes": [
+        {
+          "type": "Entra"
+        }
+      ],
+      "draft_or_nonpublished_count": 1,
+      "effective_is_latest_published": true,
+      "effective_version": "13",
+      "endpoint_version_selector": "13",
+      "has_draft_or_nonpublished": true,
+      "instructions_sha256": "07BF121B4631E61DAC2C435D9E8D0B610CD91B4359F8C361D6A0C5DD3E01D42B",
+      "latest_any_version": "13",
+      "latest_published_version": "13",
+      "model": "gpt-5-mini-sbx",
+      "protocols": [
+        "responses"
+      ],
+      "publish_approval_status": "not_published",
+      "reasoning": {
+        "effort": "low"
+      },
+      "snapshot_definition_sha256": "3495A6F5D5E6FB6E61E66E086DD981FAF340691CAD6C4C373A3B854DD6D09947",
+      "snapshot_path": "agent-azure-operations-sbx/v13",
+      "status": "active",
+      "tool_count": 1,
+      "tools": [
+        {
+          "allowed_tools": {
+            "tool_names": [
+              "subscription_list",
+              "group_list",
+              "group_resource_list",
+              "advisor_recommendation_list",
+              "advisor_recommendation_summary",
+              "compute_vm_power-state"
+            ]
+          },
+          "project_connection_id": "<REDACTED:project_connection_id>",
+          "require_approval": {
+            "never": {
+              "tool_names": [
+                "subscription_list",
+                "group_list",
+                "group_resource_list",
+                "advisor_recommendation_list",
+                "advisor_recommendation_summary"
+              ]
+            }
+          },
+          "server_label": "<REDACTED:server_label>",
+          "server_url": "<REDACTED:server_url>",
+          "type": "mcp"
+        }
+      ],
+      "version_env_var": "FOUNDRY_AGENT_AZURE_OPERATIONS_VERSION"
+    },
+    {
+      "agent_key": "itsm",
+      "agent_name": "agent-itsm-sbx",
+      "authorization_schemes": [
+        {
+          "type": "Entra"
+        }
+      ],
+      "draft_or_nonpublished_count": 0,
+      "effective_is_latest_published": true,
+      "effective_version": "6",
+      "endpoint_version_selector": "@latest",
+      "has_draft_or_nonpublished": false,
+      "instructions_sha256": "2A4731DE6B83F05944CB1474B8B2FF3BCE4426CEBADE8D5EFE323B144B723F30",
+      "latest_any_version": "6",
+      "latest_published_version": "6",
+      "model": "gpt-5-mini-sbx",
+      "protocols": [
+        "responses"
+      ],
+      "publish_approval_status": "not_published",
+      "reasoning": {
+        "effort": "low"
+      },
+      "snapshot_definition_sha256": "131D06F5BA4E1B6F82605A4EC2D9A38E25586D3498A071BDD83569CD32378857",
+      "snapshot_path": "agent-itsm-sbx/v6",
+      "status": "active",
+      "tool_count": 0,
+      "tools": [],
+      "version_env_var": "FOUNDRY_AGENT_ITSM_VERSION"
+    }
+  ],
+  "captured_at_utc": "2026-09-02T12:41:03Z",
+  "policy": {
+    "connection_ids_published": false,
+    "draft_identifiers_published": false,
+    "full_instructions_published": false,
+    "identity_ids_published": false,
+    "private_identifier_hashes_published": false,
+    "server_labels_published": false,
+    "server_urls_published": false,
+    "tool_capability_names_published": true
+  },
+  "schema_version": 1,
+  "snapshot_policy": "public_sanitized_only",
+  "source": {
+    "azure_ai_projects_version": "2.3.0",
+    "azure_identity_version": "1.25.3",
+    "project_endpoint": "<OMITTED_FROM_PUBLIC_REPOSITORY>",
+    "service": "Microsoft Foundry Agent Service"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "agent_key": "azure_operations",
+  "agent_name": "agent-azure-operations-sbx",
+  "authorization_schemes": [
+    {
+      "type": "Entra"
+    }
+  ],
+  "draft_or_nonpublished_count": 1,
+  "effective_is_latest_published": true,
+  "effective_version": "13",
+  "endpoint_version_selector": "13",
+  "has_draft_or_nonpublished": true,
+  "instructions_sha256": "07BF121B4631E61DAC2C435D9E8D0B610CD91B4359F8C361D6A0C5DD3E01D42B",
+  "latest_any_version": "13",
+  "latest_published_version": "13",
+  "model": "gpt-5-mini-sbx",
+  "protocols": [
+    "responses"
+  ],
+  "publish_approval_status": "not_published",
+  "reasoning": {
+    "effort": "low"
+  },
+  "snapshot_definition_sha256": "3495A6F5D5E6FB6E61E66E086DD981FAF340691CAD6C4C373A3B854DD6D09947",
+  "status": "active",
+  "tool_count": 1,
+  "version_env_var": "FOUNDRY_AGENT_AZURE_OPERATIONS_VERSION"
+}

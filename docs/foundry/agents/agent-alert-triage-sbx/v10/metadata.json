@@ -1,0 +1,29 @@
+{
+  "agent_key": "alert_triage",
+  "agent_name": "agent-alert-triage-sbx",
+  "authorization_schemes": [
+    {
+      "type": "Entra"
+    }
+  ],
+  "draft_or_nonpublished_count": 0,
+  "effective_is_latest_published": true,
+  "effective_version": "10",
+  "endpoint_version_selector": "@latest",
+  "has_draft_or_nonpublished": false,
+  "instructions_sha256": "CE5E43F2DD67787CB5704485D92F025A47DEE6FE1C85123D1990DA4E6FE82D6F",
+  "latest_any_version": "10",
+  "latest_published_version": "10",
+  "model": "gpt-5-mini-sbx",
+  "protocols": [
+    "responses"
+  ],
+  "publish_approval_status": "not_published",
+  "reasoning": {
+    "effort": "low"
+  },
+  "snapshot_definition_sha256": "28B081209E8B9C4F262476301084095E22834D827C1CD42C920E4B2AB139DEB3",
+  "status": "active",
+  "tool_count": 1,
+  "version_env_var": "FOUNDRY_AGENT_ALERT_TRIAGE_VERSION"
+}

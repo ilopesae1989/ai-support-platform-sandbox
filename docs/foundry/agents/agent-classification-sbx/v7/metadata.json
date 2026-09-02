@@ -1,0 +1,29 @@
+{
+  "agent_key": "classification",
+  "agent_name": "agent-classification-sbx",
+  "authorization_schemes": [
+    {
+      "type": "Entra"
+    }
+  ],
+  "draft_or_nonpublished_count": 0,
+  "effective_is_latest_published": true,
+  "effective_version": "7",
+  "endpoint_version_selector": "@latest",
+  "has_draft_or_nonpublished": false,
+  "instructions_sha256": "3F8F50E21692CD07DA7C6D10C81E6616D0BF5976631860675A4DA9EA4EDA08E1",
+  "latest_any_version": "7",
+  "latest_published_version": "7",
+  "model": "gpt-5-mini-sbx",
+  "protocols": [
+    "responses"
+  ],
+  "publish_approval_status": "not_published",
+  "reasoning": {
+    "effort": "low"
+  },
+  "snapshot_definition_sha256": "65B79B0FEFA557491E25B28F64E5F52F2D35A42E63BDECD15505751941A0CD6F",
+  "status": "active",
+  "tool_count": 0,
+  "version_env_var": "FOUNDRY_AGENT_CLASSIFICATION_VERSION"
+}

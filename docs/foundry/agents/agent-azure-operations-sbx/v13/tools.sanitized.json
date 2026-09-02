@@ -1,0 +1,29 @@
+[
+  {
+    "allowed_tools": {
+      "tool_names": [
+        "subscription_list",
+        "group_list",
+        "group_resource_list",
+        "advisor_recommendation_list",
+        "advisor_recommendation_summary",
+        "compute_vm_power-state"
+      ]
+    },
+    "project_connection_id": "<REDACTED:project_connection_id>",
+    "require_approval": {
+      "never": {
+        "tool_names": [
+          "subscription_list",
+          "group_list",
+          "group_resource_list",
+          "advisor_recommendation_list",
+          "advisor_recommendation_summary"
+        ]
+      }
+    },
+    "server_label": "<REDACTED:server_label>",
+    "server_url": "<REDACTED:server_url>",
+    "type": "mcp"
+  }
+]

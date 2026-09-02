@@ -1,0 +1,29 @@
+{
+  "agent_key": "knowledge",
+  "agent_name": "agent-knowledge-sbx",
+  "authorization_schemes": [
+    {
+      "type": "Entra"
+    }
+  ],
+  "draft_or_nonpublished_count": 0,
+  "effective_is_latest_published": true,
+  "effective_version": "8",
+  "endpoint_version_selector": "@latest",
+  "has_draft_or_nonpublished": false,
+  "instructions_sha256": "586E6B49A14A621C0D3E3785E2880D7402578B597822B15DE060C0A9E18AD9B6",
+  "latest_any_version": "8",
+  "latest_published_version": "8",
+  "model": "gpt-5-mini-sbx",
+  "protocols": [
+    "responses"
+  ],
+  "publish_approval_status": "not_published",
+  "reasoning": {
+    "effort": "low"
+  },
+  "snapshot_definition_sha256": "D18D09D720D9A21334D82C948FF2280D4ACD60ED6154280E7082E915D143270F",
+  "status": "active",
+  "tool_count": 1,
+  "version_env_var": "FOUNDRY_AGENT_KNOWLEDGE_VERSION"
+}

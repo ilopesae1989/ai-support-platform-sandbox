@@ -1,0 +1,17 @@
+{
+  "instructions": "<OMITTED_FROM_PUBLIC_REPOSITORY:SHA256=586E6B49A14A621C0D3E3785E2880D7402578B597822B15DE060C0A9E18AD9B6>",
+  "kind": "prompt",
+  "model": "gpt-5-mini-sbx",
+  "reasoning": {
+    "effort": "low"
+  },
+  "tools": [
+    {
+      "project_connection_id": "<REDACTED:project_connection_id>",
+      "require_approval": "never",
+      "server_label": "<REDACTED:server_label>",
+      "server_url": "<REDACTED:server_url>",
+      "type": "mcp"
+    }
+  ]
+}

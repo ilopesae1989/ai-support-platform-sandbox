@@ -1,0 +1,29 @@
+{
+  "agent_key": "procedure_execution",
+  "agent_name": "agent-procedure-execution-sbx",
+  "authorization_schemes": [
+    {
+      "type": "Entra"
+    }
+  ],
+  "draft_or_nonpublished_count": 0,
+  "effective_is_latest_published": true,
+  "effective_version": "6",
+  "endpoint_version_selector": "@latest",
+  "has_draft_or_nonpublished": false,
+  "instructions_sha256": "B29B9B983237D0A0E75AC8507F54E6EEEA012A3C3B0C7497167A5C853F08117B",
+  "latest_any_version": "6",
+  "latest_published_version": "6",
+  "model": "gpt-5-mini-sbx",
+  "protocols": [
+    "responses"
+  ],
+  "publish_approval_status": "not_published",
+  "reasoning": {
+    "effort": "low"
+  },
+  "snapshot_definition_sha256": "2808AC17EE807079560C5E51EDFB733925522EBB545552B2C1A37D12FF1D1195",
+  "status": "active",
+  "tool_count": 1,
+  "version_env_var": "FOUNDRY_AGENT_PROCEDURE_EXECUTION_VERSION"
+}

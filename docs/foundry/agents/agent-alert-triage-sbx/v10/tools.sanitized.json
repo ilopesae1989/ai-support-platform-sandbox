@@ -1,0 +1,9 @@
+[
+  {
+    "project_connection_id": "<REDACTED:project_connection_id>",
+    "require_approval": "never",
+    "server_label": "<REDACTED:server_label>",
+    "server_url": "<REDACTED:server_url>",
+    "type": "mcp"
+  }
+]
