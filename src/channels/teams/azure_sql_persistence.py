@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import (
+    dataclass,
+)
+
 from src.channels.teams.bootstrap import (
     TeamsHitlPersistence,
 )
@@ -29,27 +33,51 @@ from src.persistence.azure_sql.pending_approval_store import (
     AzureSqlPendingApprovalStore,
 )
 
+from src.persistence.azure_sql.session_store import (
+    AzureSqlSessionStore,
+)
+
 from src.workflows.incident_resolution.checkpoint_storage import (
     incident_checkpoint_allowed_types,
 )
 
 
+@dataclass(
+    frozen=True
+)
+class AzureSqlTeamsHitlPersistence(
+    TeamsHitlPersistence
+):
+    """
+    Bundle productivo de persistencia Azure SQL.
+
+    Extiende el contrato histórico Teams/HITL con
+    persistencia durable de AgentSession.
+
+    No modifica el contrato local/sandbox y no
+    concede autoridad de runtime conversacional.
+    """
+
+    session_store: AzureSqlSessionStore
+
+
 def build_azure_sql_teams_hitl_persistence(
     settings: AzureSqlManagedIdentitySettings,
-) -> TeamsHitlPersistence:
+) -> AzureSqlTeamsHitlPersistence:
     """
-    Compone la persistencia durable Teams/HITL
+    Compone la persistencia durable productiva
     sobre Azure SQL.
 
     El composition root:
 
     - recibe configuración estructurada;
     - construye una única connection factory;
-    - comparte esa factory entre los cinco adapters;
+    - comparte esa factory entre seis adapters;
     - conserva la allowlist explícita del workflow;
     - no abre conexiones;
     - no ejecuta DDL;
-    - no descubre configuración.
+    - no descubre configuración;
+    - no ejecuta AgentSession ni runtime multi-turn.
     """
     if not isinstance(
         settings,
@@ -109,7 +137,15 @@ def build_azure_sql_teams_hitl_persistence(
         )
     )
 
-    return TeamsHitlPersistence(
+    session_store = (
+        AzureSqlSessionStore(
+            connection_factory=(
+                connection_factory
+            ),
+        )
+    )
+
+    return AzureSqlTeamsHitlPersistence(
         store=store,
         checkpoint_storage=(
             checkpoint_storage
@@ -122,5 +158,8 @@ def build_azure_sql_teams_hitl_persistence(
         ),
         conversation_store=(
             conversation_store
+        ),
+        session_store=(
+            session_store
         ),
     )
