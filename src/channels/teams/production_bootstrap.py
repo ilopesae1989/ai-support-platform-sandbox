@@ -7,6 +7,7 @@ from src.channels.teams.azure_sql_persistence import (
 from src.channels.teams.bootstrap import (
     TeamsHitlAppSettings,
     TeamsHitlBootstrap,
+    TeamsManagedIdentityAppSettings,
     build_teams_hitl_app,
 )
 
@@ -20,7 +21,10 @@ from src.workflows.incident_resolution.azure_vm_instance_view import (
 
 
 def build_production_teams_hitl_app(
-    app_settings: TeamsHitlAppSettings,
+    app_settings: (
+        TeamsHitlAppSettings
+        | TeamsManagedIdentityAppSettings
+    ),
     azure_sql_settings: AzureSqlManagedIdentitySettings,
     *,
     azure_vm_power_state_reader: AzureVmPowerStateReader,
@@ -47,11 +51,15 @@ def build_production_teams_hitl_app(
     """
     if not isinstance(
         app_settings,
-        TeamsHitlAppSettings,
+        (
+            TeamsHitlAppSettings,
+            TeamsManagedIdentityAppSettings,
+        ),
     ):
         raise TypeError(
             "app_settings debe ser "
-            "TeamsHitlAppSettings."
+            "TeamsHitlAppSettings o "
+            "TeamsManagedIdentityAppSettings."
         )
 
     if not isinstance(

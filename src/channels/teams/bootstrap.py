@@ -11,6 +11,10 @@ from pathlib import (
     Path,
 )
 
+from uuid import (
+    UUID,
+)
+
 from microsoft_teams.apps import (
     App,
 )
@@ -181,6 +185,84 @@ class TeamsHitlAppSettings:
                 )
             ),
         )
+
+
+@dataclass(
+    frozen=True
+)
+class TeamsManagedIdentityAppSettings:
+    """
+    Configuración de aplicación Teams autenticada
+    mediante Managed Identity.
+
+    No contiene client_secret.
+
+    managed_identity_client_id acepta únicamente:
+
+    - "system" para system-assigned identity;
+    - client ID UUID canónico para user-assigned
+      identity.
+
+    No lee entorno ni selecciona credenciales.
+    """
+
+    client_id: str
+
+    managed_identity_client_id: str
+
+    bot_tenant_id: str
+
+    teams_channel_tenant_id: str
+
+    approver_aad_object_id: str
+
+    messaging_endpoint: str = (
+        "/api/messages"
+    )
+
+    def __post_init__(
+        self,
+    ) -> None:
+        value = (
+            self.managed_identity_client_id
+        )
+
+        if value == "system":
+            return
+
+        if (
+            not isinstance(
+                value,
+                str,
+            )
+            or not value
+            or not value.strip()
+            or value != value.strip()
+        ):
+            raise ValueError(
+                "managed_identity_client_id debe "
+                "ser 'system' o un UUID canónico."
+            )
+
+        try:
+            parsed = UUID(
+                value
+            )
+        except (
+            ValueError,
+            AttributeError,
+            TypeError,
+        ):
+            raise ValueError(
+                "managed_identity_client_id debe "
+                "ser 'system' o un UUID canónico."
+            ) from None
+
+        if str(parsed) != value:
+            raise ValueError(
+                "managed_identity_client_id debe "
+                "usar representación UUID canónica."
+            )
 
 
 @dataclass(
@@ -429,6 +511,7 @@ def build_teams_hitl_app(
     settings: (
         TeamsHitlSettings
         | TeamsHitlAppSettings
+        | TeamsManagedIdentityAppSettings
     ),
     *,
     persistence: (
@@ -460,14 +543,26 @@ def build_teams_hitl_app(
         (
             TeamsHitlSettings,
             TeamsHitlAppSettings,
+            TeamsManagedIdentityAppSettings,
         ),
     ):
         raise TypeError(
-            "settings debe ser TeamsHitlSettings "
-            "o TeamsHitlAppSettings."
+            "settings debe ser TeamsHitlSettings, "
+            "TeamsHitlAppSettings o "
+            "TeamsManagedIdentityAppSettings."
         )
 
     if persistence is None:
+        if isinstance(
+            settings,
+            TeamsManagedIdentityAppSettings,
+        ):
+            raise TeamsHitlConfigurationError(
+                "TeamsManagedIdentityAppSettings "
+                "requiere persistence inyectada "
+                "explícitamente."
+            )
+
         if not isinstance(
             settings,
             TeamsHitlSettings,
@@ -598,23 +693,47 @@ def build_teams_hitl_app(
         )
     )
 
-    app = App(
-        client_id=(
-            settings.client_id
-        ),
+    if isinstance(
+        settings,
+        TeamsManagedIdentityAppSettings,
+    ):
+        app = App(
+            client_id=(
+                settings.client_id
+            ),
 
-        client_secret=(
-            settings.client_secret
-        ),
+            managed_identity_client_id=(
+                settings
+                .managed_identity_client_id
+            ),
 
-        tenant_id=(
-            settings.bot_tenant_id
-        ),
+            tenant_id=(
+                settings.bot_tenant_id
+            ),
 
-        messaging_endpoint=(
-            settings.messaging_endpoint
-        ),
-    )
+            messaging_endpoint=(
+                settings.messaging_endpoint
+            ),
+        )
+
+    else:
+        app = App(
+            client_id=(
+                settings.client_id
+            ),
+
+            client_secret=(
+                settings.client_secret
+            ),
+
+            tenant_id=(
+                settings.bot_tenant_id
+            ),
+
+            messaging_endpoint=(
+                settings.messaging_endpoint
+            ),
+        )
 
     outbound = (
         TeamsOutboundDependencies(
