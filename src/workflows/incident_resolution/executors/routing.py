@@ -145,6 +145,18 @@ class ProcedureRequestExecutor(Executor):
                     request.incident_description
                 ),
 
+                procedure_found=(
+                    request.procedure_found
+                ),
+
+                procedure_match=(
+                    request.procedure_match
+                ),
+
+                execution_eligible=(
+                    request.execution_eligible
+                ),
+
                 operational_affected_resource=(
                     operational_context
                     .affected_resource

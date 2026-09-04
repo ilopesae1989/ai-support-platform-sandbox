@@ -13,6 +13,9 @@ MODULE_NAME = (
 EXPECTED_FIELDS = [
     "request_affected_resource",
     "incident_description",
+    "procedure_found",
+    "procedure_match",
+    "execution_eligible",
     "operational_affected_resource",
     "resource_type",
     "service",
@@ -62,6 +65,9 @@ def make_context():
             "La VM requiere tratamiento "
             "operacional controlado."
         ),
+        procedure_found=True,
+        procedure_match="exact",
+        execution_eligible=True,
         operational_affected_resource=(
             "vm-icenter-sbx-demo-01"
         ),

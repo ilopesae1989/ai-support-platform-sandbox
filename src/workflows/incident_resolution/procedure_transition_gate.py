@@ -4,6 +4,11 @@ from collections.abc import (
     Mapping,
 )
 
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+)
+
 from src.runtime.procedure.models import (
     NextAction,
     ProcedureExecutionResult,
@@ -24,6 +29,30 @@ from src.workflows.incident_resolution.operation_models import (
 from src.workflows.incident_resolution.procedure_validation_models import (
     ProcedureValidationContext,
 )
+
+
+class ProcedureTransitionOutcome(BaseModel):
+    """
+    Resultado autoritativo de una transicion
+    determinista de procedimiento.
+
+    state:
+        estado ya mutado por ProcedureRuntime.
+
+    decision:
+        decision efectiva exacta utilizada para
+        producir ese estado.
+
+    La decision no se reconstruye despues desde
+    status, cursor ni otros efectos secundarios.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+    state: ProcedureRuntimeState
+    decision: ProcedureExecutionResult
 
 
 def _revalidate_state(
@@ -494,11 +523,11 @@ def _build_verification_evidence(
     )
 
 
-def apply_procedure_validation_transition(
+def apply_procedure_validation_transition_with_outcome(
     *,
     state: ProcedureRuntimeState,
     context: ProcedureValidationContext,
-) -> ProcedureRuntimeState:
+) -> ProcedureTransitionOutcome:
     """
     Única puerta determinista entre:
 
@@ -577,13 +606,45 @@ def apply_procedure_validation_transition(
         ),
     )
 
-    runtime.apply_procedure_decision(
-        trusted_state,
-
+    decision = (
         _build_runtime_decision(
             state=trusted_state,
             context=trusted_context,
-        ),
+        )
     )
 
-    return trusted_state
+    runtime.apply_procedure_decision(
+        trusted_state,
+        decision,
+    )
+
+    return ProcedureTransitionOutcome(
+        state=trusted_state,
+        decision=decision,
+    )
+
+
+def apply_procedure_validation_transition(
+    *,
+    state: ProcedureRuntimeState,
+    context: ProcedureValidationContext,
+) -> ProcedureRuntimeState:
+    """
+    Wrapper historico de compatibilidad.
+
+    Conserva exactamente el contrato publico
+    previo a FASE 22.5C:
+
+        ProcedureRuntimeState -> ProcedureRuntimeState
+
+    La nueva autoridad explicita esta disponible en
+    apply_procedure_validation_transition_with_outcome.
+    """
+
+    return (
+        apply_procedure_validation_transition_with_outcome(
+            state=state,
+            context=context,
+        )
+        .state
+    )

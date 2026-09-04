@@ -754,6 +754,15 @@ async def test_initial_procedure_request_stores_exact_continuation_context():
         "incident_description":
             "Alerta utilizada para pruebas de routing.",
 
+        "procedure_found":
+            True,
+
+        "procedure_match":
+            "exact",
+
+        "execution_eligible":
+            True,
+
         "operational_affected_resource":
             "SERVER01",
 
@@ -856,3 +865,44 @@ async def test_initial_procedure_request_fails_before_send_when_continuation_sta
 
     assert ctx.messages == []
     assert ctx.outputs == []
+
+
+# ============================================================
+# FASE 22.5B
+# DURABLE PROCEDURE ADMISSION SNAPSHOT
+# TDD RED
+# ============================================================
+
+@pytest.mark.asyncio
+async def test_initial_continuation_context_persists_original_admission_snapshot():
+    executor = ProcedureRequestExecutor()
+
+    ctx = ContinuationStateWorkflowContext()
+
+    context = create_context(
+        procedure_match="exact",
+        execution_eligible=True,
+        recommended_next_step="procedure_execution",
+        procedure_found=True,
+    )
+
+    await executor.prepare_procedure_request(
+        context,
+        ctx,
+    )
+
+    payload = ctx.state[
+        "procedure_continuation_context"
+    ]
+
+    assert payload[
+        "procedure_found"
+    ] is True
+
+    assert payload[
+        "procedure_match"
+    ] == "exact"
+
+    assert payload[
+        "execution_eligible"
+    ] is True

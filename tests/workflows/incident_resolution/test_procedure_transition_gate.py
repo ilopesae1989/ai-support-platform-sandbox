@@ -566,3 +566,316 @@ def test_final_step_satisfied_continue_is_normalized_to_resolved():
         )
         == original
     )
+
+
+# ============================================================
+# FASE 22.5C
+# EXPLICIT TRANSITION OUTCOME AUTHORITY
+# TDD RED
+# ============================================================
+
+import importlib as _phase22_transition_importlib
+
+
+def _load_transition_outcome_contract():
+    module = (
+        _phase22_transition_importlib
+        .import_module(
+            "src.workflows.incident_resolution."
+            "procedure_transition_gate"
+        )
+    )
+
+    outcome_model = getattr(
+        module,
+        "ProcedureTransitionOutcome",
+        None,
+    )
+
+    apply_with_outcome = getattr(
+        module,
+        "apply_procedure_validation_transition_with_outcome",
+        None,
+    )
+
+    assert outcome_model is not None
+
+    assert callable(
+        apply_with_outcome
+    )
+
+    return (
+        outcome_model,
+        apply_with_outcome,
+    )
+
+
+def test_transition_outcome_contract_has_exact_authority_fields():
+    outcome_model, _ = (
+        _load_transition_outcome_contract()
+    )
+
+    assert (
+        list(outcome_model.model_fields)
+        == [
+            "state",
+            "decision",
+        ]
+    )
+
+    assert (
+        outcome_model
+        .model_config
+        .get("extra")
+        == "forbid"
+    )
+
+
+def test_transition_outcome_exposes_exact_nonfinal_continue_decision():
+    _, apply_with_outcome = (
+        _load_transition_outcome_contract()
+    )
+
+    state = make_state()
+
+    original = state.model_dump(
+        mode="python"
+    )
+
+    outcome = apply_with_outcome(
+        state=state,
+        context=make_context(
+            validation_status="satisfied",
+            proposed_next_action="continue",
+        ),
+    )
+
+    assert (
+        outcome.decision.next_action.value
+        == "continue"
+    )
+
+    assert (
+        outcome.state.step_status
+        == StepStatus.SUCCEEDED
+    )
+
+    assert (
+        outcome.state.workflow_status
+        == WorkflowStatus.RUNNING
+    )
+
+    assert (
+        outcome.state.verification_result
+        is not None
+    )
+
+    assert (
+        state.model_dump(
+            mode="python"
+        )
+        == original
+    )
+
+
+def test_transition_outcome_exposes_python_normalized_final_resolved_decision():
+    _, apply_with_outcome = (
+        _load_transition_outcome_contract()
+    )
+
+    state = make_state()
+
+    state.total_steps = 1
+    state.current_step = 1
+
+    original = state.model_dump(
+        mode="python"
+    )
+
+    outcome = apply_with_outcome(
+        state=state,
+        context=make_context(
+            validation_status="satisfied",
+            proposed_next_action="continue",
+        ),
+    )
+
+    assert (
+        outcome.decision.next_action.value
+        == "resolved"
+    )
+
+    assert (
+        outcome.state.current_step
+        == 1
+    )
+
+    assert (
+        outcome.state.total_steps
+        == 1
+    )
+
+    assert (
+        outcome.state.step_status
+        == StepStatus.SUCCEEDED
+    )
+
+    assert (
+        outcome.state.workflow_status
+        == WorkflowStatus.RESOLVED
+    )
+
+    assert (
+        state.model_dump(
+            mode="python"
+        )
+        == original
+    )
+
+
+def test_transition_outcome_exposes_repeat_decision_used_for_reset():
+    _, apply_with_outcome = (
+        _load_transition_outcome_contract()
+    )
+
+    state = make_state()
+
+    outcome = apply_with_outcome(
+        state=state,
+        context=make_context(
+            validation_status="not_satisfied",
+            proposed_next_action="repeat",
+        ),
+    )
+
+    assert (
+        outcome.decision.next_action.value
+        == "repeat"
+    )
+
+    assert (
+        outcome.state.step_status
+        == StepStatus.PENDING
+    )
+
+    assert outcome.state.approval_id is None
+
+    assert (
+        outcome.state.approval_status
+        == ApprovalStatus.PENDING
+    )
+
+    assert outcome.state.operation_result is None
+
+    assert (
+        outcome.state.verification_result
+        is None
+    )
+
+    assert (
+        outcome.state.resolved_parameters
+        == []
+    )
+
+    assert (
+        outcome.state.retry_count
+        == 1
+    )
+
+
+def test_legacy_transition_wrapper_remains_state_only_and_semantically_equivalent():
+    _, apply_with_outcome = (
+        _load_transition_outcome_contract()
+    )
+
+    source_state = make_state()
+    source_context = make_context()
+
+    outcome_state = source_state.model_copy(
+        deep=True
+    )
+
+    legacy_state = source_state.model_copy(
+        deep=True
+    )
+
+    outcome_context = source_context.model_copy(
+        deep=True
+    )
+
+    legacy_context = source_context.model_copy(
+        deep=True
+    )
+
+    outcome = apply_with_outcome(
+        state=outcome_state,
+        context=outcome_context,
+    )
+
+    legacy = (
+        apply_procedure_validation_transition(
+            state=legacy_state,
+            context=legacy_context,
+        )
+    )
+
+    assert isinstance(
+        legacy,
+        ProcedureRuntimeState,
+    )
+
+    legacy_payload = legacy.model_dump(
+        mode="python"
+    )
+
+    outcome_payload = outcome.state.model_dump(
+        mode="python"
+    )
+
+    # Dos ejecuciones independientes del gate
+    # generan timestamps distintos. Esos valores
+    # prueban temporalidad, no semantica de la
+    # transicion.
+    legacy_payload.pop(
+        "updated_at",
+        None,
+    )
+
+    outcome_payload.pop(
+        "updated_at",
+        None,
+    )
+
+    legacy_verification = (
+        legacy_payload.get(
+            "verification_result"
+        )
+    )
+
+    outcome_verification = (
+        outcome_payload.get(
+            "verification_result"
+        )
+    )
+
+    if legacy_verification is not None:
+        legacy_verification.pop(
+            "collected_at",
+            None,
+        )
+
+    if outcome_verification is not None:
+        outcome_verification.pop(
+            "collected_at",
+            None,
+        )
+
+    assert (
+        legacy_payload
+        == outcome_payload
+    )
+
+    assert not hasattr(
+        legacy,
+        "decision",
+    )

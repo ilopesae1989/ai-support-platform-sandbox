@@ -48,6 +48,15 @@ class ProcedureContinuationContext(BaseModel):
     request_affected_resource: str
     incident_description: str
 
+    # Snapshot exacto de la admisión original.
+    #
+    # No tienen defaults:
+    # un checkpoint que carezca de esta autoridad
+    # debe fallar cerrado al rehidratarse.
+    procedure_found: bool
+    procedure_match: str
+    execution_eligible: bool
+
     operational_affected_resource: str | None = None
     resource_type: str | None = None
     service: str | None = None
