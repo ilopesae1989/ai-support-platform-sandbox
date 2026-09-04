@@ -23,6 +23,11 @@ from src.workflows.incident_resolution.operational_context import (
     build_operational_context,
 )
 
+from src.workflows.incident_resolution.continuation_context import (
+    ProcedureContinuationContext,
+    store_procedure_continuation_context,
+)
+
 
 class ProcedureRequestExecutor(Executor):
     """
@@ -128,6 +133,74 @@ class ProcedureRequestExecutor(Executor):
             incident_description=(
                 context.alert.description
             ),
+        )
+
+        continuation_context = (
+            ProcedureContinuationContext(
+                request_affected_resource=(
+                    request.affected_resource
+                ),
+
+                incident_description=(
+                    request.incident_description
+                ),
+
+                operational_affected_resource=(
+                    operational_context
+                    .affected_resource
+                ),
+
+                resource_type=(
+                    operational_context
+                    .resource_type
+                ),
+
+                service=(
+                    operational_context
+                    .service
+                ),
+
+                environment=(
+                    operational_context
+                    .environment
+                ),
+
+                incident_origin=(
+                    operational_context
+                    .incident_origin
+                ),
+
+                subscription_id=(
+                    operational_context
+                    .subscription_id
+                ),
+
+                resource_group=(
+                    operational_context
+                    .resource_group
+                ),
+
+                vm_name=(
+                    operational_context
+                    .vm_name
+                ),
+
+                tenant_id=(
+                    operational_context
+                    .tenant_id
+                ),
+            )
+        )
+
+        # El contexto necesario para un futuro N+1
+        # debe quedar durable antes de emitir el
+        # primer ProcedureExecutionInput.
+        #
+        # Si shared state falla, el workflow no
+        # puede continuar de forma no durable.
+        store_procedure_continuation_context(
+            ctx,
+            continuation_context,
         )
 
         await ctx.send_message(

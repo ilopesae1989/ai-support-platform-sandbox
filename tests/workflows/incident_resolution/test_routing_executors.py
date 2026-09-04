@@ -27,6 +27,24 @@ class FakeWorkflowContext:
     def __init__(self) -> None:
         self.messages = []
         self.outputs = []
+        self.state = {}
+
+    def set_state(
+        self,
+        key,
+        value,
+    ) -> None:
+        self.state[key] = value
+
+    def get_state(
+        self,
+        key,
+        default=None,
+    ):
+        return self.state.get(
+            key,
+            default,
+        )
 
     async def send_message(
         self,
@@ -649,3 +667,192 @@ async def test_initial_procedure_request_sets_requested_step_one():
         )
         == 1
     )
+
+
+# ============================================================
+# FASE 22.4
+# INITIAL DURABLE CONTINUATION CONTEXT
+# TDD RED
+# ============================================================
+
+class ContinuationStateWorkflowContext(
+    FakeWorkflowContext
+):
+    def __init__(self):
+        super().__init__()
+
+        self.state = {}
+
+    def set_state(
+        self,
+        key,
+        value,
+    ):
+        self.state[key] = value
+
+    def get_state(
+        self,
+        key,
+        default=None,
+    ):
+        return self.state.get(
+            key,
+            default,
+        )
+
+
+class FailingContinuationStateWorkflowContext(
+    FakeWorkflowContext
+):
+    def set_state(
+        self,
+        key,
+        value,
+    ):
+        raise RuntimeError(
+            "continuation state unavailable"
+        )
+
+    def get_state(
+        self,
+        key,
+        default=None,
+    ):
+        return default
+
+
+@pytest.mark.asyncio
+async def test_initial_procedure_request_stores_exact_continuation_context():
+    executor = ProcedureRequestExecutor()
+
+    ctx = ContinuationStateWorkflowContext()
+
+    context = create_context(
+        procedure_match="exact",
+        execution_eligible=True,
+        recommended_next_step="procedure_execution",
+        procedure_found=True,
+    )
+
+    await executor.prepare_procedure_request(
+        context,
+        ctx,
+    )
+
+    assert len(ctx.messages) == 1
+
+    assert set(ctx.state) == {
+        "procedure_continuation_context"
+    }
+
+    assert ctx.state[
+        "procedure_continuation_context"
+    ] == {
+        "request_affected_resource":
+            "SERVER01",
+
+        "incident_description":
+            "Alerta utilizada para pruebas de routing.",
+
+        "operational_affected_resource":
+            "SERVER01",
+
+        "resource_type":
+            "TestResource",
+
+        "service":
+            "Test Service",
+
+        "environment":
+            None,
+
+        "incident_origin":
+            "observed",
+
+        "subscription_id":
+            None,
+
+        "resource_group":
+            None,
+
+        "vm_name":
+            None,
+
+        "tenant_id":
+            None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_initial_continuation_context_contains_no_runtime_owned_authority():
+    executor = ProcedureRequestExecutor()
+
+    ctx = ContinuationStateWorkflowContext()
+
+    context = create_context(
+        procedure_match="exact",
+        execution_eligible=True,
+        recommended_next_step="procedure_execution",
+        procedure_found=True,
+    )
+
+    await executor.prepare_procedure_request(
+        context,
+        ctx,
+    )
+
+    payload = ctx.state[
+        "procedure_continuation_context"
+    ]
+
+    forbidden = {
+        "workflow_id",
+        "alert_id",
+        "correlation_id",
+        "procedure_id",
+        "procedure_name",
+        "procedure_version",
+        "requested_step",
+        "current_step",
+        "step",
+        "approval_id",
+        "operation_result",
+        "verification_result",
+    }
+
+    assert (
+        forbidden.intersection(
+            payload
+        )
+        == set()
+    )
+
+
+@pytest.mark.asyncio
+async def test_initial_procedure_request_fails_before_send_when_continuation_state_store_fails():
+    executor = ProcedureRequestExecutor()
+
+    ctx = (
+        FailingContinuationStateWorkflowContext()
+    )
+
+    context = create_context(
+        procedure_match="exact",
+        execution_eligible=True,
+        recommended_next_step="procedure_execution",
+        procedure_found=True,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "continuation state unavailable"
+        ),
+    ):
+        await executor.prepare_procedure_request(
+            context,
+            ctx,
+        )
+
+    assert ctx.messages == []
+    assert ctx.outputs == []
