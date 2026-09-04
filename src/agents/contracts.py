@@ -506,7 +506,8 @@ class ProcedureExecutionResult(BaseModel):
     blocked_by_policy: bool
 
     total_steps: int = Field(
-        ge=0
+        ge=0,
+        le=8,
     )
 
     current_step: int = Field(

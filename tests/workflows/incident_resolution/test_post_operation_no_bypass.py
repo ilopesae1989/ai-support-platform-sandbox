@@ -342,10 +342,12 @@ def incoming(
 
 def test_post_operation_graph_is_single_linear_chain():
     """
-    FASE 16.8.6
-
     Azure Operations no puede saltarse
-    Registration, Validation ni Transition.
+    Registration, Observation, Validation ni
+    Transition.
+
+    En FASE 22.6, CONTINUE puede salir únicamente
+    de ProcedureTransition hacia Procedure.
     """
 
     edges = workflow_edges()
@@ -406,13 +408,13 @@ def test_post_operation_graph_is_single_linear_chain():
         "procedure_validation",
     ]
 
-    #
-    # En FASE 16 la transición es terminal.
-    #
     assert outgoing(
         edges,
         "procedure_transition",
-    ) == []
+    ) == [
+        "procedure",
+    ]
+
 
 
 def test_only_transition_is_terminal_output_of_post_operation_chain():
@@ -531,10 +533,16 @@ def test_registration_and_validation_only_send_downstream():
     )
 
 
-def test_transition_is_terminal_adapter_in_phase16():
+def test_transition_has_governed_continue_and_terminal_output_surfaces():
     """
-    ProcedureTransitionExecutor produce output
-    pero no puede continuar downstream en FASE 16.
+    ProcedureTransitionExecutor tiene exactamente
+    dos superficies de salida gobernadas:
+
+    - send_message exclusivamente para CONTINUE;
+    - yield_output para decisiones terminales.
+
+    El mensaje CONTINUE se dirige al ID canónico
+    procedure_execution.
     """
 
     tree = parse_file(
@@ -551,14 +559,69 @@ def test_transition_is_terminal_adapter_in_phase16():
         handle
     )
 
-    assert len(calls) == 1
+    attributes = [
+        call.func.attr
+        for call in calls
+    ]
 
     assert (
-        calls[0]
-        .func
-        .attr
-        == "yield_output"
+        attributes.count(
+            "send_message"
+        )
+        == 1
     )
+
+    assert (
+        attributes.count(
+            "yield_output"
+        )
+        == 1
+    )
+
+    assert len(calls) == 2
+
+    send_calls = [
+        call
+        for call in calls
+        if (
+            call.func.attr
+            == "send_message"
+        )
+    ]
+
+    assert len(
+        send_calls
+    ) == 1
+
+    send_call = (
+        send_calls[0]
+    )
+
+    target_keywords = [
+        keyword
+        for keyword in send_call.keywords
+        if keyword.arg == "target_id"
+    ]
+
+    assert len(
+        target_keywords
+    ) == 1
+
+    target = (
+        target_keywords[0]
+        .value
+    )
+
+    assert isinstance(
+        target,
+        ast.Constant,
+    )
+
+    assert (
+        target.value
+        == "procedure_execution"
+    )
+
 
 
 def test_azure_operations_emits_same_result_to_both_surfaces():

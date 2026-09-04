@@ -122,7 +122,7 @@ class AzureWorkflowFakeFoundryAgents(
                         False,
 
                     "total_steps":
-                        5,
+                        1,
 
                     "current_step":
                         1,
@@ -342,6 +342,63 @@ class DatabaseWorkflowFakeFoundryAgents(
         )
 
 
+class SingleStepAzureWorkflowFakeFoundryAgents(
+    AzureWorkflowFakeFoundryAgents
+):
+    """
+    Variante histórica deliberadamente single-step.
+
+    Estos tests validan routing/HITL/Azure, no el
+    nuevo contrato multi-step de FASE 22.6.
+    """
+
+    async def run_procedure_execution(
+        self,
+        message: str,
+        *,
+        agent_version: str | None = None,
+    ):
+        result = (
+            await super()
+            .run_procedure_execution(
+                message,
+                agent_version=agent_version,
+            )
+        )
+
+        payload = result.model_dump(
+            mode="python"
+        )
+
+        payload[
+            "total_steps"
+        ] = 1
+
+        payload[
+            "current_step"
+        ] = 1
+
+        step = dict(
+            payload[
+                "step"
+            ]
+        )
+
+        step[
+            "id"
+        ] = "1"
+
+        payload[
+            "step"
+        ] = step
+
+        return type(
+            result
+        ).model_validate(
+            payload
+        )
+
+
 @pytest.mark.asyncio
 async def test_approved_azure_step_reaches_azure_operations_once():
     """
@@ -363,7 +420,7 @@ async def test_approved_azure_step_reaches_azure_operations_once():
     """
 
     agents = (
-        AzureWorkflowFakeFoundryAgents()
+        SingleStepAzureWorkflowFakeFoundryAgents()
     )
 
     workflow = (
@@ -454,7 +511,7 @@ async def test_approved_azure_step_reaches_azure_operations_once():
 
     assert (
         runtime_state.workflow_status
-        == WorkflowStatus.RUNNING
+        == WorkflowStatus.RESOLVED
     )
 
     assert (
@@ -739,7 +796,7 @@ async def test_post_hitl_azure_routing_does_not_reinvoke_cognitive_agents():
     """
 
     agents = (
-        AzureWorkflowFakeFoundryAgents()
+        SingleStepAzureWorkflowFakeFoundryAgents()
     )
 
     workflow = (

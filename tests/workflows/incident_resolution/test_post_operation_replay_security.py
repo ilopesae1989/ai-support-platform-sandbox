@@ -295,7 +295,7 @@ async def test_validation_context_cannot_be_replayed_after_continue():
 
     assert (
         state.workflow_status
-        == WorkflowStatus.RUNNING
+        == WorkflowStatus.RESOLVED
     )
 
     replay_context = (

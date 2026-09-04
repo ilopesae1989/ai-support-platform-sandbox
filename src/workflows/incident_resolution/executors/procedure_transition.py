@@ -7,6 +7,7 @@ from agent_framework import (
 )
 
 from src.runtime.procedure.models import (
+    NextAction,
     ProcedureRuntimeState,
 )
 
@@ -15,8 +16,20 @@ from src.runtime.procedure.workflow_state import (
     store_procedure_runtime_state,
 )
 
+from ..continuation_context import (
+    load_procedure_continuation_context,
+)
+
 from ..procedure_transition_gate import (
-    apply_procedure_validation_transition,
+    apply_procedure_validation_transition_with_outcome,
+)
+
+from ..continuation_request_builder import (
+    build_procedure_continuation_input,
+)
+
+from ..models import (
+    ProcedureExecutionInput,
 )
 
 from ..procedure_validation_models import (
@@ -58,7 +71,7 @@ class ProcedureTransitionExecutor(
         self,
         context: ProcedureValidationContext,
         ctx: WorkflowContext[
-            None,
+            ProcedureExecutionInput,
             ProcedureRuntimeState,
         ],
     ) -> None:
@@ -77,8 +90,8 @@ class ProcedureTransitionExecutor(
         # operación, paso y transición reside
         # exclusivamente en el gate de FASE 16.7.
         #
-        transitioned_state = (
-            apply_procedure_validation_transition(
+        outcome = (
+            apply_procedure_validation_transition_with_outcome(
                 state=state,
                 context=context,
             )
@@ -87,20 +100,56 @@ class ProcedureTransitionExecutor(
         #
         # Fail-closed:
         #
-        # sólo persistimos después de que el gate
-        # haya finalizado correctamente.
+        # la transición determinista se persiste
+        # antes de cualquier routing posterior.
         #
         store_procedure_runtime_state(
             ctx,
-            transitioned_state,
+            outcome.state,
         )
 
         #
-        # Salida terminal temporal de FASE 16.
+        # CONTINUE es la única decisión que puede
+        # producir un nuevo ProcedureExecutionInput.
         #
-        # En FASE 17 podrá sustituirse por routing
-        # determinista hacia el siguiente ciclo.
+        # La decisión procede del Transition Gate.
+        # No se infiere de status ni del cursor.
+        #
+        if (
+            outcome.decision.next_action
+            == NextAction.CONTINUE
+        ):
+            continuation = (
+                load_procedure_continuation_context(
+                    ctx
+                )
+            )
+
+            if continuation is None:
+                raise RuntimeError(
+                    "ProcedureContinuationContext "
+                    "durable no disponible."
+                )
+
+            next_input = (
+                build_procedure_continuation_input(
+                    outcome=outcome,
+                    continuation=continuation,
+                )
+            )
+
+            await ctx.send_message(
+                next_input,
+                target_id="procedure_execution",
+            )
+
+            return
+
+        #
+        # Todas las decisiones distintas de
+        # CONTINUE siguen siendo terminales para
+        # este ciclo del workflow.
         #
         await ctx.yield_output(
-            transitioned_state
+            outcome.state
         )

@@ -91,7 +91,7 @@ def assert_completed_runtime(
 
     assert (
         state.workflow_status
-        == WorkflowStatus.RUNNING
+        == WorkflowStatus.RESOLVED
     )
 
     assert (

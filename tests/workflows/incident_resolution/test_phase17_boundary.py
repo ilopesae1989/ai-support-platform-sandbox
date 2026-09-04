@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 
@@ -62,6 +63,102 @@ class Phase17BoundaryFakeFoundryAgents(
         self.validation_operation_id: (
             str | None
         ) = None
+
+        self.requested_steps: list[
+            int
+        ] = []
+
+    async def run_procedure_execution(
+        self,
+        message: str,
+        *,
+        agent_version: str | None = None,
+    ):
+        #
+        # El executor productivo entrega al agente
+        # el prompt cognitivo, no el envelope.
+        #
+        # requested_step sigue perteneciendo a
+        # Python y se observa aquí únicamente para
+        # que el fake histórico respete el contrato.
+        #
+        matches = re.findall(
+            (
+                r"^Paso solicitado:"
+                r"\s*([0-9]+)\s*$"
+            ),
+            message,
+            flags=(
+                re.IGNORECASE
+                | re.MULTILINE
+            ),
+        )
+
+        assert len(matches) == 1
+
+        requested_step = int(
+            matches[0]
+        )
+
+        self.requested_steps.append(
+            requested_step
+        )
+
+        result = (
+            await super()
+            .run_procedure_execution(
+                message,
+                agent_version=agent_version,
+            )
+        )
+
+        payload = result.model_dump(
+            mode="python"
+        )
+
+        #
+        # Este fake es deliberadamente multi-step.
+        # El fake Azure histórico base es single-step.
+        #
+        payload[
+            "total_steps"
+        ] = 5
+
+        payload[
+            "current_step"
+        ] = requested_step
+
+        step = dict(
+            payload[
+                "step"
+            ]
+        )
+
+        step[
+            "id"
+        ] = str(
+            requested_step
+        )
+
+        step[
+            "description"
+        ] = (
+            "Historical governed step "
+            + str(
+                requested_step
+            )
+            + "."
+        )
+
+        payload[
+            "step"
+        ] = step
+
+        return type(
+            result
+        ).model_validate(
+            payload
+        )
 
     async def run_procedure_validation(
         self,
@@ -252,15 +349,16 @@ def assert_single_operation_cycle(
 
 
 @pytest.mark.asyncio
-async def test_continue_stops_at_phase17_boundary():
+@pytest.mark.asyncio
+async def test_continue_enters_next_step_with_fresh_hitl_boundary():
     """
-    CONTINUE significa que el step actual ha
-    terminado correctamente.
+    CONTINUE ya no es una salida terminal.
 
-    FASE 16 NO debe preparar ni ejecutar el
-    siguiente step.
+    La decisión efectiva de Python debe construir
+    exactamente N+1 y volver a Procedure.
 
-    Esa continuación pertenece a FASE 17.
+    El nuevo paso debe detenerse en un HITL fresco
+    antes de cualquier segunda operación.
     """
 
     agents = (
@@ -277,68 +375,81 @@ async def test_continue_stops_at_phase17_boundary():
         agents
     )
 
-    assert_single_operation_cycle(
-        agents
-    )
-
-    #
-    # FASE 16 no genera el siguiente HITL.
-    #
     assert (
-        new_hitl_requests
-        == []
-    )
-
-    assert len(outputs) == 1
-
-    state = outputs[0]
-
-    assert isinstance(
-        state,
-        ProcedureRuntimeState,
+        agents.requested_steps
+        == [1, 2]
     )
 
     assert (
-        state.step_status
-        == StepStatus.SUCCEEDED
-    )
-
-    assert (
-        state.workflow_status
-        == WorkflowStatus.RUNNING
-    )
-
-    #
-    # FASE 16 todavía no avanza el procedimiento.
-    #
-    assert (
-        state.current_step
+        agents.calls.count(
+            "classification"
+        )
         == 1
     )
 
-    #
-    # El ciclo que acaba de ejecutarse conserva
-    # su autorización y evidencia.
-    #
     assert (
-        state.approval_id
-        is not None
+        agents.calls.count(
+            "knowledge"
+        )
+        == 1
     )
 
     assert (
-        state.operation_result
-        is not None
+        agents.calls.count(
+            "alert_triage"
+        )
+        == 1
     )
 
     assert (
-        state.verification_result
-        is not None
+        agents.calls.count(
+            "procedure_execution"
+        )
+        == 2
     )
+
+    assert (
+        agents.calls.count(
+            "azure_operations"
+        )
+        == 1
+    )
+
+    assert (
+        agents.calls.count(
+            "procedure_validation"
+        )
+        == 1
+    )
+
+    assert agents.calls == [
+        "classification",
+        "knowledge",
+        "alert_triage",
+        "procedure_execution",
+        "azure_operations",
+        "procedure_validation",
+        "procedure_execution",
+    ]
+
+    #
+    # CONTINUE no produce output terminal.
+    #
+    assert outputs == []
+
+    #
+    # El paso N+1 requiere una nueva decisión
+    # humana antes de ejecutar otra operación.
+    #
+    assert len(
+        new_hitl_requests
+    ) == 1
 
     assert (
         agents.validation_operation_id
         is not None
     )
+
 
 
 @pytest.mark.asyncio

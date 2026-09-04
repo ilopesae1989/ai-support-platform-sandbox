@@ -104,6 +104,12 @@ def load_stored_state(
 async def test_transition_executor_applies_and_persists_gate_result():
     state = make_state()
 
+    # Este test histórico valida la rama terminal.
+    # Un único paso convierte el CONTINUE cognitivo
+    # en RESOLVED determinista.
+    state.total_steps = 1
+    state.current_step = 1
+
     state_before = (
         state.model_dump(
             mode="json"
@@ -148,7 +154,7 @@ async def test_transition_executor_applies_and_persists_gate_result():
 
     assert (
         stored.workflow_status
-        == WorkflowStatus.RUNNING
+        == WorkflowStatus.RESOLVED
     )
 
     assert (

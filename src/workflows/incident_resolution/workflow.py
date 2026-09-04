@@ -411,6 +411,8 @@ def build_incident_resolution_workflow(
 
     return (
         WorkflowBuilder(
+            max_iterations=100,
+
             start_executor=classification,
 
             output_from=[
@@ -647,6 +649,18 @@ def build_incident_resolution_workflow(
         .add_edge(
             procedure_validation,
             procedure_transition,
+        )
+
+        #
+        # Governed multi-step continuation.
+        #
+        # ProcedureTransitionExecutor only emits
+        # a message on this edge when the exact
+        # Python transition decision is CONTINUE.
+        #
+        .add_edge(
+            procedure_transition,
+            procedure,
         )
 
         .build()

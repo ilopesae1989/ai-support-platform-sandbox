@@ -253,7 +253,7 @@ async def test_integrated_workflow_outputs_transitioned_runtime_state():
 
     assert (
         result.workflow_status
-        == WorkflowStatus.RUNNING
+        == WorkflowStatus.RESOLVED
     )
 
     assert (
