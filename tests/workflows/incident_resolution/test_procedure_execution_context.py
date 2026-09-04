@@ -335,3 +335,121 @@ def test_procedure_prompt_declares_prepare_step_mode():
         "No inventes ni sustituyas el identificador"
         in normalized_prompt
     )
+
+
+# ============================================================
+# FASE 22.2
+# AUTHORITATIVE PROCEDURE STEP REQUEST CONTRACT
+# TDD RED
+# ============================================================
+
+def test_procedure_execution_request_requires_python_owned_requested_step():
+    assert (
+        "requested_step"
+        in ProcedureExecutionRequest.model_fields
+    )
+
+
+def test_procedure_execution_requested_step_must_be_positive():
+    payload = (
+        create_request()
+        .model_dump(
+            mode="python"
+        )
+    )
+
+    payload["requested_step"] = 0
+
+    with pytest.raises(
+        ValueError
+    ):
+        ProcedureExecutionRequest.model_validate(
+            payload
+        )
+
+
+def test_procedure_prompt_contains_exact_requested_step():
+    request = (
+        create_request()
+        .model_copy(
+            update={
+                "requested_step": 2,
+            }
+        )
+    )
+
+    prompt = (
+        ProcedureExecutionExecutor
+        ._build_prompt(
+            request
+        )
+    )
+
+    normalized_prompt = " ".join(
+        prompt.split()
+    )
+
+    assert (
+        "Paso solicitado: 2"
+        in normalized_prompt
+    )
+
+
+def test_procedure_result_cursor_mismatch_is_rejected():
+    request = (
+        create_request()
+        .model_copy(
+            update={
+                "requested_step": 2,
+            }
+        )
+    )
+
+    result = create_result()
+
+    assert result.current_step == 1
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "requested_step|"
+            "current_step|"
+            "paso solicitado"
+        ),
+    ):
+        ProcedureExecutionExecutor._validate_result_identity(
+            request,
+            result,
+        )
+
+
+def test_runtime_rejects_procedure_result_cursor_mismatch():
+    context = (
+        create_execution_context()
+    )
+
+    context.request = (
+        context.request
+        .model_copy(
+            update={
+                "requested_step": 2,
+            }
+        )
+    )
+
+    assert (
+        context.result.current_step
+        == 1
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "requested_step|"
+            "current_step|"
+            "paso solicitado"
+        ),
+    ):
+        ProcedureRuntimeExecutor._validate_execution_context(
+            context
+        )

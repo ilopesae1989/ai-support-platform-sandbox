@@ -116,6 +116,10 @@ class ProcedureRequestExecutor(Executor):
                 procedure.version
             ),
 
+            # El primer cursor del procedimiento
+            # nace en Python.
+            requested_step=1,
+
             affected_resource=(
                 context.alert.affected_resource
                 or triage.affected_resource

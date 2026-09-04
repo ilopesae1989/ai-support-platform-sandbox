@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.agents.contracts import (
     AlertTriageResult,
@@ -74,6 +74,15 @@ class ProcedureExecutionRequest(BaseModel):
     procedure_id: str
     procedure_name: str
     procedure_version: str | None = None
+
+    # Cursor solicitado por Python.
+    #
+    # Procedure Execution interpreta el contenido
+    # del paso, pero no elige su número autoritativo.
+    requested_step: int = Field(
+        default=1,
+        ge=1,
+    )
 
     affected_resource: str
     incident_description: str

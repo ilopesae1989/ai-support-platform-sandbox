@@ -128,6 +128,14 @@ def create_request(
             PROCEDURE_VERSION
         ),
 
+        # FASE 22.2:
+        # este fixture simula explícitamente el paso 2.
+        # El cursor debe proceder de Python y coincidir
+        # con current_step=2 de la salida cognitiva.
+        requested_step=(
+            2
+        ),
+
         affected_resource=(
             VM_NAME
         ),
@@ -1004,6 +1012,15 @@ def create_real_vm_execution_context(
 
                 "procedure_version": (
                     "1.0"
+                ),
+
+                # FASE 22.2 REAL VM:
+                # este helper transforma el fixture base
+                # en un procedimiento real de un único paso.
+                # El request Python debe solicitar también
+                # exactamente el paso 1.
+                "requested_step": (
+                    1
                 ),
             }
         )

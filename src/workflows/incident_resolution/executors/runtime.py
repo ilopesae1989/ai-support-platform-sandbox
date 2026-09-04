@@ -169,6 +169,16 @@ class ProcedureRuntimeExecutor(Executor):
                 "a la versión solicitada."
             )
 
+        if (
+            result.current_step
+            != request.requested_step
+        ):
+            raise ValueError(
+                "ProcedureExecutionResult contiene un "
+                "current_step diferente al "
+                "requested_step autorizado por Python."
+            )
+
     def _resolve_authoritative_target_resource(
         self,
         context: ProcedureExecutionContext,

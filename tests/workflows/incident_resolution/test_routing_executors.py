@@ -607,3 +607,45 @@ async def test_knowledge_review_executor_supports_exact_but_non_eligible():
     assert result.missing_context == [
         "Falta contexto operacional requerido."
     ]
+
+
+# ============================================================
+# FASE 22.2
+# INITIAL PYTHON-OWNED PROCEDURE CURSOR
+# TDD RED
+# ============================================================
+
+@pytest.mark.asyncio
+async def test_initial_procedure_request_sets_requested_step_one():
+    executor = ProcedureRequestExecutor()
+    ctx = FakeWorkflowContext()
+
+    context = create_context(
+        procedure_match="exact",
+        execution_eligible=True,
+        recommended_next_step="procedure_execution",
+        procedure_found=True,
+    )
+
+    await executor.prepare_procedure_request(
+        context,
+        ctx,
+    )
+
+    assert len(ctx.messages) == 1
+
+    execution_input = ctx.messages[0]
+
+    assert isinstance(
+        execution_input,
+        ProcedureExecutionInput,
+    )
+
+    assert (
+        getattr(
+            execution_input.request,
+            "requested_step",
+            None,
+        )
+        == 1
+    )

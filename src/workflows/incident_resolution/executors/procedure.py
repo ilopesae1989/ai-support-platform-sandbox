@@ -125,6 +125,16 @@ class ProcedureExecutionExecutor(Executor):
                 "a la solicitada."
             )
 
+        if (
+            result.current_step
+            != request.requested_step
+        ):
+            raise ValueError(
+                "Procedure Execution devolvió un "
+                "current_step diferente al "
+                "requested_step autorizado por Python."
+            )
+
     @handler
     async def process_request(
         self,
@@ -208,6 +218,15 @@ Procedimiento:
 ID: {request.procedure_id}
 Nombre: {request.procedure_name}
 Versión: {version}
+Paso solicitado: {request.requested_step}
+
+Contrato obligatorio del cursor:
+
+- requested_step ha sido determinado por Python.
+- Devuelve exactamente ese número en current_step.
+- No selecciones otro paso.
+- No avances ni retrocedas el cursor.
+- No determines por tu cuenta qué número de paso corresponde.
 
 Recurso afectado:
 {request.affected_resource}
