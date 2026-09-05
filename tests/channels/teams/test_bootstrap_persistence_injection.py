@@ -17,6 +17,7 @@ EXPECTED_PERSISTENCE_FIELDS = (
     "store",
     "checkpoint_storage",
     "operation_dispatch_ledger",
+    "wait_recheck_consumption_ledger",
     "continuation_store",
     "conversation_store",
 )
@@ -173,6 +174,7 @@ def test_build_teams_hitl_app_does_not_construct_local_persistence_directly():
     forbidden_calls = {
         "SqlitePendingApprovalStore",
         "SqliteOperationDispatchLedger",
+        "SqliteWaitRecheckConsumptionLedger",
         "SqliteIncidentContinuationStore",
         "SqliteTeamsConversationBindingStore",
         "build_incident_checkpoint_storage",
@@ -223,6 +225,7 @@ def test_injected_persistence_is_used_exactly_without_local_store_creation(
     pending_store = object()
     checkpoint_storage = object()
     operation_dispatch_ledger = object()
+    wait_recheck_consumption_ledger = object()
     continuation_store = object()
     conversation_store = (
         FakeConversationStore()
@@ -235,6 +238,9 @@ def test_injected_persistence_is_used_exactly_without_local_store_creation(
         ),
         operation_dispatch_ledger=(
             operation_dispatch_ledger
+        ),
+        wait_recheck_consumption_ledger=(
+            wait_recheck_consumption_ledger
         ),
         continuation_store=(
             continuation_store
@@ -262,6 +268,12 @@ def test_injected_persistence_is_used_exactly_without_local_store_creation(
     monkeypatch.setattr(
         teams_bootstrap,
         "SqliteOperationDispatchLedger",
+        forbidden_local_constructor,
+    )
+
+    monkeypatch.setattr(
+        teams_bootstrap,
+        "SqliteWaitRecheckConsumptionLedger",
         forbidden_local_constructor,
     )
 
@@ -318,6 +330,11 @@ def test_injected_persistence_is_used_exactly_without_local_store_creation(
     assert (
         bootstrap.operation_dispatch_ledger
         is operation_dispatch_ledger
+    )
+
+    assert (
+        bootstrap.wait_recheck_consumption_ledger
+        is wait_recheck_consumption_ledger
     )
 
     assert (

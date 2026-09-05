@@ -542,14 +542,18 @@ async def test_repeat_reenters_same_step_but_does_not_execute_second_operation_b
 
 
 @pytest.mark.asyncio
-async def test_wait_does_not_reexecute_operation():
+async def test_wait_on_unsupported_legacy_read_fails_closed_without_reexecution():
     """
-    WAIT conserva el resultado registrado y su
-    validación, pero no inicia ninguna nueva
-    operación.
+    El fake histórico de esta frontera representa
+    una operación Azure READ legacy.
 
-    El desbloqueo/revalidación futura queda fuera
-    de la responsabilidad de FASE 16.
+    FASE 22.8 no puede inventar un mecanismo de
+    fresh-read genérico para esa operación.
+
+    Si Procedure Validation propone WAIT sobre una
+    operación sin adapter de recheck certificado,
+    el workflow debe fallar cerrado después de la
+    primera operación y nunca iniciar una segunda.
     """
 
     agents = (
@@ -563,64 +567,30 @@ async def test_wait_does_not_reexecute_operation():
         )
     )
 
-    (
-        outputs,
-        new_hitl_requests,
-    ) = await run_one_approved_operation_cycle(
-        agents
-    )
+    with pytest.raises(
+        ValueError,
+        match="azure.vm.start",
+    ):
+        await run_one_approved_operation_cycle(
+            agents
+        )
 
     assert_single_operation_cycle(
         agents
     )
 
     assert (
-        new_hitl_requests
-        == []
-    )
-
-    assert len(outputs) == 1
-
-    state = outputs[0]
-
-    assert isinstance(
-        state,
-        ProcedureRuntimeState,
-    )
-
-    assert (
-        state.step_status
-        == StepStatus.WAITING_VALIDATION
-    )
-
-    assert (
-        state.workflow_status
-        == WorkflowStatus.WAITING_VALIDATION
-    )
-
-    assert (
-        state.current_step
+        agents.calls.count(
+            "azure_operations"
+        )
         == 1
     )
 
     assert (
-        state.retry_count
-        == 0
-    )
-
-    assert (
-        state.approval_id
-        is not None
-    )
-
-    assert (
-        state.operation_result
-        is not None
-    )
-
-    assert (
-        state.verification_result
-        is not None
+        agents.calls.count(
+            "procedure_validation"
+        )
+        == 1
     )
 
     assert (

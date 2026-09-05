@@ -29,6 +29,10 @@ from src.persistence.azure_sql.operation_dispatch_ledger import (
     AzureSqlOperationDispatchLedger,
 )
 
+from src.persistence.azure_sql.wait_recheck_consumption_ledger import (
+    AzureSqlWaitRecheckConsumptionLedger,
+)
+
 from src.persistence.azure_sql.pending_approval_store import (
     AzureSqlPendingApprovalStore,
 )
@@ -72,7 +76,7 @@ def build_azure_sql_teams_hitl_persistence(
 
     - recibe configuración estructurada;
     - construye una única connection factory;
-    - comparte esa factory entre seis adapters;
+    - comparte esa factory entre siete adapters;
     - conserva la allowlist explícita del workflow;
     - no abre conexiones;
     - no ejecuta DDL;
@@ -121,6 +125,12 @@ def build_azure_sql_teams_hitl_persistence(
         )
     )
 
+    wait_recheck_consumption_ledger = (
+        AzureSqlWaitRecheckConsumptionLedger(
+            connection_factory=connection_factory,
+        )
+    )
+
     continuation_store = (
         AzureSqlIncidentContinuationStore(
             connection_factory=(
@@ -152,6 +162,9 @@ def build_azure_sql_teams_hitl_persistence(
         ),
         operation_dispatch_ledger=(
             operation_dispatch_ledger
+        ),
+        wait_recheck_consumption_ledger=(
+            wait_recheck_consumption_ledger
         ),
         continuation_store=(
             continuation_store

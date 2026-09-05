@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 from agent_framework import (
     Executor,
     WorkflowContext,
     handler,
+    response_handler,
 )
 
 from src.runtime.procedure.models import (
@@ -35,6 +34,19 @@ from ..models import (
 
 from ..procedure_validation_models import (
     ProcedureValidationContext,
+    ProcedureValidationRequest,
+)
+
+from ..wait_recheck import (
+    WaitRecheckRequest,
+    WaitRecheckSignal,
+    build_wait_recheck_request,
+    consume_wait_recheck_signal,
+)
+
+from ..wait_recheck_consumption_ledger import (
+    InMemoryWaitRecheckConsumptionLedger,
+    WaitRecheckConsumptionLedger,
 )
 
 
@@ -62,10 +74,26 @@ class ProcedureTransitionExecutor(
 
     def __init__(
         self,
+        *,
+        wait_recheck_consumption_ledger: (
+            WaitRecheckConsumptionLedger | None
+        ) = None,
     ) -> None:
         super().__init__(
             id="procedure_transition"
         )
+
+        if (
+            wait_recheck_consumption_ledger
+            is None
+        ):
+            self._wait_recheck_consumption_ledger = (
+                InMemoryWaitRecheckConsumptionLedger()
+            )
+        else:
+            self._wait_recheck_consumption_ledger = (
+                wait_recheck_consumption_ledger
+            )
 
     @handler
     async def handle(
@@ -110,11 +138,12 @@ class ProcedureTransitionExecutor(
         )
 
         #
-        # CONTINUE es la única decisión que puede
-        # producir un nuevo ProcedureExecutionInput.
+        # CONTINUE avanza a N+1.
+        # REPEAT reutiliza el cursor para un intento
+        # operacional nuevo.
         #
-        # La decisión procede del Transition Gate.
-        # No se infiere de status ni del cursor.
+        # Ambas decisiones proceden del Transition
+        # Gate y se enrutan explícitamente.
         #
         if (
             outcome.decision.next_action
@@ -184,9 +213,94 @@ class ProcedureTransitionExecutor(
             return
 
         #
-        # WAIT, RESOLVED, ESCALATE y BLOCKED
-        # permanecen terminales para este ciclo.
+        # WAIT pausa el workflow esperando una
+        # señal externa NO operacional.
+        #
+        if (
+            outcome.decision.next_action
+            == NextAction.WAIT
+        ):
+            request = (
+                build_wait_recheck_request(
+                    outcome.state
+                )
+            )
+
+            await ctx.request_info(
+                request_data=request,
+                response_type=(
+                    WaitRecheckSignal
+                ),
+                request_id=(
+                    request.recheck_id
+                ),
+            )
+
+            return
+
+        #
+        # RESOLVED, ESCALATE y BLOCKED
+        # permanecen terminales.
         #
         await ctx.yield_output(
             outcome.state
+        )
+
+    @response_handler
+    async def handle_wait_recheck_response(
+        self,
+        original_request: WaitRecheckRequest,
+        response: WaitRecheckSignal,
+        ctx: WorkflowContext[
+            ProcedureValidationRequest,
+            ProcedureRuntimeState,
+        ],
+    ) -> None:
+        state = (
+            load_procedure_runtime_state(
+                ctx
+            )
+        )
+
+        #
+        # Primero se revalida y calcula el candidato
+        # sobre una copia del runtime.
+        #
+        # consume_wait_recheck_signal() no persiste
+        # ni modifica WorkflowContext.
+        #
+        (
+            candidate_state,
+            validation_request,
+        ) = consume_wait_recheck_signal(
+            state=state,
+            original_request=(
+                original_request
+            ),
+            signal=response,
+        )
+
+        #
+        # Sólo una request/signal ya correlacionada
+        # puede intentar reclamar autoridad.
+        #
+        # El claim ocurre ANTES de:
+        # - persistir recheck_count;
+        # - invalidar verification_result durable;
+        # - enrutar a fresh-read.
+        #
+        self._wait_recheck_consumption_ledger.claim(
+            original_request.recheck_id
+        )
+
+        store_procedure_runtime_state(
+            ctx,
+            candidate_state,
+        )
+
+        await ctx.send_message(
+            validation_request,
+            target_id=(
+                "azure_vm_post_operation_observation"
+            ),
         )

@@ -48,6 +48,11 @@ from tests.workflows.incident_resolution.test_incident_workflow_azure_operations
     AzureWorkflowFakeFoundryAgents,
 )
 
+from tests.workflows.incident_resolution.test_procedure_transition_gate import (
+    make_context as make_transition_gate_context,
+    make_state as make_transition_gate_state,
+)
+
 
 class ReplaySecurityFakeFoundryAgents(
     AzureWorkflowFakeFoundryAgents
@@ -392,23 +397,36 @@ async def test_validation_context_cannot_be_replayed_after_continue():
         )
 
 
-@pytest.mark.asyncio
-async def test_wait_state_rejects_second_validation_of_same_result():
+def test_wait_state_rejects_second_validation_of_same_result():
     """
-    WAIT conserva OperationResult y
-    verification_result.
+    El Transition Gate registra exactamente una
+    verification_result para un OperationResult.
 
-    Precisamente por eso un segundo contexto
-    cognitivo no puede consumir de nuevo el mismo
-    resultado sin un nuevo lifecycle explícito.
+    WAIT no convierte esa misma evidencia cognitiva
+    en consumible por segunda vez.
+
+    La autorización para un recheck posterior se
+    encuentra fuera del gate y requiere un lifecycle
+    explícito que invalide únicamente la verificación
+    anterior antes de obtener fresh-read evidence.
     """
 
-    (
-        agents,
-        state,
-    ) = await run_cycle(
-        validation_status="indeterminate",
-        proposed_next_action="wait",
+    original_state = (
+        make_transition_gate_state()
+    )
+
+    context = (
+        make_transition_gate_context(
+            validation_status="indeterminate",
+            proposed_next_action="wait",
+        )
+    )
+
+    state = (
+        apply_procedure_validation_transition(
+            state=original_state,
+            context=context,
+        )
     )
 
     assert (
@@ -431,18 +449,13 @@ async def test_wait_state_rejects_second_validation_of_same_result():
         is not None
     )
 
-    replay_context = (
-        rebuild_validation_context(
-            agents.validation_payload
-        )
-    )
-
     with pytest.raises(
         ValueError,
+        match="verification_result",
     ):
         apply_procedure_validation_transition(
             state=state,
-            context=replay_context,
+            context=context,
         )
 
 

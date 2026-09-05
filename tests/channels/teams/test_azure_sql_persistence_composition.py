@@ -33,6 +33,10 @@ from src.persistence.azure_sql.operation_dispatch_ledger import (
     AzureSqlOperationDispatchLedger,
 )
 
+from src.persistence.azure_sql.wait_recheck_consumption_ledger import (
+    AzureSqlWaitRecheckConsumptionLedger,
+)
+
 from src.persistence.azure_sql.pending_approval_store import (
     AzureSqlPendingApprovalStore,
 )
@@ -51,6 +55,7 @@ EXPECTED_PERSISTENCE_FIELDS = (
     "store",
     "checkpoint_storage",
     "operation_dispatch_ledger",
+    "wait_recheck_consumption_ledger",
     "continuation_store",
     "conversation_store",
 )
@@ -142,6 +147,7 @@ def test_azure_sql_composition_builds_one_shared_factory_and_exact_bundle(
         "store": [],
         "checkpoint_storage": [],
         "operation_dispatch_ledger": [],
+        "wait_recheck_consumption_ledger": [],
         "continuation_store": [],
         "conversation_store": [],
     }
@@ -228,6 +234,14 @@ def test_azure_sql_composition_builds_one_shared_factory_and_exact_bundle(
 
     monkeypatch.setattr(
         module,
+        "AzureSqlWaitRecheckConsumptionLedger",
+        fake_adapter(
+            "wait_recheck_consumption_ledger"
+        ),
+    )
+
+    monkeypatch.setattr(
+        module,
         "AzureSqlIncidentContinuationStore",
         fake_adapter(
             "continuation_store"
@@ -277,6 +291,19 @@ def test_azure_sql_composition_builds_one_shared_factory_and_exact_bundle(
     assert (
         adapter_calls[
             "operation_dispatch_ledger"
+        ]
+        == [
+            {
+                "connection_factory": (
+                    shared_connection_factory
+                )
+            }
+        ]
+    )
+
+    assert (
+        adapter_calls[
+            "wait_recheck_consumption_ledger"
         ]
         == [
             {
@@ -357,6 +384,13 @@ def test_azure_sql_composition_builds_one_shared_factory_and_exact_bundle(
         persistence.operation_dispatch_ledger
         is sentinels[
             "operation_dispatch_ledger"
+        ]
+    )
+
+    assert (
+        persistence.wait_recheck_consumption_ledger
+        is sentinels[
+            "wait_recheck_consumption_ledger"
         ]
     )
 
@@ -444,6 +478,11 @@ def test_azure_sql_composition_is_lazy_and_opens_no_connection(
     )
 
     assert isinstance(
+        persistence.wait_recheck_consumption_ledger,
+        AzureSqlWaitRecheckConsumptionLedger,
+    )
+
+    assert isinstance(
         persistence.continuation_store,
         AzureSqlIncidentContinuationStore,
     )
@@ -471,6 +510,12 @@ def test_azure_sql_composition_is_lazy_and_opens_no_connection(
     )
 
     assert (
+        persistence.wait_recheck_consumption_ledger
+        ._connection_factory
+        is forbidden_connection_factory
+    )
+
+    assert (
         persistence.continuation_store
         ._connection_factory
         is forbidden_connection_factory
@@ -488,7 +533,7 @@ def test_azure_sql_composition_is_lazy_and_opens_no_connection(
 
     assert len(
         expected_allowed_types
-    ) == 53
+    ) == 55
 
     assert (
         persistence.checkpoint_storage

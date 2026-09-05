@@ -340,14 +340,22 @@ def incoming(
     ]
 
 
-def test_post_operation_graph_is_single_linear_chain():
+def test_post_operation_graph_preserves_linear_chain_with_governed_wait_recheck():
     """
     Azure Operations no puede saltarse
     Registration, Observation, Validation ni
     Transition.
 
-    En FASE 22.6, CONTINUE puede salir únicamente
-    de ProcedureTransition hacia Procedure.
+    FASE 22.8 añade una única vuelta gobernada:
+
+        ProcedureTransition
+            -> fresh Observation
+
+    exclusivamente después de una señal WAIT
+    correlacionada.
+
+    La cadena operacional inicial sigue siendo
+    obligatoriamente lineal.
     """
 
     edges = workflow_edges()
@@ -373,12 +381,15 @@ def test_post_operation_graph_is_single_linear_chain():
         "azure_vm_post_operation_observation",
     ]
 
-    assert incoming(
-        edges,
-        "azure_vm_post_operation_observation",
-    ) == [
+    assert set(
+        incoming(
+            edges,
+            "azure_vm_post_operation_observation",
+        )
+    ) == {
         "operation_result_registration",
-    ]
+        "procedure_transition",
+    }
 
     assert outgoing(
         edges,
@@ -408,12 +419,15 @@ def test_post_operation_graph_is_single_linear_chain():
         "procedure_validation",
     ]
 
-    assert outgoing(
-        edges,
-        "procedure_transition",
-    ) == [
+    assert set(
+        outgoing(
+            edges,
+            "procedure_transition",
+        )
+    ) == {
         "procedure",
-    ]
+        "azure_vm_post_operation_observation",
+    }
 
 
 

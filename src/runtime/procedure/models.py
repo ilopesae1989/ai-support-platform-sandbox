@@ -196,6 +196,11 @@ class ProcedureRuntimeState(BaseModel):
 
     retry_count: int = 0
 
+    recheck_count: int = Field(
+        default=0,
+        ge=0,
+    )
+
     escalation_required: bool = False
     escalation_team: str | None = None
     escalation_level: str | None = None

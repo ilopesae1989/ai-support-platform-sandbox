@@ -34,13 +34,16 @@ def create_settings(tmp_path):
 def install_future_component_fakes(*, monkeypatch):
     checkpoint_storage = object()
     dispatch_ledger = object()
+    wait_recheck_ledger = object()
     incident_workflow = object()
     processor_result = object()
 
     calls = {
         "checkpoint_paths": [],
         "ledger_paths": [],
+        "wait_ledger_paths": [],
         "incident_ledgers": [],
+        "incident_wait_ledgers": [],
         "incident_readers": [],
         "incident_processor": [],
         "legacy_workflow": [],
@@ -54,13 +57,24 @@ def install_future_component_fakes(*, monkeypatch):
         calls["ledger_paths"].append(Path(database_path))
         return dispatch_ledger
 
+    def fake_wait_ledger_builder(database_path):
+        calls["wait_ledger_paths"].append(
+            Path(database_path)
+        )
+        return wait_recheck_ledger
+
     def fake_incident_workflow_builder(
         *,
         operation_dispatch_ledger,
+        wait_recheck_consumption_ledger,
         azure_vm_power_state_reader,
     ):
         calls["incident_ledgers"].append(
             operation_dispatch_ledger
+        )
+
+        calls["incident_wait_ledgers"].append(
+            wait_recheck_consumption_ledger
         )
 
         calls["incident_readers"].append(
@@ -106,6 +120,13 @@ def install_future_component_fakes(*, monkeypatch):
 
     monkeypatch.setattr(
         teams_bootstrap,
+        "SqliteWaitRecheckConsumptionLedger",
+        fake_wait_ledger_builder,
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        teams_bootstrap,
         "build_incident_resolution_workflow",
         fake_incident_workflow_builder,
         raising=False,
@@ -127,6 +148,7 @@ def install_future_component_fakes(*, monkeypatch):
     return {
         "checkpoint_storage": checkpoint_storage,
         "dispatch_ledger": dispatch_ledger,
+        "wait_recheck_ledger": wait_recheck_ledger,
         "incident_workflow": incident_workflow,
         "processor_result": processor_result,
         "calls": calls,
@@ -153,6 +175,13 @@ def test_bootstrap_builds_durable_incident_authorities(
         settings.operation_dispatch_database_path
     ]
 
+    assert fakes["calls"]["wait_ledger_paths"] == [
+        (
+            settings.pending_database_path.parent
+            / "wait-recheck-consumption.db"
+        )
+    ]
+
 
 def test_workflow_factory_builds_full_incident_workflow_with_durable_ledger(
     monkeypatch,
@@ -175,6 +204,10 @@ def test_workflow_factory_builds_full_incident_workflow_with_durable_ledger(
 
     assert fakes["calls"]["incident_ledgers"] == [
         fakes["dispatch_ledger"]
+    ]
+
+    assert fakes["calls"]["incident_wait_ledgers"] == [
+        fakes["wait_recheck_ledger"]
     ]
 
     assert fakes["calls"]["incident_readers"] == [
@@ -244,4 +277,9 @@ def test_bootstrap_exposes_durable_incident_components(
     assert (
         bootstrap.operation_dispatch_ledger
         is fakes["dispatch_ledger"]
+    )
+
+    assert (
+        bootstrap.wait_recheck_consumption_ledger
+        is fakes["wait_recheck_ledger"]
     )

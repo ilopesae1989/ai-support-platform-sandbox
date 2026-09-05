@@ -15,6 +15,91 @@ from .models import (
 
 CERTIFIED_MAX_PROCEDURE_OPERATION_ATTEMPTS = 8
 
+CERTIFIED_FRAMEWORK_MAX_ITERATIONS = 100
+CERTIFIED_OPERATION_ATTEMPT_SUPERSTEP_COST = 11
+CERTIFIED_PROCEDURE_BASE_TAIL_ITERATIONS = 4
+CERTIFIED_WAIT_RECHECK_SUPERSTEP_COST = 4
+
+
+def projected_procedure_iteration_budget(
+    *,
+    total_steps: int,
+    retry_count: int,
+    recheck_count: int,
+) -> int:
+    values = {
+        "total_steps": total_steps,
+        "retry_count": retry_count,
+        "recheck_count": recheck_count,
+    }
+
+    for name, value in values.items():
+        if (
+            isinstance(
+                value,
+                bool,
+            )
+            or not isinstance(
+                value,
+                int,
+            )
+        ):
+            raise ValueError(
+                name
+                + " debe ser un entero."
+            )
+
+    if total_steps <= 0:
+        raise ValueError(
+            "total_steps debe ser positivo."
+        )
+
+    if retry_count < 0:
+        raise ValueError(
+            "retry_count no puede ser negativo."
+        )
+
+    if recheck_count < 0:
+        raise ValueError(
+            "recheck_count no puede ser negativo."
+        )
+
+    return (
+        CERTIFIED_OPERATION_ATTEMPT_SUPERSTEP_COST
+        * (
+            total_steps
+            + retry_count
+        )
+        + CERTIFIED_PROCEDURE_BASE_TAIL_ITERATIONS
+        + CERTIFIED_WAIT_RECHECK_SUPERSTEP_COST
+        * recheck_count
+    )
+
+
+def validate_procedure_iteration_budget(
+    *,
+    total_steps: int,
+    retry_count: int,
+    recheck_count: int,
+) -> int:
+    projected = (
+        projected_procedure_iteration_budget(
+            total_steps=total_steps,
+            retry_count=retry_count,
+            recheck_count=recheck_count,
+        )
+    )
+
+    if (
+        projected
+        >= CERTIFIED_FRAMEWORK_MAX_ITERATIONS
+    ):
+        raise ValueError(
+            "Procedure iteration budget exceeded."
+        )
+
+    return projected
+
 
 class ProcedureRuntime:
     """
@@ -270,6 +355,69 @@ class ProcedureRuntime:
 
         return state
 
+    def prepare_wait_recheck(
+        self,
+        state: ProcedureRuntimeState,
+    ) -> ProcedureRuntimeState:
+        """
+        Consume exclusivamente una señal externa
+        de recheck ya correlacionada.
+
+        No:
+        - ejecuta WRITE;
+        - genera approval;
+        - reutiliza autorización;
+        - cambia el cursor;
+        - elimina OperationResult.
+
+        Invalida únicamente la verificación
+        cognitiva anterior para permitir una
+        observación read-only y validación nuevas.
+        """
+
+        if (
+            state.step_status
+            != StepStatus.WAITING_VALIDATION
+            or state.workflow_status
+            != WorkflowStatus.WAITING_VALIDATION
+        ):
+            raise ValueError(
+                "WAIT recheck requiere "
+                "waiting_validation."
+            )
+
+        if state.operation_result is None:
+            raise ValueError(
+                "WAIT recheck requiere "
+                "operation_result registrado."
+            )
+
+        if state.verification_result is None:
+            raise ValueError(
+                "WAIT recheck requiere una "
+                "verificación WAIT previa."
+            )
+
+        next_recheck_count = (
+            state.recheck_count + 1
+        )
+
+        validate_procedure_iteration_budget(
+            total_steps=state.total_steps,
+            retry_count=state.retry_count,
+            recheck_count=next_recheck_count,
+        )
+
+        state.recheck_count = (
+            next_recheck_count
+        )
+
+        state.verification_result = None
+
+        state.updated_at = utc_now()
+
+        return state
+
     def apply_procedure_decision(
         self,
         state: ProcedureRuntimeState,
@@ -335,6 +483,12 @@ class ProcedureRuntime:
                     "Procedure iteration budget exceeded."
                 )
 
+            validate_procedure_iteration_budget(
+                total_steps=state.total_steps,
+                retry_count=next_retry_count,
+                recheck_count=state.recheck_count,
+            )
+
             state.retry_count = (
                 next_retry_count
             )
@@ -379,6 +533,14 @@ class ProcedureRuntime:
             decision.next_action
             == NextAction.WAIT
         ):
+            validate_procedure_iteration_budget(
+                total_steps=state.total_steps,
+                retry_count=state.retry_count,
+                recheck_count=(
+                    state.recheck_count + 1
+                ),
+            )
+
             state.step_status = (
                 StepStatus.WAITING_VALIDATION
             )

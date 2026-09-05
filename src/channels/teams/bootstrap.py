@@ -41,6 +41,11 @@ from src.workflows.incident_resolution.operation_dispatch_ledger import (
     SqliteOperationDispatchLedger,
 )
 
+from src.workflows.incident_resolution.wait_recheck_consumption_ledger import (
+    SqliteWaitRecheckConsumptionLedger,
+    WaitRecheckConsumptionLedger,
+)
+
 from src.workflows.incident_resolution.workflow import (
     build_incident_resolution_workflow,
 )
@@ -394,6 +399,10 @@ class TeamsHitlPersistence:
         OperationDispatchLedger
     )
 
+    wait_recheck_consumption_ledger: (
+        WaitRecheckConsumptionLedger
+    )
+
     continuation_store: (
         IncidentContinuationStore
     )
@@ -427,6 +436,10 @@ class TeamsHitlBootstrap:
 
     operation_dispatch_ledger: (
         OperationDispatchLedger
+    )
+
+    wait_recheck_consumption_ledger: (
+        WaitRecheckConsumptionLedger
     )
 
     continuation_store: (
@@ -478,6 +491,13 @@ def build_local_teams_hitl_persistence(
         )
     )
 
+    wait_recheck_consumption_ledger = (
+        SqliteWaitRecheckConsumptionLedger(
+            settings.pending_database_path.parent
+            / "wait-recheck-consumption.db"
+        )
+    )
+
     continuation_store = (
         SqliteIncidentContinuationStore(
             settings.pending_database_path.parent
@@ -498,6 +518,9 @@ def build_local_teams_hitl_persistence(
         ),
         operation_dispatch_ledger=(
             operation_dispatch_ledger
+        ),
+        wait_recheck_consumption_ledger=(
+            wait_recheck_consumption_ledger
         ),
         continuation_store=(
             continuation_store
@@ -596,6 +619,11 @@ def build_teams_hitl_app(
         persistence.operation_dispatch_ledger
     )
 
+    wait_recheck_consumption_ledger = (
+        persistence
+        .wait_recheck_consumption_ledger
+    )
+
     continuation_store = (
         persistence.continuation_store
     )
@@ -633,6 +661,9 @@ def build_teams_hitl_app(
             build_incident_resolution_workflow(
                 operation_dispatch_ledger=(
                     operation_dispatch_ledger
+                ),
+                wait_recheck_consumption_ledger=(
+                    wait_recheck_consumption_ledger
                 ),
                 azure_vm_power_state_reader=(
                     azure_vm_power_state_reader
@@ -800,6 +831,9 @@ def build_teams_hitl_app(
         ),
         operation_dispatch_ledger=(
             operation_dispatch_ledger
+        ),
+        wait_recheck_consumption_ledger=(
+            wait_recheck_consumption_ledger
         ),
         continuation_store=(
             continuation_store

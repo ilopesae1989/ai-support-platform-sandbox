@@ -119,6 +119,7 @@ def _persistence():
             store=object(),
             checkpoint_storage=object(),
             operation_dispatch_ledger=object(),
+            wait_recheck_consumption_ledger=object(),
             continuation_store=object(),
             conversation_store=(
                 FakeConversationStore()

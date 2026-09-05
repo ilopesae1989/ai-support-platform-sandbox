@@ -29,6 +29,7 @@ BASE_FIELDS = (
     "store",
     "checkpoint_storage",
     "operation_dispatch_ledger",
+    "wait_recheck_consumption_ledger",
     "continuation_store",
     "conversation_store",
 )
@@ -106,7 +107,7 @@ def test_builder_return_contract_is_production_bundle():
     )
 
 
-def test_composition_builds_six_adapters_with_one_shared_factory(
+def test_composition_builds_seven_adapters_with_one_shared_factory(
     monkeypatch,
 ):
     module = _module()
@@ -120,6 +121,7 @@ def test_composition_builds_six_adapters_with_one_shared_factory(
         "store",
         "checkpoint_storage",
         "operation_dispatch_ledger",
+        "wait_recheck_consumption_ledger",
         "continuation_store",
         "conversation_store",
         "session_store",
@@ -203,6 +205,14 @@ def test_composition_builds_six_adapters_with_one_shared_factory(
 
     monkeypatch.setattr(
         module,
+        "AzureSqlWaitRecheckConsumptionLedger",
+        fake_adapter(
+            "wait_recheck_consumption_ledger"
+        ),
+    )
+
+    monkeypatch.setattr(
+        module,
         "AzureSqlIncidentContinuationStore",
         fake_adapter(
             "continuation_store"
@@ -250,6 +260,7 @@ def test_composition_builds_six_adapters_with_one_shared_factory(
     for name in (
         "store",
         "operation_dispatch_ledger",
+        "wait_recheck_consumption_ledger",
         "continuation_store",
         "conversation_store",
         "session_store",
@@ -305,6 +316,13 @@ def test_composition_builds_six_adapters_with_one_shared_factory(
         persistence.operation_dispatch_ledger
         is sentinels[
             "operation_dispatch_ledger"
+        ]
+    )
+
+    assert (
+        persistence.wait_recheck_consumption_ledger
+        is sentinels[
+            "wait_recheck_consumption_ledger"
         ]
     )
 

@@ -204,6 +204,7 @@ def test_injected_persistence_accepts_app_settings_without_local_paths(
             store=object(),
             checkpoint_storage=object(),
             operation_dispatch_ledger=object(),
+            wait_recheck_consumption_ledger=object(),
             continuation_store=object(),
             conversation_store=FakeConversationStore(),
         )
@@ -260,6 +261,11 @@ def test_injected_persistence_accepts_app_settings_without_local_paths(
     assert (
         bootstrap.operation_dispatch_ledger
         is persistence.operation_dispatch_ledger
+    )
+
+    assert (
+        bootstrap.wait_recheck_consumption_ledger
+        is persistence.wait_recheck_consumption_ledger
     )
 
     assert (

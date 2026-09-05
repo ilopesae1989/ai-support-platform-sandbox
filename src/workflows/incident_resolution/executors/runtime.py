@@ -18,6 +18,7 @@ from src.runtime.procedure.models import (
 
 from src.runtime.procedure.runtime import (
     CERTIFIED_MAX_PROCEDURE_OPERATION_ATTEMPTS,
+    validate_procedure_iteration_budget,
 )
 
 from src.workflows.incident_resolution.operational_capability import (
@@ -918,6 +919,20 @@ class ProcedureRuntimeExecutor(Executor):
             )
         )
 
+        recheck_count = (
+            prior_state.recheck_count
+            if prior_state is not None
+            else 0
+        )
+
+        validate_procedure_iteration_budget(
+            total_steps=(
+                context.result.total_steps
+            ),
+            retry_count=retry_count,
+            recheck_count=recheck_count,
+        )
+
         state = (
             self._build_runtime_state(
                 context,
@@ -928,6 +943,10 @@ class ProcedureRuntimeExecutor(Executor):
                     retry_count
                 ),
             )
+        )
+
+        state.recheck_count = (
+            recheck_count
         )
 
         store_procedure_runtime_state(

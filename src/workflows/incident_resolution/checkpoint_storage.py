@@ -105,6 +105,12 @@ _INCIDENT_ADDITIONAL_CHECKPOINT_TYPES = frozenset(
 
         "src.workflows.incident_resolution.procedure_validation_models:"
         "ProcedureValidationStep",
+
+        "src.workflows.incident_resolution.wait_recheck:"
+        "WaitRecheckRequest",
+
+        "src.workflows.incident_resolution.wait_recheck:"
+        "WaitRecheckSignal",
     }
 )
 

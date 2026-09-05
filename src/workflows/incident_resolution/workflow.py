@@ -85,6 +85,11 @@ from src.workflows.incident_resolution.operation_dispatch_ledger import (
     OperationDispatchLedger,
 )
 
+from src.workflows.incident_resolution.wait_recheck_consumption_ledger import (
+    InMemoryWaitRecheckConsumptionLedger,
+    WaitRecheckConsumptionLedger,
+)
+
 from src.workflows.incident_resolution.resource_identity_registry import (
     ResourceIdentityRegistry,
     build_default_resource_identity_registry,
@@ -117,6 +122,10 @@ def build_incident_resolution_workflow(
 
     operation_dispatch_ledger: (
         OperationDispatchLedger | None
+    ) = None,
+
+    wait_recheck_consumption_ledger: (
+        WaitRecheckConsumptionLedger | None
     ) = None,
 
     azure_vm_power_state_reader: (
@@ -229,6 +238,18 @@ def build_incident_resolution_workflow(
         operation_dispatch_ledger
         or InMemoryOperationDispatchLedger()
     )
+
+    if (
+        wait_recheck_consumption_ledger
+        is None
+    ):
+        wait_recheck_ledger = (
+            InMemoryWaitRecheckConsumptionLedger()
+        )
+    else:
+        wait_recheck_ledger = (
+            wait_recheck_consumption_ledger
+        )
 
     identity_registry = (
         resource_identity_registry
@@ -360,7 +381,11 @@ def build_incident_resolution_workflow(
     )
 
     procedure_transition = (
-        ProcedureTransitionExecutor()
+        ProcedureTransitionExecutor(
+            wait_recheck_consumption_ledger=(
+                wait_recheck_ledger
+            )
+        )
     )
 
     #
@@ -652,15 +677,25 @@ def build_incident_resolution_workflow(
         )
 
         #
-        # Governed multi-step continuation.
+        # Governed procedure continuation.
         #
-        # ProcedureTransitionExecutor only emits
-        # a message on this edge when the exact
-        # Python transition decision is CONTINUE.
+        # CONTINUE y REPEAT vuelven al Procedure
+        # executor mediante target_id explícito.
         #
         .add_edge(
             procedure_transition,
             procedure,
+        )
+
+        #
+        # WAIT reanudado no repite el WRITE.
+        # La señal externa sólo habilita una
+        # observación read-only nueva antes de
+        # Procedure Validation.
+        #
+        .add_edge(
+            procedure_transition,
+            azure_vm_post_operation_observation,
         )
 
         .build()
