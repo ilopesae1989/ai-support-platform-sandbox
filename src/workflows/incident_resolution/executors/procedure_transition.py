@@ -26,6 +26,7 @@ from ..procedure_transition_gate import (
 
 from ..continuation_request_builder import (
     build_procedure_continuation_input,
+    build_procedure_repeat_input,
 )
 
 from ..models import (
@@ -146,9 +147,45 @@ class ProcedureTransitionExecutor(
             return
 
         #
-        # Todas las decisiones distintas de
-        # CONTINUE siguen siendo terminales para
-        # este ciclo del workflow.
+        # REPEAT representa una operación nueva
+        # del MISMO paso.
+        #
+        # El runtime ya invalidó completamente
+        # la autoridad del intento anterior.
+        #
+        if (
+            outcome.decision.next_action
+            == NextAction.REPEAT
+        ):
+            continuation = (
+                load_procedure_continuation_context(
+                    ctx
+                )
+            )
+
+            if continuation is None:
+                raise RuntimeError(
+                    "ProcedureContinuationContext "
+                    "durable no disponible."
+                )
+
+            repeat_input = (
+                build_procedure_repeat_input(
+                    outcome=outcome,
+                    continuation=continuation,
+                )
+            )
+
+            await ctx.send_message(
+                repeat_input,
+                target_id="procedure_execution",
+            )
+
+            return
+
+        #
+        # WAIT, RESOLVED, ESCALATE y BLOCKED
+        # permanecen terminales para este ciclo.
         #
         await ctx.yield_output(
             outcome.state

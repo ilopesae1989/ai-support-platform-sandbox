@@ -278,6 +278,7 @@ async def test_runtime_handler_copies_conversation_into_runtime_state(
         context,
         *,
         conversation_id=None,
+        retry_count=0,
     ):
         captured[
             "context"
@@ -286,6 +287,10 @@ async def test_runtime_handler_copies_conversation_into_runtime_state(
         captured[
             "conversation_id"
         ] = conversation_id
+
+        captured[
+            "retry_count"
+        ] = retry_count
 
         return state_sentinel
 
@@ -324,6 +329,13 @@ async def test_runtime_handler_copies_conversation_into_runtime_state(
             "conversation_id"
         ]
         == CONVERSATION_ID
+    )
+
+    assert (
+        captured[
+            "retry_count"
+        ]
+        == 0
     )
 
     assert (

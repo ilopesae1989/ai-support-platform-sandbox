@@ -7,10 +7,17 @@ from agent_framework import (
 )
 
 from src.runtime.procedure.models import (
+    ApprovalStatus,
     OperationKind,
     ProcedureReference,
     ProcedureRuntimeState,
     ProcedureStep,
+    StepStatus,
+    WorkflowStatus,
+)
+
+from src.runtime.procedure.runtime import (
+    CERTIFIED_MAX_PROCEDURE_OPERATION_ATTEMPTS,
 )
 
 from src.workflows.incident_resolution.operational_capability import (
@@ -18,6 +25,8 @@ from src.workflows.incident_resolution.operational_capability import (
 )
 
 from src.runtime.procedure.workflow_state import (
+    PROCEDURE_RUNTIME_STATE_KEY,
+    load_procedure_runtime_state,
     store_procedure_runtime_state,
 )
 
@@ -491,17 +500,199 @@ class ProcedureRuntimeExecutor(Executor):
 
         return capability
 
+    @staticmethod
+    def _load_prior_runtime_state(
+        ctx: WorkflowContext,
+    ) -> ProcedureRuntimeState | None:
+        snapshot = ctx.get_state(
+            PROCEDURE_RUNTIME_STATE_KEY,
+            None,
+        )
+
+        if snapshot is None:
+            return None
+
+        return load_procedure_runtime_state(
+            ctx
+        )
+
+    @staticmethod
+    def _resolve_carried_retry_count(
+        *,
+        context: ProcedureExecutionContext,
+        prior_state: ProcedureRuntimeState | None,
+    ) -> int:
+        """
+        Conserva retry_count exclusivamente desde
+        ProcedureRuntimeState autoritativo.
+
+        Nunca procede:
+        - del LLM;
+        - del prompt;
+        - de ProcedureExecutionResult.
+        """
+
+        if prior_state is None:
+            return 0
+
+        identity = (
+            context.execution_identity
+        )
+
+        request = (
+            context.request
+        )
+
+        result = (
+            context.result
+        )
+
+        if prior_state.retry_count < 0:
+            raise ValueError(
+                "retry_count autoritativo inválido."
+            )
+
+        if (
+            prior_state.workflow_id
+            != identity.workflow_id
+        ):
+            raise ValueError(
+                "ProcedureRuntimeState previo "
+                "pertenece a otro workflow."
+            )
+
+        if (
+            prior_state.alert_id
+            != identity.alert_id
+        ):
+            raise ValueError(
+                "ProcedureRuntimeState previo "
+                "pertenece a otra alerta."
+            )
+
+        if (
+            prior_state.procedure.id
+            != result.procedure.id
+        ):
+            raise ValueError(
+                "ProcedureRuntimeState previo "
+                "pertenece a otro procedimiento."
+            )
+
+        if (
+            prior_state.procedure.version
+            != result.procedure.version
+        ):
+            raise ValueError(
+                "ProcedureRuntimeState previo "
+                "pertenece a otra versión."
+            )
+
+        if (
+            prior_state.total_steps
+            != result.total_steps
+        ):
+            raise ValueError(
+                "total_steps cambió durante "
+                "la continuación del procedimiento."
+            )
+
+        requested_step = (
+            request.requested_step
+        )
+
+        #
+        # REPEAT:
+        # mismo cursor y fresh operation boundary.
+        #
+        if (
+            requested_step
+            == prior_state.current_step
+        ):
+            if (
+                prior_state.step_status
+                != StepStatus.PENDING
+                or prior_state.workflow_status
+                != WorkflowStatus.RUNNING
+                or prior_state.approval_status
+                != ApprovalStatus.PENDING
+                or prior_state.approval_id
+                is not None
+                or prior_state.resolved_parameters
+                != []
+                or prior_state.operation_result
+                is not None
+                or prior_state.verification_result
+                is not None
+                or prior_state.retry_count
+                <= 0
+            ):
+                raise ValueError(
+                    "REPEAT continuation state "
+                    "no representa un fresh "
+                    "operation boundary."
+                )
+
+            return (
+                prior_state.retry_count
+            )
+
+        #
+        # CONTINUE:
+        # N -> N+1 conserva el budget acumulado.
+        #
+        if (
+            requested_step
+            == prior_state.current_step + 1
+        ):
+            if (
+                prior_state.step_status
+                != StepStatus.SUCCEEDED
+                or prior_state.workflow_status
+                != WorkflowStatus.RUNNING
+                or prior_state.verification_result
+                is None
+            ):
+                raise ValueError(
+                    "CONTINUE continuation state "
+                    "no es autoritativo."
+                )
+
+            return (
+                prior_state.retry_count
+            )
+
+        raise ValueError(
+            "Procedure continuation cursor "
+            "no corresponde al estado previo."
+        )
+
     def _build_runtime_state(
         self,
         context: ProcedureExecutionContext,
         *,
         conversation_id: str | None = None,
+        retry_count: int = 0,
     ) -> ProcedureRuntimeState:
         self._validate_execution_context(
             context
         )
 
         result = context.result
+
+        if retry_count < 0:
+            raise ValueError(
+                "retry_count no puede ser negativo."
+            )
+
+        if (
+            result.total_steps
+            + retry_count
+            > CERTIFIED_MAX_PROCEDURE_OPERATION_ATTEMPTS
+        ):
+            raise ValueError(
+                "Procedure iteration budget exceeded."
+            )
 
         identity = (
             context.execution_identity
@@ -694,6 +885,10 @@ class ProcedureRuntimeExecutor(Executor):
                 parameter_resolution
                 .resolved_parameters
             ),
+
+            retry_count=(
+                retry_count
+            ),
         )
 
     @handler
@@ -710,11 +905,27 @@ class ProcedureRuntimeExecutor(Executor):
             )
         )
 
+        prior_state = (
+            self._load_prior_runtime_state(
+                ctx
+            )
+        )
+
+        retry_count = (
+            self._resolve_carried_retry_count(
+                context=context,
+                prior_state=prior_state,
+            )
+        )
+
         state = (
             self._build_runtime_state(
                 context,
                 conversation_id=(
                     conversation_id
+                ),
+                retry_count=(
+                    retry_count
                 ),
             )
         )

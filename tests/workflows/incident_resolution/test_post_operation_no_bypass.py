@@ -533,16 +533,18 @@ def test_registration_and_validation_only_send_downstream():
     )
 
 
-def test_transition_has_governed_continue_and_terminal_output_surfaces():
+def test_transition_has_governed_continue_repeat_and_terminal_output_surfaces():
     """
     ProcedureTransitionExecutor tiene exactamente
-    dos superficies de salida gobernadas:
+    tres superficies explícitas:
 
-    - send_message exclusivamente para CONTINUE;
-    - yield_output para decisiones terminales.
+    - CONTINUE -> send_message;
+    - REPEAT   -> send_message;
+    - WAIT / RESOLVED / ESCALATE / BLOCKED
+      -> yield_output.
 
-    El mensaje CONTINUE se dirige al ID canónico
-    procedure_execution.
+    Ambos mensajes activos se dirigen al executor
+    canónico procedure_execution.
     """
 
     tree = parse_file(
@@ -568,7 +570,7 @@ def test_transition_has_governed_continue_and_terminal_output_surfaces():
         attributes.count(
             "send_message"
         )
-        == 1
+        == 2
     )
 
     assert (
@@ -578,7 +580,7 @@ def test_transition_has_governed_continue_and_terminal_output_surfaces():
         == 1
     )
 
-    assert len(calls) == 2
+    assert len(calls) == 3
 
     send_calls = [
         call
@@ -591,36 +593,59 @@ def test_transition_has_governed_continue_and_terminal_output_surfaces():
 
     assert len(
         send_calls
-    ) == 1
+    ) == 2
 
-    send_call = (
-        send_calls[0]
-    )
+    message_names = set()
 
-    target_keywords = [
-        keyword
-        for keyword in send_call.keywords
-        if keyword.arg == "target_id"
-    ]
+    for send_call in send_calls:
+        assert len(
+            send_call.args
+        ) == 1
 
-    assert len(
-        target_keywords
-    ) == 1
+        argument = (
+            send_call.args[0]
+        )
 
-    target = (
-        target_keywords[0]
-        .value
-    )
+        assert isinstance(
+            argument,
+            ast.Name,
+        )
 
-    assert isinstance(
-        target,
-        ast.Constant,
-    )
+        message_names.add(
+            argument.id
+        )
 
-    assert (
-        target.value
-        == "procedure_execution"
-    )
+        target_keywords = [
+            keyword
+            for keyword
+            in send_call.keywords
+            if keyword.arg
+            == "target_id"
+        ]
+
+        assert len(
+            target_keywords
+        ) == 1
+
+        target = (
+            target_keywords[0]
+            .value
+        )
+
+        assert isinstance(
+            target,
+            ast.Constant,
+        )
+
+        assert (
+            target.value
+            == "procedure_execution"
+        )
+
+    assert message_names == {
+        "next_input",
+        "repeat_input",
+    }
 
 
 

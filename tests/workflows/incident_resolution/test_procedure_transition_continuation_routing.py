@@ -92,14 +92,14 @@ class FakeWorkflowContext:
         )
 
         assert (
-            stored.step_status
-            == StepStatus.SUCCEEDED
-        )
-
-        assert (
             stored.workflow_status
             == WorkflowStatus.RUNNING
         )
+
+        assert stored.step_status in {
+            StepStatus.SUCCEEDED,
+            StepStatus.PENDING,
+        }
 
         self.messages.append(
             (
@@ -439,12 +439,12 @@ async def test_resolved_is_terminal_and_does_not_require_continuation_context():
 
 
 @pytest.mark.asyncio
-async def test_repeat_remains_terminal_and_does_not_require_continuation_context():
+async def test_repeat_routes_same_step_with_continuation_context():
     state = make_state()
 
     ctx = FakeWorkflowContext(
         state,
-        continuation=None,
+        continuation=make_continuation(),
     )
 
     await get_executor().handle(
@@ -469,6 +469,8 @@ async def test_repeat_remains_terminal_and_does_not_require_continuation_context
         == WorkflowStatus.RUNNING
     )
 
+    assert stored.retry_count == 1
+
     assert stored.approval_id is None
 
     assert (
@@ -476,13 +478,73 @@ async def test_repeat_remains_terminal_and_does_not_require_continuation_context
         == ApprovalStatus.PENDING
     )
 
+    assert stored.resolved_parameters == []
     assert stored.operation_result is None
+    assert stored.verification_result is None
 
-    assert (
-        stored.verification_result
-        is None
+    assert ctx.outputs == []
+
+    assert len(ctx.messages) == 1
+
+    message, target_id = (
+        ctx.messages[0]
     )
 
-    assert ctx.messages == []
+    assert isinstance(
+        message,
+        ProcedureExecutionInput,
+    )
 
-    assert len(ctx.outputs) == 1
+    assert (
+        target_id
+        == "procedure_execution"
+    )
+
+    assert (
+        message.request.requested_step
+        == stored.current_step
+    )
+
+
+@pytest.mark.asyncio
+async def test_repeat_fails_closed_without_continuation_context():
+    state = make_state()
+
+    ctx = FakeWorkflowContext(
+        state,
+        continuation=None,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="ContinuationContext",
+    ):
+        await get_executor().handle(
+            make_context(
+                validation_status="not_satisfied",
+                proposed_next_action="repeat",
+            ),
+            ctx,
+        )
+
+    stored = load_stored_state(
+        ctx
+    )
+
+    assert (
+        stored.step_status
+        == StepStatus.PENDING
+    )
+
+    assert (
+        stored.workflow_status
+        == WorkflowStatus.RUNNING
+    )
+
+    assert stored.retry_count == 1
+    assert stored.approval_id is None
+    assert stored.operation_result is None
+    assert stored.verification_result is None
+
+    assert ctx.messages == []
+    assert ctx.outputs == []

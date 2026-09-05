@@ -2,6 +2,10 @@ import json
 
 import pytest
 
+from agent_framework import (
+    InMemoryCheckpointStorage,
+)
+
 from src.agents.contracts import (
     ProcedureValidationEscalation,
     ProcedureValidationResult,
@@ -140,6 +144,10 @@ async def run_cycle(
         ),
     )
 
+    storage = (
+        InMemoryCheckpointStorage()
+    )
+
     workflow = (
         build_incident_resolution_workflow(
             agents=agents,
@@ -151,11 +159,9 @@ async def run_cycle(
     async for event in workflow.run(
         create_alert(),
         stream=True,
+        checkpoint_storage=storage,
     ):
-        if (
-            event.type
-            == "request_info"
-        ):
+        if event.type == "request_info":
             responses[
                 event.request_id
             ] = True
@@ -163,36 +169,108 @@ async def run_cycle(
     assert len(responses) == 1
 
     outputs = []
+    fresh_requests = []
 
     async for event in workflow.run(
         responses=responses,
         stream=True,
+        checkpoint_storage=storage,
     ):
-        if (
-            event.type
-            == "output"
-        ):
+        if event.type == "output":
             outputs.append(
                 event.data
             )
 
-    assert len(outputs) == 1
-
-    state = outputs[0]
-
-    assert isinstance(
-        state,
-        ProcedureRuntimeState,
-    )
+        elif event.type == "request_info":
+            fresh_requests.append(
+                event
+            )
 
     assert (
         agents.validation_payload
         is not None
     )
 
+    if (
+        proposed_next_action
+        != "repeat"
+    ):
+        assert len(outputs) == 1
+        assert fresh_requests == []
+
+        state = outputs[0]
+
+        assert isinstance(
+            state,
+            ProcedureRuntimeState,
+        )
+
+        return (
+            agents,
+            state,
+        )
+
+    assert outputs == []
+    assert len(fresh_requests) == 1
+
+    fresh_request = (
+        fresh_requests[0]
+    )
+
+    checkpoints = (
+        await storage.list_checkpoints(
+            workflow_name=workflow.name
+        )
+    )
+
+    candidates = []
+
+    for checkpoint in checkpoints:
+        snapshot = checkpoint.state.get(
+            "procedure_runtime_state"
+        )
+
+        if snapshot is None:
+            continue
+
+        if (
+            fresh_request.request_id
+            not in checkpoint
+            .pending_request_info_events
+        ):
+            continue
+
+        state = (
+            ProcedureRuntimeState
+            .model_validate(
+                snapshot
+            )
+        )
+
+        if (
+            state.retry_count == 1
+            and state.step_status
+            == StepStatus.WAITING_APPROVAL
+            and state.workflow_status
+            == WorkflowStatus.WAITING_HUMAN
+            and state.approval_status
+            == ApprovalStatus.PENDING
+            and state.approval_id
+            == fresh_request.data.approval_id
+            and state.operation_result
+            is None
+            and state.verification_result
+            is None
+        ):
+            candidates.append(
+                state
+            )
+
+    assert len(candidates) == 1
+
     return (
         agents,
-        state,
+        candidates[0],
     )
 
 
@@ -371,11 +449,9 @@ async def test_wait_state_rejects_second_validation_of_same_result():
 @pytest.mark.asyncio
 async def test_repeat_state_rejects_old_operation_result_replay():
     """
-    REPEAT invalida la autoridad del ciclo anterior.
-
-    El OperationResult viejo puede seguir existiendo
-    fuera del runtime como dato histórico, pero no
-    puede volver a registrarse como autoridad.
+    Tras REPEAT existe ya un NUEVO HITL,
+    pero el resultado operacional anterior
+    continúa sin autoridad sobre ese intento.
     """
 
     (
@@ -398,18 +474,17 @@ async def test_repeat_state_rejects_old_operation_result_replay():
 
     assert (
         state.step_status
-        == StepStatus.PENDING
+        == StepStatus.WAITING_APPROVAL
     )
 
     assert (
         state.workflow_status
-        == WorkflowStatus.RUNNING
+        == WorkflowStatus.WAITING_HUMAN
     )
 
-    assert (
-        state.approval_id
-        is None
-    )
+    assert state.retry_count == 1
+
+    assert state.approval_id is not None
 
     assert (
         state.approval_status
@@ -417,14 +492,12 @@ async def test_repeat_state_rejects_old_operation_result_replay():
     )
 
     assert (
-        state.operation_result
-        is None
+        old_result.approval_id
+        != state.approval_id
     )
 
-    assert (
-        state.verification_result
-        is None
-    )
+    assert state.operation_result is None
+    assert state.verification_result is None
 
     with pytest.raises(
         ValueError,
@@ -438,17 +511,13 @@ async def test_repeat_state_rejects_old_operation_result_replay():
 @pytest.mark.asyncio
 async def test_repeat_does_not_preserve_old_operation_identity_as_authority():
     """
-    Tras REPEAT:
+    El nuevo intento REPEAT posee un HITL fresco.
 
-    - no approval_id;
-    - no registered OperationResult;
-    - no verification result;
-    - no segundo Azure call;
-    - no segundo Procedure Validation.
-
-    La identidad del intento anterior sólo puede
-    permanecer fuera del runtime como evidencia
-    histórica, nunca como autorización vigente.
+    Antes de aprobarlo:
+    - no existe segundo OperationResult;
+    - no existe segunda validation;
+    - el approval_id anterior no es autoridad;
+    - sólo ocurrió una operación Azure.
     """
 
     (
@@ -459,30 +528,33 @@ async def test_repeat_does_not_preserve_old_operation_identity_as_authority():
         proposed_next_action="repeat",
     )
 
+    payload = agents.validation_payload
+
+    old_result = (
+        OperationResult.model_validate(
+            payload[
+                "operation_result"
+            ]
+        )
+    )
+
     old_operation_id = (
-        agents.validation_payload[
-            "trusted_identity"
-        ][
-            "operation_id"
-        ]
+        old_result.operation_id
     )
 
     assert old_operation_id
 
+    assert state.retry_count == 1
+
+    assert state.approval_id is not None
+
     assert (
         state.approval_id
-        is None
+        != old_result.approval_id
     )
 
-    assert (
-        state.operation_result
-        is None
-    )
-
-    assert (
-        state.verification_result
-        is None
-    )
+    assert state.operation_result is None
+    assert state.verification_result is None
 
     assert (
         agents.calls.count(
@@ -498,17 +570,9 @@ async def test_repeat_does_not_preserve_old_operation_identity_as_authority():
         == 1
     )
 
-    #
-    # FASE 16 no genera una identidad operacional
-    # para el próximo intento.
-    #
     assert (
-        old_operation_id
-        not in {
-            getattr(
-                state,
-                "operation_id",
-                None,
-            ),
-        }
+        agents.calls.count(
+            "procedure_execution"
+        )
+        == 2
     )

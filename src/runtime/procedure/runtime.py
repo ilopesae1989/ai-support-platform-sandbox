@@ -13,6 +13,9 @@ from .models import (
 )
 
 
+CERTIFIED_MAX_PROCEDURE_OPERATION_ATTEMPTS = 8
+
+
 class ProcedureRuntime:
     """
     Runtime determinista para la ejecución de procedimientos.
@@ -319,7 +322,22 @@ class ProcedureRuntime:
             decision.next_action
             == NextAction.REPEAT
         ):
-            state.retry_count += 1
+            next_retry_count = (
+                state.retry_count + 1
+            )
+
+            if (
+                state.total_steps
+                + next_retry_count
+                > CERTIFIED_MAX_PROCEDURE_OPERATION_ATTEMPTS
+            ):
+                raise ValueError(
+                    "Procedure iteration budget exceeded."
+                )
+
+            state.retry_count = (
+                next_retry_count
+            )
 
             #
             # REPEAT representa una nueva operación

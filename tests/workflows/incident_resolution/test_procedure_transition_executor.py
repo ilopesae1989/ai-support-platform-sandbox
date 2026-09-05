@@ -261,11 +261,17 @@ async def test_transition_executor_gate_failure_does_not_persist_or_output():
 
 
 @pytest.mark.asyncio
-async def test_transition_executor_repeat_persists_fresh_operation_boundary():
+async def test_transition_executor_repeat_persists_and_routes_fresh_operation_boundary():
+    from tests.workflows.incident_resolution.test_procedure_transition_continuation_routing import (
+        FakeWorkflowContext as RoutingFakeWorkflowContext,
+        make_continuation,
+    )
+
     state = make_state()
 
-    ctx = FakeWorkflowContext(
-        state
+    ctx = RoutingFakeWorkflowContext(
+        state,
+        continuation=make_continuation(),
     )
 
     context = make_context(
@@ -296,10 +302,6 @@ async def test_transition_executor_repeat_persists_fresh_operation_boundary():
 
     assert stored.retry_count == 1
 
-    #
-    # REPEAT no conserva autorización
-    # de la operación anterior.
-    #
     assert stored.approval_id is None
 
     assert (
@@ -308,14 +310,23 @@ async def test_transition_executor_repeat_persists_fresh_operation_boundary():
     )
 
     assert stored.resolved_parameters == []
-
     assert stored.operation_result is None
+    assert stored.verification_result is None
 
-    assert (
-        stored.verification_result
-        is None
+    assert ctx.outputs == []
+
+    assert len(ctx.messages) == 1
+
+    message, target_id = (
+        ctx.messages[0]
     )
 
-    assert len(
-        ctx.outputs
-    ) == 1
+    assert (
+        target_id
+        == "procedure_execution"
+    )
+
+    assert (
+        message.request.requested_step
+        == stored.current_step
+    )

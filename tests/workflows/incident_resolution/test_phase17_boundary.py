@@ -453,21 +453,13 @@ async def test_continue_enters_next_step_with_fresh_hitl_boundary():
 
 
 @pytest.mark.asyncio
-async def test_repeat_invalidates_old_cycle_but_does_not_start_new_one():
+async def test_repeat_reenters_same_step_but_does_not_execute_second_operation_before_hitl():
     """
-    REPEAT es especialmente sensible.
+    REPEAT invalida el ciclo anterior y activa
+    un nuevo intento del MISMO paso.
 
-    Debe invalidar la autorización y los
-    resultados del ciclo anterior.
-
-    Pero FASE 16 NO puede:
-
-    - generar nuevo approval_id;
-    - generar nuevo operation_id;
-    - lanzar nuevo HITL;
-    - ejecutar Azure otra vez.
-
-    Todo eso pertenece a FASE 17.
+    La segunda operación sigue bloqueada por un
+    HITL completamente nuevo.
     """
 
     agents = (
@@ -488,87 +480,61 @@ async def test_repeat_invalidates_old_cycle_but_does_not_start_new_one():
         agents
     )
 
-    assert_single_operation_cycle(
-        agents
+    assert (
+        agents.requested_steps
+        == [1, 1]
+    )
+
+    assert agents.calls == [
+        "classification",
+        "knowledge",
+        "alert_triage",
+        "procedure_execution",
+        "azure_operations",
+        "procedure_validation",
+        "procedure_execution",
+    ]
+
+    assert (
+        agents.calls.count(
+            "azure_operations"
+        )
+        == 1
     )
 
     assert (
+        agents.calls.count(
+            "procedure_validation"
+        )
+        == 1
+    )
+
+    assert (
+        agents.calls.count(
+            "procedure_execution"
+        )
+        == 2
+    )
+
+    assert outputs == []
+
+    assert len(
         new_hitl_requests
-        == []
-    )
+    ) == 1
 
-    assert len(outputs) == 1
-
-    state = outputs[0]
-
-    assert isinstance(
-        state,
-        ProcedureRuntimeState,
+    fresh_request = (
+        new_hitl_requests[0]
     )
 
     assert (
-        state.step_status
-        == StepStatus.PENDING
-    )
-
-    assert (
-        state.workflow_status
-        == WorkflowStatus.RUNNING
-    )
-
-    #
-    # El mismo step queda preparado para un
-    # ciclo futuro, pero no comienza todavía.
-    #
-    assert (
-        state.current_step
+        fresh_request.data.current_step
         == 1
     )
 
     assert (
-        state.retry_count
-        == 1
+        fresh_request.data.approval_id
     )
 
-    #
-    # La autorización anterior no puede
-    # reutilizarse.
-    #
-    assert (
-        state.approval_id
-        is None
-    )
-
-    assert (
-        state.approval_status
-        == ApprovalStatus.PENDING
-    )
-
-    assert (
-        state.resolved_parameters
-        == []
-    )
-
-    #
-    # El OperationResult y su validación tampoco
-    # pueden convertirse en autoridad para el
-    # siguiente intento.
-    #
-    assert (
-        state.operation_result
-        is None
-    )
-
-    assert (
-        state.verification_result
-        is None
-    )
-
-    #
-    # Existió un operation_id en el ciclo que
-    # acaba de terminar, pero FASE 16 no ha
-    # generado otro.
-    #
     assert (
         agents.validation_operation_id
         is not None
