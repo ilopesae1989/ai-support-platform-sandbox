@@ -463,6 +463,8 @@ def build_wait_recheck_request(
 
 def _build_validation_request(
     state: ProcedureRuntimeState,
+    *,
+    wait_recheck_id: str | None = None,
 ) -> ProcedureValidationRequest:
     result = (
         _load_registered_operation_result(
@@ -472,6 +474,7 @@ def _build_validation_request(
 
     return ProcedureValidationRequest(
         operation_result=result,
+        wait_recheck_id=wait_recheck_id,
         step=ProcedureValidationStep(
             procedure_id=(
                 state.procedure.id
@@ -567,7 +570,11 @@ def consume_wait_recheck_signal(
 
     validation_request = (
         _build_validation_request(
-            trusted_state
+            trusted_state,
+            wait_recheck_id=(
+                trusted_request
+                .recheck_id
+            ),
         )
     )
 

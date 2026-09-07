@@ -442,6 +442,7 @@ def test_validation_request_uses_common_operation_result_without_duplicate_evide
         "operation_result",
         "step",
         "post_operation_observation",
+        "wait_recheck_id",
     )
 
     assert (
@@ -458,8 +459,22 @@ def test_validation_request_uses_common_operation_result_without_duplicate_evide
         not in request_type.model_fields
     )
 
+    assert (
+        request_type
+        .model_fields[
+            "wait_recheck_id"
+        ]
+        .default
+        is None
+    )
+
     request = (
         create_validation_request()
+    )
+
+    assert (
+        request.wait_recheck_id
+        is None
     )
 
     assert (

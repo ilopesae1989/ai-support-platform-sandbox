@@ -8,6 +8,10 @@ from dataclasses import (
     dataclass,
 )
 
+from enum import (
+    Enum,
+)
+
 from pathlib import (
     Path,
 )
@@ -27,16 +31,32 @@ class WaitRecheckAlreadyConsumedError(
     RuntimeError
 ):
     """
-    El recheck_id ya fue consumido.
+    El recheck_id ya está COMPLETED.
 
     Es una condición de seguridad monotónica,
     no un error transitorio.
 
-    Nunca debe provocar retry automático del
-    mismo WaitRecheckSignal.
+    Un recheck IN_PROGRESS puede reanudarse.
+    Un recheck COMPLETED nunca recupera autoridad.
     """
 
     pass
+
+
+class WaitRecheckStatus(
+    str,
+    Enum,
+):
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class WaitRecheckBeginResult(
+    str,
+    Enum,
+):
+    CLAIMED = "claimed"
+    RESUMED = "resumed"
 
 
 class WaitRecheckConsumptionLedger(
@@ -45,15 +65,37 @@ class WaitRecheckConsumptionLedger(
     """
     Autoridad monotónica externa al checkpoint.
 
-    Garantiza:
+    Estado durable:
 
-        recheck_id
+        ABSENT
             ->
-        claim exactamente una vez
+        IN_PROGRESS
+            ->
+        COMPLETED
 
-    Restaurar un checkpoint histórico no puede
-    devolver autoridad a un recheck_id consumido.
+    IN_PROGRESS permite reanudar el response
+    superstep después de un crash.
+
+    COMPLETED bloquea cualquier replay histórico.
     """
+
+    def begin(
+        self,
+        recheck_id: str,
+    ) -> WaitRecheckBeginResult:
+        ...
+
+    def complete(
+        self,
+        recheck_id: str,
+    ) -> None:
+        ...
+
+    def status(
+        self,
+        recheck_id: str,
+    ) -> WaitRecheckStatus | None:
+        ...
 
     def claim(
         self,
@@ -73,6 +115,7 @@ class WaitRecheckConsumptionLedger(
 )
 class WaitRecheckConsumptionRecord:
     recheck_id: str
+    status: WaitRecheckStatus
 
 
 def _validate_recheck_id(
@@ -114,6 +157,116 @@ class InMemoryWaitRecheckConsumptionLedger:
 
         self._lock = Lock()
 
+    def begin(
+        self,
+        recheck_id: str,
+    ) -> WaitRecheckBeginResult:
+        trusted_id = (
+            _validate_recheck_id(
+                recheck_id
+            )
+        )
+
+        with self._lock:
+            record = self._records.get(
+                trusted_id
+            )
+
+            if record is None:
+                self._records[
+                    trusted_id
+                ] = (
+                    WaitRecheckConsumptionRecord(
+                        recheck_id=trusted_id,
+                        status=(
+                            WaitRecheckStatus
+                            .IN_PROGRESS
+                        ),
+                    )
+                )
+
+                return (
+                    WaitRecheckBeginResult
+                    .CLAIMED
+                )
+
+            if (
+                record.status
+                == WaitRecheckStatus.IN_PROGRESS
+            ):
+                return (
+                    WaitRecheckBeginResult
+                    .RESUMED
+                )
+
+            raise (
+                WaitRecheckAlreadyConsumedError(
+                    "WAIT recheck ya completado. "
+                    "recheck_id="
+                    f"{trusted_id!r}."
+                )
+            )
+
+    def complete(
+        self,
+        recheck_id: str,
+    ) -> None:
+        trusted_id = (
+            _validate_recheck_id(
+                recheck_id
+            )
+        )
+
+        with self._lock:
+            record = self._records.get(
+                trusted_id
+            )
+
+            if record is None:
+                raise RuntimeError(
+                    "WAIT recheck no fue iniciado. "
+                    "recheck_id="
+                    f"{trusted_id!r}."
+                )
+
+            if (
+                record.status
+                == WaitRecheckStatus.COMPLETED
+            ):
+                return
+
+            self._records[
+                trusted_id
+            ] = (
+                WaitRecheckConsumptionRecord(
+                    recheck_id=trusted_id,
+                    status=(
+                        WaitRecheckStatus
+                        .COMPLETED
+                    ),
+                )
+            )
+
+    def status(
+        self,
+        recheck_id: str,
+    ) -> WaitRecheckStatus | None:
+        trusted_id = (
+            _validate_recheck_id(
+                recheck_id
+            )
+        )
+
+        with self._lock:
+            record = self._records.get(
+                trusted_id
+            )
+
+            if record is None:
+                return None
+
+            return record.status
+
     def claim(
         self,
         recheck_id: str,
@@ -138,7 +291,11 @@ class InMemoryWaitRecheckConsumptionLedger:
                 trusted_id
             ] = (
                 WaitRecheckConsumptionRecord(
-                    recheck_id=trusted_id
+                    recheck_id=trusted_id,
+                    status=(
+                        WaitRecheckStatus
+                        .COMPLETED
+                    ),
                 )
             )
 
@@ -169,18 +326,16 @@ class InMemoryWaitRecheckConsumptionLedger:
 
 class SqliteWaitRecheckConsumptionLedger:
     """
-    Autoridad durable mínima para sandbox/MVP.
+    Autoridad durable sandbox/MVP.
 
-    Propiedades:
+    Legacy claim() conserva semántica binaria
+    y crea directamente COMPLETED.
 
-    - persistencia entre instancias;
-    - recheck_id único;
-    - claim atómico;
-    - replay fail-closed;
-    - autoridad externa al checkpoint;
-    - sin delete/reset/reopen.
+    El flujo WAIT crash-safe utiliza:
 
-    No es la implementación Azure SQL productiva.
+        begin()
+        complete()
+        status()
     """
 
     def __init__(
@@ -235,17 +390,292 @@ class SqliteWaitRecheckConsumptionLedger:
     def _initialize(
         self,
     ) -> None:
-        with closing(
-            self._connect()
-        ) as connection, connection:
+        connection = self._connect()
+
+        try:
+            connection.execute(
+                "BEGIN IMMEDIATE"
+            )
+
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS
                 wait_recheck_consumption_claims (
-                    recheck_id TEXT PRIMARY KEY
+                    recheck_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL
+                        DEFAULT 'completed'
+                        CHECK (
+                            status IN (
+                                'in_progress',
+                                'completed'
+                            )
+                        )
                 )
                 """
             )
+
+            columns = {
+                str(
+                    row[1]
+                )
+                for row
+                in connection.execute(
+                    """
+                    PRAGMA table_info(
+                        wait_recheck_consumption_claims
+                    )
+                    """
+                ).fetchall()
+            }
+
+            if "status" not in columns:
+                connection.execute(
+                    """
+                    ALTER TABLE
+                    wait_recheck_consumption_claims
+                    ADD COLUMN status TEXT NOT NULL
+                        DEFAULT 'completed'
+                        CHECK (
+                            status IN (
+                                'in_progress',
+                                'completed'
+                            )
+                        )
+                    """
+                )
+
+            connection.commit()
+
+        except Exception:
+            connection.rollback()
+            raise
+
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _decode_status(
+        value,
+    ) -> WaitRecheckStatus:
+        try:
+            return WaitRecheckStatus(
+                str(
+                    value
+                )
+            )
+
+        except ValueError as exc:
+            raise RuntimeError(
+                "WAIT recheck contiene status "
+                "durable inválido."
+            ) from exc
+
+    def begin(
+        self,
+        recheck_id: str,
+    ) -> WaitRecheckBeginResult:
+        trusted_id = (
+            _validate_recheck_id(
+                recheck_id
+            )
+        )
+
+        connection = self._connect()
+
+        try:
+            connection.execute(
+                "BEGIN IMMEDIATE"
+            )
+
+            row = connection.execute(
+                """
+                SELECT status
+                FROM wait_recheck_consumption_claims
+                WHERE recheck_id = ?
+                LIMIT 1
+                """,
+                (
+                    trusted_id,
+                ),
+            ).fetchone()
+
+            if row is None:
+                connection.execute(
+                    """
+                    INSERT INTO
+                    wait_recheck_consumption_claims (
+                        recheck_id,
+                        status
+                    )
+                    VALUES (?, ?)
+                    """,
+                    (
+                        trusted_id,
+                        (
+                            WaitRecheckStatus
+                            .IN_PROGRESS
+                            .value
+                        ),
+                    ),
+                )
+
+                connection.commit()
+
+                return (
+                    WaitRecheckBeginResult
+                    .CLAIMED
+                )
+
+            durable_status = (
+                self._decode_status(
+                    row[0]
+                )
+            )
+
+            if (
+                durable_status
+                == WaitRecheckStatus.IN_PROGRESS
+            ):
+                connection.commit()
+
+                return (
+                    WaitRecheckBeginResult
+                    .RESUMED
+                )
+
+            connection.rollback()
+
+            raise (
+                WaitRecheckAlreadyConsumedError(
+                    "WAIT recheck ya completado. "
+                    "recheck_id="
+                    f"{trusted_id!r}."
+                )
+            )
+
+        except WaitRecheckAlreadyConsumedError:
+            connection.rollback()
+            raise
+
+        except Exception:
+            connection.rollback()
+            raise
+
+        finally:
+            connection.close()
+
+    def complete(
+        self,
+        recheck_id: str,
+    ) -> None:
+        trusted_id = (
+            _validate_recheck_id(
+                recheck_id
+            )
+        )
+
+        connection = self._connect()
+
+        try:
+            connection.execute(
+                "BEGIN IMMEDIATE"
+            )
+
+            row = connection.execute(
+                """
+                SELECT status
+                FROM wait_recheck_consumption_claims
+                WHERE recheck_id = ?
+                LIMIT 1
+                """,
+                (
+                    trusted_id,
+                ),
+            ).fetchone()
+
+            if row is None:
+                connection.rollback()
+
+                raise RuntimeError(
+                    "WAIT recheck no fue iniciado. "
+                    "recheck_id="
+                    f"{trusted_id!r}."
+                )
+
+            durable_status = (
+                self._decode_status(
+                    row[0]
+                )
+            )
+
+            if (
+                durable_status
+                == WaitRecheckStatus.COMPLETED
+            ):
+                connection.commit()
+                return
+
+            connection.execute(
+                """
+                UPDATE
+                    wait_recheck_consumption_claims
+                SET
+                    status = ?
+                WHERE
+                    recheck_id = ?
+                    AND status = ?
+                """,
+                (
+                    WaitRecheckStatus
+                    .COMPLETED
+                    .value,
+                    trusted_id,
+                    WaitRecheckStatus
+                    .IN_PROGRESS
+                    .value,
+                ),
+            )
+
+            connection.commit()
+
+        except Exception:
+            connection.rollback()
+            raise
+
+        finally:
+            connection.close()
+
+    def status(
+        self,
+        recheck_id: str,
+    ) -> WaitRecheckStatus | None:
+        trusted_id = (
+            _validate_recheck_id(
+                recheck_id
+            )
+        )
+
+        with closing(
+            self._connect()
+        ) as connection:
+            row = connection.execute(
+                """
+                SELECT status
+                FROM wait_recheck_consumption_claims
+                WHERE recheck_id = ?
+                LIMIT 1
+                """,
+                (
+                    trusted_id,
+                ),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._decode_status(
+            row[0]
+        )
 
     def claim(
         self,
@@ -257,9 +687,7 @@ class SqliteWaitRecheckConsumptionLedger:
             )
         )
 
-        connection = (
-            self._connect()
-        )
+        connection = self._connect()
 
         try:
             connection.execute(

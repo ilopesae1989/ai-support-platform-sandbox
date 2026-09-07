@@ -371,6 +371,9 @@ def build_incident_resolution_workflow(
             reader=(
                 azure_vm_power_state_reader
             ),
+            wait_recheck_consumption_ledger=(
+                wait_recheck_ledger
+            ),
         )
     )
 

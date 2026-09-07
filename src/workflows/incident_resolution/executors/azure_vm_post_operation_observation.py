@@ -25,6 +25,10 @@ from ..procedure_validation_models import (
     ProcedureValidationRequest,
 )
 
+from ..wait_recheck_consumption_ledger import (
+    WaitRecheckConsumptionLedger,
+)
+
 
 class AzureVmPostOperationObservationExecutor(
     Executor
@@ -37,12 +41,20 @@ class AzureVmPostOperationObservationExecutor(
     def __init__(
         self,
         reader: AzureVmPowerStateReader | None = None,
+        *,
+        wait_recheck_consumption_ledger: (
+            WaitRecheckConsumptionLedger | None
+        ) = None,
     ) -> None:
         super().__init__(
             id="azure_vm_post_operation_observation"
         )
 
         self._reader = reader
+
+        self._wait_recheck_consumption_ledger = (
+            wait_recheck_consumption_ledger
+        )
 
     @staticmethod
     def _revalidate_request(
@@ -189,6 +201,25 @@ class AzureVmPostOperationObservationExecutor(
             )
         )
 
+        wait_recheck_id = (
+            trusted_request.wait_recheck_id
+        )
+
+        if wait_recheck_id is not None:
+            if (
+                self
+                ._wait_recheck_consumption_ledger
+                is None
+            ):
+                raise RuntimeError(
+                    "WAIT recheck authority no está "
+                    "configurada en observation."
+                )
+
+            self._wait_recheck_consumption_ledger.complete(
+                wait_recheck_id
+            )
+
         result = trusted_request.operation_result
 
         if not self._requires_vm_observation(
@@ -259,6 +290,10 @@ class AzureVmPostOperationObservationExecutor(
                 operation_result=trusted_request.operation_result,
                 step=trusted_request.step,
                 post_operation_observation=observation,
+                wait_recheck_id=(
+                    trusted_request
+                    .wait_recheck_id
+                ),
             )
         )
 

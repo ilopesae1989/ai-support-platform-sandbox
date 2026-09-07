@@ -65,6 +65,8 @@ class ProcedureValidationRequest(
         AzureVmPowerStateObservation | None
     ) = None
 
+    wait_recheck_id: str | None = None
+
     @model_validator(mode="after")
     def validate_step_identity(
         self,
@@ -72,6 +74,44 @@ class ProcedureValidationRequest(
         result = (
             self.operation_result
         )
+
+        wait_recheck_id = (
+            self.wait_recheck_id
+        )
+
+        if wait_recheck_id is not None:
+            if (
+                not isinstance(
+                    wait_recheck_id,
+                    str,
+                )
+                or not wait_recheck_id
+                or not wait_recheck_id.strip()
+                or wait_recheck_id
+                != wait_recheck_id.strip()
+            ):
+                raise ValueError(
+                    "wait_recheck_id debe ser un "
+                    "string exacto no vacío."
+                )
+
+            if (
+                result.success is not True
+                or result.technical_success is not True
+                or result.operation_domain != "azure"
+                or result.operation_kind
+                != OperationKind.WRITE
+                or result.operation_action
+                != OperationAction.VM_START
+                or result.capability_id
+                != "azure.vm.start"
+                or result.hitl_required is not True
+            ):
+                raise ValueError(
+                    "wait_recheck_id sólo puede "
+                    "acompañar un VM Start Azure "
+                    "gobernado y técnicamente exitoso."
+                )
 
         comparisons = {
             "procedure_id": (

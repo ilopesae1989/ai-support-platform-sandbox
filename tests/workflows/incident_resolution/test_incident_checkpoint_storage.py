@@ -78,6 +78,13 @@ EXPECTED_ADDITIONAL_TYPES = {
 
     "src.workflows.incident_resolution.procedure_validation_models:"
     "ProcedureValidationStep",
+
+    "src.workflows.incident_resolution.wait_recheck:"
+    "WaitRecheckRequest",
+
+    "src.workflows.incident_resolution.wait_recheck:"
+    "WaitRecheckSignal",
+
     "src.workflows.incident_resolution.workflow_input:IncidentWorkflowInput",  # TDD_PHASE18_INCIDENT_CHECKPOINT_ALLOWLIST_43
 }
 
@@ -136,9 +143,9 @@ def test_incident_allowlist_extends_existing_contract_exactly():
 
     assert len(
         EXPECTED_ADDITIONAL_TYPES
-    ) == 38
+    ) == 40
 
-    assert len(allowed) == 53
+    assert len(allowed) == 55
 
     assert (
         "src.runtime.procedure.workflow:"
@@ -155,7 +162,7 @@ def test_every_incident_allowlist_entry_resolves_to_real_type():
         .incident_checkpoint_allowed_types()
     )
 
-    assert len(allowed) == 53
+    assert len(allowed) == 55
 
     for token in allowed:
         resolved = resolve_type_token(
@@ -236,8 +243,8 @@ def test_builder_passes_exact_allowlist_to_file_checkpoint_storage(
         captured[
             "allowed_checkpoint_types"
         ]
-    ) == 53
+    ) == 55
 
-# TDD_PHASE18_INCIDENT_CHECKPOINT_ADDITIONAL_38
+# TDD_PHASE22_8_INCIDENT_CHECKPOINT_ADDITIONAL_40
 
-# TDD_PHASE18_INCIDENT_CHECKPOINT_TOTAL_53
+# TDD_PHASE22_8_INCIDENT_CHECKPOINT_TOTAL_55

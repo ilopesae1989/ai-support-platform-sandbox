@@ -284,12 +284,12 @@ class ProcedureTransitionExecutor(
         # Sólo una request/signal ya correlacionada
         # puede intentar reclamar autoridad.
         #
-        # El claim ocurre ANTES de:
+        # El begin crash-safe ocurre ANTES de:
         # - persistir recheck_count;
         # - invalidar verification_result durable;
         # - enrutar a fresh-read.
         #
-        self._wait_recheck_consumption_ledger.claim(
+        self._wait_recheck_consumption_ledger.begin(
             original_request.recheck_id
         )
 

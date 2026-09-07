@@ -4,6 +4,8 @@ from dataclasses import (
     fields,
 )
 
+from types import SimpleNamespace
+
 import pytest
 
 from src.agents.contracts import (
@@ -271,7 +273,7 @@ async def test_runtime_handler_copies_conversation_into_runtime_state(
 
     captured = {}
 
-    state_sentinel = object()
+    state_sentinel = SimpleNamespace()
 
     def fake_build(
         self,
@@ -310,7 +312,11 @@ async def test_runtime_handler_copies_conversation_into_runtime_state(
         ProcedureRuntimeExecutor
     )
 
-    execution_context = object()
+    execution_context = SimpleNamespace(
+        result=SimpleNamespace(
+            total_steps=1,
+        ),
+    )
 
     await executor.create_runtime_state(
         execution_context,

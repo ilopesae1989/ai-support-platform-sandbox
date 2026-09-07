@@ -1,5 +1,7 @@
 import json
 
+from types import SimpleNamespace
+
 import pytest
 
 from src.runtime.procedure.models import (
@@ -202,8 +204,14 @@ async def test_runtime_executor_persists_authoritative_state_as_json_snapshot(
 
     ctx = FakeWorkflowContext()
 
+    execution_context = SimpleNamespace(
+        result=SimpleNamespace(
+            total_steps=1,
+        ),
+    )
+
     await executor.create_runtime_state(
-        object(),
+        execution_context,
         ctx,
     )
 

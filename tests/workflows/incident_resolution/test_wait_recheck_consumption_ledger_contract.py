@@ -218,7 +218,20 @@ class RejectingLedger:
         error_type,
     ):
         self.error_type = error_type
+        self.begun = []
         self.claimed = []
+
+    def begin(
+        self,
+        recheck_id,
+    ):
+        self.begun.append(
+            recheck_id
+        )
+
+        raise self.error_type(
+            "recheck already completed"
+        )
 
     def claim(
         self,
@@ -306,7 +319,7 @@ def _wait_state_and_request():
 
 
 @pytest.mark.asyncio
-async def test_transition_claims_recheck_before_mutating_runtime_or_routing():
+async def test_transition_begins_recheck_before_mutating_runtime_or_routing():
     module = _load_ledger_module()
 
     error_type = (
@@ -354,9 +367,11 @@ async def test_transition_claims_recheck_before_mutating_runtime_or_routing():
             ctx,
         )
 
-    assert ledger.claimed == [
+    assert ledger.begun == [
         request.recheck_id
     ]
+
+    assert ledger.claimed == []
 
     assert ctx.state == snapshot_before
     assert ctx.messages == []
@@ -401,6 +416,7 @@ class ObservationCaptureExecutor(
 ):
     def __init__(
         self,
+        ledger,
     ) -> None:
         super().__init__(
             id=(
@@ -408,6 +424,7 @@ class ObservationCaptureExecutor(
             )
         )
 
+        self._ledger = ledger
         self.messages = []
 
     @handler
@@ -418,6 +435,20 @@ class ObservationCaptureExecutor(
             ProcedureValidationRequest
         ],
     ) -> None:
+        recheck_id = (
+            message.wait_recheck_id
+        )
+
+        if recheck_id is None:
+            raise AssertionError(
+                "WAIT replay test requiere "
+                "wait_recheck_id."
+            )
+
+        self._ledger.complete(
+            recheck_id
+        )
+
         self.messages.append(
             message
         )
@@ -437,7 +468,9 @@ def _build_replay_workflow(
     )
 
     capture = (
-        ObservationCaptureExecutor()
+        ObservationCaptureExecutor(
+            ledger
+        )
     )
 
     workflow = (
