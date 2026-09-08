@@ -297,6 +297,24 @@ def test_triage_prompt_exposes_only_operational_parameter_availability():
 class FakeWorkflowContext:
     def __init__(self) -> None:
         self.messages = []
+        self.state = {}
+
+    def set_state(
+        self,
+        key,
+        value,
+    ) -> None:
+        self.state[key] = value
+
+    def get_state(
+        self,
+        key,
+        default=None,
+    ):
+        return self.state.get(
+            key,
+            default,
+        )
 
     async def send_message(
         self,

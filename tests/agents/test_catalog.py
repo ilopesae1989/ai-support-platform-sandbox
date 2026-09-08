@@ -16,6 +16,7 @@ def test_catalog_contains_all_agents():
         AgentKey.PROCEDURE_EXECUTION,
         AgentKey.AZURE_OPERATIONS,
         AgentKey.ITSM,
+        AgentKey.COMMUNICATION,
     }
 
 
@@ -29,6 +30,7 @@ def test_catalog_uses_expected_sandbox_versions(
         "FOUNDRY_AGENT_PROCEDURE_EXECUTION_VERSION",
         "FOUNDRY_AGENT_AZURE_OPERATIONS_VERSION",
         "FOUNDRY_AGENT_ITSM_VERSION",
+        "FOUNDRY_AGENT_COMMUNICATION_VERSION",
     ]:
         monkeypatch.delenv(
             variable,
@@ -73,6 +75,16 @@ def test_catalog_uses_expected_sandbox_versions(
     assert (
         catalog[AgentKey.ITSM].version
         == "6"
+    )
+
+    assert (
+        catalog[AgentKey.COMMUNICATION].name
+        == "agent-communication-sbx"
+    )
+
+    assert (
+        catalog[AgentKey.COMMUNICATION].version
+        == "1"
     )
 
 

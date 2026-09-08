@@ -9,6 +9,18 @@ from src.runtime.procedure.models import (
     WorkflowStatus,
 )
 
+from src.communication.context import (
+    SafeCommunicationContext,
+)
+
+from src.communication.contracts import (
+    CommunicationResult,
+)
+
+from src.communication.projection import (
+    build_runtime_communication_request,
+)
+
 from .approval_authorization import (
     AuthorizedTeamsApprovalInvocation,
 )
@@ -146,21 +158,48 @@ def render_incident_terminal_result(
     )
 
 
+def _render_communication_result(
+    result: CommunicationResult,
+) -> str:
+    if type(result) is not CommunicationResult:
+        raise IncidentTerminalPresentationError(
+            "Communication runner no devolvió "
+            "CommunicationResult exacto."
+        )
+
+    lines = [
+        result.headline,
+        result.summary,
+    ]
+
+    lines.extend(
+        f"- {detail}"
+        for detail in result.details
+    )
+
+    return "\n".join(
+        lines
+    )
+
+
 async def notify_teams_incident_terminal_result(
     *,
     invocation: AuthorizedTeamsApprovalInvocation,
     processed: Any,
     outbound: TeamsOutboundDependencies,
+    communication_runner: Any | None = None,
 ):
     """
-    Envía el resultado terminal como mensaje
-    proactivo fuera del activity handler.
+    Publica el resultado terminal gobernado.
 
     El destino procede exclusivamente de la
-    identidad Teams autenticada ya congelada
-    en AuthorizedTeamsApprovalInvocation.
+    identidad Teams autenticada y autorizada.
 
-    Nunca se obtiene del workflow_result.
+    Communication es exclusivamente presentación:
+    Python proyecta primero el estado gobernado.
+
+    Si falla únicamente la capa cognitiva se usa
+    el renderer determinista existente.
     """
 
     if not isinstance(
@@ -201,21 +240,54 @@ async def notify_teams_incident_terminal_result(
             "con la identidad Teams autorizada."
         )
 
-    text = render_incident_terminal_result(
-        workflow_result
-    )
+    if communication_runner is None:
+        text = render_incident_terminal_result(
+            workflow_result
+        )
+
+    else:
+        safe_communication_context = getattr(
+            processed,
+            "safe_communication_context",
+            None,
+        )
+
+        if type(
+            safe_communication_context
+        ) is not SafeCommunicationContext:
+            raise IncidentTerminalPresentationError(
+                "processed no contiene "
+                "SafeCommunicationContext exacto."
+            )
+
+        communication_request = (
+            build_runtime_communication_request(
+                context=(
+                    safe_communication_context
+                ),
+                state=workflow_result,
+            )
+        )
+
+        try:
+            communication_result = await (
+                communication_runner(
+                    communication_request
+                )
+            )
+
+            text = _render_communication_result(
+                communication_result
+            )
+
+        except Exception:
+            text = render_incident_terminal_result(
+                workflow_result
+            )
 
     return await send_teams_message(
         dependencies=outbound,
-        tenant_id=(
-            invocation
-            .operator
-            .tenant_id
-        ),
-        conversation_id=(
-            invocation
-            .operator
-            .conversation_id
-        ),
+        tenant_id=invocation.operator.tenant_id,
+        conversation_id=invocation.operator.conversation_id,
         text=text,
     )

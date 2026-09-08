@@ -12,6 +12,7 @@ class AgentKey(StrEnum):
     PROCEDURE_EXECUTION = "procedure_execution"
     AZURE_OPERATIONS = "azure_operations"
     ITSM = "itsm"
+    COMMUNICATION = "communication"
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,11 @@ _DEFAULT_AGENT_CATALOG: dict[
         name="agent-itsm-sbx",
         version="6",
     ),
+    AgentKey.COMMUNICATION: FoundryAgentDefinition(
+        key=AgentKey.COMMUNICATION,
+        name="agent-communication-sbx",
+        version="1",
+    ),
 }
 
 
@@ -102,6 +108,9 @@ AGENT_VERSION_ENV_VARS: Mapping[
 
         AgentKey.ITSM:
             "FOUNDRY_AGENT_ITSM_VERSION",
+
+        AgentKey.COMMUNICATION:
+            "FOUNDRY_AGENT_COMMUNICATION_VERSION",
     }
 )
 

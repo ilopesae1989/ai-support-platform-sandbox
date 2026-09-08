@@ -17,6 +17,14 @@ from agent_framework.foundry import FoundryAgent
 from azure.identity import AzureCliCredential
 from pydantic import ValidationError
 
+from src.communication.agent_adapter import (
+    CommunicationAgentAdapter,
+)
+from src.communication.contracts import (
+    CommunicationRequest,
+    CommunicationResult,
+)
+
 from .audit import AgentInvocationMetadata
 from .catalog import (
     AgentKey,
@@ -106,6 +114,8 @@ class FoundryAgents:
             AgentKey,
             FoundryAgentDefinition,
         ] | None = None,
+        *,
+        credential: object | None = None,
     ) -> None:
         self._project_endpoint = (
             project_endpoint
@@ -127,7 +137,11 @@ class FoundryAgents:
         # En producción este componente se sustituirá
         # por la identidad administrada correspondiente.
         #
-        self._credential = AzureCliCredential()
+        self._credential = (
+            credential
+            if credential is not None
+            else AzureCliCredential()
+        )
 
         #
         # Contextos Azure Operations iniciados por esta
@@ -595,6 +609,45 @@ class FoundryAgents:
                 "el contrato "
                 "ProcedureValidationResult."
             ) from exc
+
+    async def run_communication(
+        self,
+        request: CommunicationRequest,
+    ) -> CommunicationResult:
+        """
+        Invoca exclusivamente el boundary cognitivo
+        de comunicación registrado en el catálogo.
+
+        Recibe una proyección previamente gobernada
+        y devuelve únicamente contenido de presentación.
+        """
+
+        if type(request) is not CommunicationRequest:
+            raise TypeError(
+                "request debe ser exactamente "
+                "CommunicationRequest."
+            )
+
+        definition = self.get_definition(
+            AgentKey.COMMUNICATION
+        )
+
+        self._register_invocation(
+            definition
+        )
+
+        agent = self._create_agent(
+            definition
+        )
+
+        adapter = CommunicationAgentAdapter(
+            runner=agent
+        )
+
+        return await adapter.run(
+            request
+        )
+
 
     def get_azure_operations_agent(
         self,

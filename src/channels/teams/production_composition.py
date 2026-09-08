@@ -53,3 +53,58 @@ def build_production_teams_host(
         host_settings.azure_sql_settings,
         azure_vm_power_state_reader=reader,
     )
+
+
+from src.channels.teams.production_bootstrap import (
+    build_production_teams_hitl_app_with_communication,
+)
+
+
+def build_production_teams_host_with_communication(
+    environment,
+    *,
+    communication_runner: object,
+):
+    if not isinstance(
+        environment,
+        Mapping,
+    ):
+        raise TypeError(
+            "environment debe implementar Mapping."
+        )
+
+    if not callable(
+        communication_runner
+    ):
+        raise TypeError(
+            "communication_runner debe ser callable."
+        )
+
+    host_settings = (
+        build_production_teams_host_settings(
+            environment
+        )
+    )
+
+    observation_settings = (
+        build_azure_vm_observation_settings(
+            environment
+        )
+    )
+
+    reader = (
+        build_azure_vm_observation_reader(
+            observation_settings
+        )
+    )
+
+    return (
+        build_production_teams_hitl_app_with_communication(
+            host_settings.app_settings,
+            host_settings.azure_sql_settings,
+            azure_vm_power_state_reader=reader,
+            communication_runner=(
+                communication_runner
+            ),
+        )
+    )

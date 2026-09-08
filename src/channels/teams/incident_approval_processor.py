@@ -8,6 +8,14 @@ from typing import (
     Any,
 )
 
+from src.communication.checkpoint_recovery import (
+    recover_safe_communication_context_from_checkpoint,
+)
+
+from src.communication.context import (
+    SafeCommunicationContext,
+)
+
 from src.runtime.procedure.approval_resolution import (
     resolve_approval_channel_action,
 )
@@ -65,6 +73,10 @@ class TeamsIncidentApprovalProcessingResult:
 
     approval_evidence: (
         ApprovalDecisionEvidence
+    )
+
+    safe_communication_context: (
+        SafeCommunicationContext
     )
 
 
@@ -140,6 +152,20 @@ async def process_authorized_teams_incident_approval(
             ),
             checkpoint_storage=(
                 checkpoint_storage
+            ),
+        )
+    )
+
+    safe_communication_context = await (
+        recover_safe_communication_context_from_checkpoint(
+            checkpoint_storage=(
+                checkpoint_storage
+            ),
+            workflow_name=(
+                workflow.name
+            ),
+            checkpoint_id=(
+                instruction.checkpoint_id
             ),
         )
     )
@@ -264,6 +290,9 @@ async def process_authorized_teams_incident_approval(
             ),
             approval_evidence=(
                 approval_evidence
+            ),
+            safe_communication_context=(
+                safe_communication_context
             ),
         )
     )

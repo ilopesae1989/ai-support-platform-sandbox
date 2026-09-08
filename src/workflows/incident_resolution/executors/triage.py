@@ -4,6 +4,13 @@ from agent_framework import (
     handler,
 )
 
+from src.communication.context import (
+    build_safe_communication_context,
+)
+from src.communication.context_state import (
+    store_safe_communication_context,
+)
+
 from src.agents.foundry_agents import (
     FoundryAgents,
 )
@@ -59,13 +66,26 @@ class AlertTriageExecutor(Executor):
             prompt
         )
 
-        await ctx.send_message(
-            TriagedAlertContext(
-                alert=context.alert,
-                classification=context.classification,
-                knowledge=context.knowledge,
-                triage=result,
+        triaged_context = TriagedAlertContext(
+            alert=context.alert,
+            classification=context.classification,
+            knowledge=context.knowledge,
+            triage=result,
+        )
+
+        safe_communication_context = (
+            build_safe_communication_context(
+                triaged_context
             )
+        )
+
+        store_safe_communication_context(
+            ctx,
+            safe_communication_context,
+        )
+
+        await ctx.send_message(
+            triaged_context
         )
 
     @staticmethod

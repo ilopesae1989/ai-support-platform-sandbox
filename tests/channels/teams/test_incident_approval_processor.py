@@ -140,6 +140,7 @@ class FakeWorkflow:
     ):
         self.events = list(events)
         self.run_calls = []
+        self.name = "incident-resolution"
 
     async def run(
         self,
@@ -151,6 +152,25 @@ class FakeWorkflow:
 
         for event in self.events:
             yield event
+
+
+@pytest.fixture(autouse=True)
+def _communication_context_recovery_harness(
+    monkeypatch,
+):
+    import src.channels.teams.incident_approval_processor as processor
+
+    async def fake_recover(
+        **kwargs,
+    ):
+        return object()
+
+    monkeypatch.setattr(
+        processor,
+        "recover_safe_communication_context_from_checkpoint",
+        fake_recover,
+        raising=False,
+    )
 
 
 @pytest.mark.asyncio
