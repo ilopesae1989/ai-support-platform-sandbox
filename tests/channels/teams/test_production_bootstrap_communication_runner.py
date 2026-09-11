@@ -23,6 +23,8 @@ NEW_FACTORY = (
     "build_production_teams_hitl_app_with_communication"
 )
 
+MEMBERSHIP_CHECKER = object()
+
 
 def _module():
     return importlib.import_module(
@@ -44,8 +46,8 @@ def _app_settings():
         teams_channel_tenant_id=(
             "channel-tenant-id"
         ),
-        approver_aad_object_id=(
-            "approver-object-id"
+        authorized_technicians_group_object_id=(
+            "55555555-5555-4555-8555-555555555555"
         ),
     )
 
@@ -95,6 +97,7 @@ def test_historical_builder_surface_remains_exact_and_new_port_is_additive():
     ) == (
         "app_settings",
         "azure_sql_settings",
+        "membership_checker",
         "azure_vm_power_state_reader",
     )
 
@@ -117,8 +120,15 @@ def test_historical_builder_surface_remains_exact_and_new_port_is_additive():
     ) == (
         "app_settings",
         "azure_sql_settings",
+        "membership_checker",
         "azure_vm_power_state_reader",
         "communication_runner",
+    )
+
+    membership_parameter = (
+        signature.parameters[
+            "membership_checker"
+        ]
     )
 
     reader_parameter = (
@@ -131,6 +141,16 @@ def test_historical_builder_surface_remains_exact_and_new_port_is_additive():
         signature.parameters[
             "communication_runner"
         ]
+    )
+
+    assert (
+        membership_parameter.kind
+        is inspect.Parameter.KEYWORD_ONLY
+    )
+
+    assert (
+        membership_parameter.default
+        is inspect.Parameter.empty
     )
 
     assert (
@@ -183,6 +203,9 @@ def test_new_port_rejects_non_callable_runner_before_persistence_composition(
             factory(
                 _app_settings(),
                 _azure_sql_settings(),
+                membership_checker=(
+                    MEMBERSHIP_CHECKER
+                ),
                 azure_vm_power_state_reader=(
                     FakeReader()
                 ),
@@ -233,6 +256,7 @@ def test_new_port_forwards_exact_runner_to_base_teams_bootstrap(
     def fake_base_builder(
         actual_app_settings,
         *,
+        membership_checker,
         persistence,
         azure_vm_power_state_reader,
         communication_runner,
@@ -241,6 +265,7 @@ def test_new_port_forwards_exact_runner_to_base_teams_bootstrap(
             (
                 "base",
                 actual_app_settings,
+                membership_checker,
                 persistence,
                 azure_vm_power_state_reader,
                 communication_runner,
@@ -264,6 +289,7 @@ def test_new_port_forwards_exact_runner_to_base_teams_bootstrap(
     result = factory(
         app_settings,
         sql_settings,
+        membership_checker=MEMBERSHIP_CHECKER,
         azure_vm_power_state_reader=reader,
         communication_runner=(
             communication_runner
@@ -280,6 +306,7 @@ def test_new_port_forwards_exact_runner_to_base_teams_bootstrap(
         (
             "base",
             app_settings,
+            MEMBERSHIP_CHECKER,
             persistence,
             reader,
             communication_runner,
@@ -326,6 +353,9 @@ def test_new_port_does_not_invoke_communication_runner_during_composition(
     result = factory(
         _app_settings(),
         _azure_sql_settings(),
+        membership_checker=(
+            MEMBERSHIP_CHECKER
+        ),
         azure_vm_power_state_reader=(
             FakeReader()
         ),
@@ -386,6 +416,7 @@ def test_production_bootstrap_port_remains_foundry_agnostic():
 
     required = (
         "build_production_teams_hitl_app_with_communication",
+        "membership_checker",
         "communication_runner",
         "build_teams_hitl_app",
     )

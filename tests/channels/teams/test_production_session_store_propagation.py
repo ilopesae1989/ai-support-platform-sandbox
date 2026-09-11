@@ -25,6 +25,8 @@ TARGET_MODULE = (
     "src.channels.teams.production_bootstrap"
 )
 
+MEMBERSHIP_CHECKER = object()
+
 
 BASE_FIELD_NAMES = tuple(
     field.name
@@ -68,8 +70,8 @@ def _app_settings():
         teams_channel_tenant_id=(
             "channel-tenant-id"
         ),
-        approver_aad_object_id=(
-            "approver-object-id"
+        authorized_technicians_group_object_id=(
+            "55555555-5555-4555-8555-555555555555"
         ),
     )
 
@@ -226,6 +228,7 @@ def test_real_productive_persistence_propagates_session_store(
     def fake_teams_builder(
         settings,
         *,
+        membership_checker,
         persistence,
         azure_vm_power_state_reader,
     ):
@@ -259,6 +262,9 @@ def test_real_productive_persistence_propagates_session_store(
         .build_production_teams_hitl_app(
             _app_settings(),
             settings,
+            membership_checker=(
+                MEMBERSHIP_CHECKER
+            ),
             azure_vm_power_state_reader=reader,
         )
     )
@@ -328,6 +334,9 @@ def test_productive_wrapper_preserves_every_base_bootstrap_field(
         .build_production_teams_hitl_app(
             _app_settings(),
             _settings(),
+            membership_checker=(
+                MEMBERSHIP_CHECKER
+            ),
             azure_vm_power_state_reader=_reader(),
         )
     )

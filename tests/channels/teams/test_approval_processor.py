@@ -35,6 +35,7 @@ from src.runtime.procedure.workflow import (
 )
 
 from tests.channels.teams.test_activity_identity import (
+    AAD_OBJECT_ID,
     CONVERSATION_ID,
     create_activity,
 )
@@ -51,6 +52,23 @@ from tests.runtime.procedure.test_approval_resumer import (
 OTHER_CONVERSATION_ID = (
     "19:other-conversation@thread.v2"
 )
+
+
+class FakeMembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        policy = create_policy()
+
+        assert (
+            group_object_id
+            == policy.authorized_technicians_group_object_id
+        )
+
+        return user_object_id == AAD_OBJECT_ID
 
 
 async def prepare_teams_case(
@@ -111,13 +129,17 @@ async def prepare_teams_case(
     )
 
     authorized = (
-        authorize_teams_approval_invocation(
+        await authorize_teams_approval_invocation(
             invocation=(
                 invocation
             ),
 
             policy=(
                 create_policy()
+            ),
+
+            membership_checker=(
+                FakeMembershipChecker()
             ),
         )
     )

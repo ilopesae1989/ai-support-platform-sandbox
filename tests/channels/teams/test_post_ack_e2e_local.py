@@ -17,7 +17,6 @@ from microsoft_teams.api import (
 
 from src.channels.teams.approval_authorization import (
     ExactTeamsApprovalPolicy,
-    TeamsApprovalPrincipal,
 )
 
 from src.channels.teams.incident_approval_handoff_handler import (
@@ -87,6 +86,22 @@ REQUEST_ID = (
 CHECKPOINT_ID = (
     "cp-post-ack-e2e-local-001"
 )
+
+GROUP_OBJECT_ID = (
+    "55555555-5555-4555-8555-555555555555"
+)
+
+
+class FakeMembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        assert user_object_id == AAD_OBJECT_ID
+        assert group_object_id == GROUP_OBJECT_ID
+        return True
 
 
 @dataclass
@@ -252,16 +267,12 @@ async def test_post_ack_channel_e2e_exactly_once(
                 "teams-hitl-e2e-local-v1"
             ),
 
-            allowed_principals=(
-                TeamsApprovalPrincipal(
-                    tenant_id=(
-                        TENANT_ID
-                    ),
+            tenant_id=(
+                TENANT_ID
+            ),
 
-                    aad_object_id=(
-                        AAD_OBJECT_ID
-                    ),
-                ),
+            authorized_technicians_group_object_id=(
+                GROUP_OBJECT_ID
             ),
         )
     )
@@ -281,6 +292,10 @@ async def test_post_ack_channel_e2e_exactly_once(
     dependencies = (
         TeamsApprovalHandlerDependencies(
             policy=policy,
+
+            membership_checker=(
+                FakeMembershipChecker()
+            ),
 
             store=(
                 approval_store

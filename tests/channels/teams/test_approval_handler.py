@@ -24,6 +24,7 @@ from src.runtime.procedure.workflow import (
 )
 
 from tests.channels.teams.test_activity_identity import (
+    AAD_OBJECT_ID,
     CONVERSATION_ID,
     create_activity,
 )
@@ -40,6 +41,23 @@ from tests.runtime.procedure.test_approval_resumer import (
 @dataclass
 class FakeActivityContext:
     activity: AdaptiveCardInvokeActivity
+
+
+class FakeMembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        policy = create_policy()
+
+        assert (
+            group_object_id
+            == policy.authorized_technicians_group_object_id
+        )
+
+        return user_object_id == AAD_OBJECT_ID
 
 
 async def prepare_handler_case(
@@ -107,6 +125,10 @@ async def prepare_handler_case(
         TeamsApprovalHandlerDependencies(
             policy=(
                 create_policy()
+            ),
+
+            membership_checker=(
+                FakeMembershipChecker()
             ),
 
             store=(

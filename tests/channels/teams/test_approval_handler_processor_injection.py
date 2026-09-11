@@ -7,11 +7,15 @@ import pytest
 import src.channels.teams.approval_handler as approval_handler
 
 
+MEMBERSHIP_CHECKER = object()
+
+
 def test_dependencies_default_to_existing_processor():
     dependencies = (
         approval_handler
         .TeamsApprovalHandlerDependencies(
             policy=object(),
+            membership_checker=MEMBERSHIP_CHECKER,
             store=object(),
             workflow_factory=lambda: object(),
         )
@@ -48,10 +52,11 @@ async def test_handler_uses_injected_processor_after_authorization(
 
         return invocation
 
-    def fake_authorize(
+    async def fake_authorize(
         *,
         invocation,
         policy,
+        membership_checker,
     ):
         sequence.append(
             "authorize"
@@ -60,6 +65,11 @@ async def test_handler_uses_injected_processor_after_authorization(
         assert (
             invocation
             is expected_invocation
+        )
+
+        assert (
+            membership_checker
+            is MEMBERSHIP_CHECKER
         )
 
         return authorized
@@ -150,6 +160,7 @@ async def test_handler_uses_injected_processor_after_authorization(
         approval_handler
         .TeamsApprovalHandlerDependencies(
             policy=object(),
+            membership_checker=MEMBERSHIP_CHECKER,
             store=store,
             workflow_factory=lambda: workflow,
             processor=injected_processor,

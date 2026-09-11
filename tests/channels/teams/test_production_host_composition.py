@@ -40,6 +40,8 @@ VM_USER_ASSIGNED_CLIENT_ID = (
     "a3333333-3333-4333-8333-333333333333"
 )
 
+GRAPH_MEMBERSHIP_CHECKER = object()
+
 
 def _module():
     return importlib.import_module(
@@ -61,8 +63,8 @@ def _environment():
         "TEAMS_CHANNEL_TENANT_ID": (
             "channel-tenant-id"
         ),
-        "TEAMS_HITL_APPROVER_AAD_OBJECT_ID": (
-            "approver-object-id"
+        "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID": (
+            "55555555-5555-4555-8555-555555555555"
         ),
         "AZURE_SQL_SERVER": (
             "ai-support-platform-sbx"
@@ -90,8 +92,8 @@ def _host_settings():
                 teams_channel_tenant_id=(
                     "channel-tenant-id"
                 ),
-                approver_aad_object_id=(
-                    "approver-object-id"
+                authorized_technicians_group_object_id=(
+                    "55555555-5555-4555-8555-555555555555"
                 ),
             )
         ),
@@ -184,6 +186,16 @@ def test_composition_delegates_exact_boundaries(
 
         return host_settings
 
+    def fake_graph_builder(
+        *,
+        managed_identity_client_id,
+    ):
+        calls.append((
+            "graph_membership",
+            managed_identity_client_id,
+        ))
+        return GRAPH_MEMBERSHIP_CHECKER
+
     def fake_observation_settings_builder(
         actual_environment,
     ):
@@ -212,6 +224,7 @@ def test_composition_delegates_exact_boundaries(
         app_settings,
         azure_sql_settings,
         *,
+        membership_checker,
         azure_vm_power_state_reader,
     ):
         calls.append(
@@ -219,6 +232,7 @@ def test_composition_delegates_exact_boundaries(
                 "bootstrap",
                 app_settings,
                 azure_sql_settings,
+                membership_checker,
                 azure_vm_power_state_reader,
             )
         )
@@ -229,6 +243,12 @@ def test_composition_delegates_exact_boundaries(
         module,
         "build_production_teams_host_settings",
         fake_host_settings_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_managed_identity_graph_membership_client",
+        fake_graph_builder,
     )
 
     monkeypatch.setattr(
@@ -264,6 +284,10 @@ def test_composition_delegates_exact_boundaries(
             environment,
         ),
         (
+            "graph_membership",
+            "system",
+        ),
+        (
             "observation_settings",
             environment,
         ),
@@ -275,6 +299,7 @@ def test_composition_delegates_exact_boundaries(
             "bootstrap",
             host_settings.app_settings,
             host_settings.azure_sql_settings,
+            GRAPH_MEMBERSHIP_CHECKER,
             reader,
         ),
     ]
@@ -312,6 +337,15 @@ def test_three_managed_identity_boundaries_remain_independent(
     reader = object()
     bootstrap = object()
 
+    def fake_graph_builder(
+        *,
+        managed_identity_client_id,
+    ):
+        captured["graph_identity"] = (
+            managed_identity_client_id
+        )
+        return GRAPH_MEMBERSHIP_CHECKER
+
     def fake_reader_builder(
         settings,
     ):
@@ -328,6 +362,7 @@ def test_three_managed_identity_boundaries_remain_independent(
         app_settings,
         azure_sql_settings,
         *,
+        membership_checker,
         azure_vm_power_state_reader,
     ):
         captured[
@@ -345,12 +380,22 @@ def test_three_managed_identity_boundaries_remain_independent(
         )
 
         captured[
+            "graph_checker"
+        ] = membership_checker
+
+        captured[
             "reader"
         ] = (
             azure_vm_power_state_reader
         )
 
         return bootstrap
+
+    monkeypatch.setattr(
+        module,
+        "build_managed_identity_graph_membership_client",
+        fake_graph_builder,
+    )
 
     monkeypatch.setattr(
         module,
@@ -377,12 +422,16 @@ def test_three_managed_identity_boundaries_remain_independent(
         "teams_identity": (
             TEAMS_USER_ASSIGNED_CLIENT_ID
         ),
+        "graph_identity": (
+            TEAMS_USER_ASSIGNED_CLIENT_ID
+        ),
         "sql_identity": (
             SQL_USER_ASSIGNED_CLIENT_ID
         ),
         "vm_identity": (
             VM_USER_ASSIGNED_CLIENT_ID
         ),
+        "graph_checker": GRAPH_MEMBERSHIP_CHECKER,
         "reader": reader,
     }
 
@@ -404,6 +453,12 @@ def test_environment_mapping_is_not_mutated(
         module,
         "build_production_teams_hitl_app",
         lambda *args, **kwargs: object(),
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_managed_identity_graph_membership_client",
+        lambda **kwargs: GRAPH_MEMBERSHIP_CHECKER,
     )
 
     monkeypatch.setattr(
@@ -451,6 +506,7 @@ def test_composition_has_no_hidden_runtime_or_direct_resource_authority():
 
     required = (
         "build_production_teams_host_settings",
+        "build_managed_identity_graph_membership_client",
         "build_azure_vm_observation_settings",
         "build_azure_vm_observation_reader",
         "build_production_teams_hitl_app",

@@ -16,6 +16,12 @@ NEW_FACTORY = (
     "build_production_teams_host_with_communication"
 )
 
+TEAMS_MANAGED_IDENTITY_CLIENT_ID = (
+    "7fa09b7a-cc8f-48e5-af88-1600d924c799"
+)
+
+GRAPH_MEMBERSHIP_CHECKER = object()
+
 
 def _module():
     return importlib.import_module(
@@ -181,7 +187,11 @@ def test_new_composition_port_delegates_exact_boundaries_and_runner(
         "EXPLICIT": "mapping",
     }
 
-    app_settings = object()
+    app_settings = SimpleNamespace(
+        managed_identity_client_id=(
+            TEAMS_MANAGED_IDENTITY_CLIENT_ID
+        ),
+    )
     azure_sql_settings = object()
 
     host_settings = SimpleNamespace(
@@ -208,6 +218,19 @@ def test_new_composition_port_delegates_exact_boundaries_and_runner(
         )
 
         return host_settings
+
+    def fake_graph_builder(
+        *,
+        managed_identity_client_id,
+    ):
+        calls.append(
+            (
+                "graph_membership",
+                managed_identity_client_id,
+            )
+        )
+
+        return GRAPH_MEMBERSHIP_CHECKER
 
     def fake_observation_settings_builder(
         actual_environment,
@@ -237,6 +260,7 @@ def test_new_composition_port_delegates_exact_boundaries_and_runner(
         actual_app_settings,
         actual_azure_sql_settings,
         *,
+        membership_checker,
         azure_vm_power_state_reader,
         communication_runner,
     ):
@@ -245,6 +269,7 @@ def test_new_composition_port_delegates_exact_boundaries_and_runner(
                 "bootstrap",
                 actual_app_settings,
                 actual_azure_sql_settings,
+                membership_checker,
                 azure_vm_power_state_reader,
                 communication_runner,
             )
@@ -256,6 +281,12 @@ def test_new_composition_port_delegates_exact_boundaries_and_runner(
         module,
         "build_production_teams_host_settings",
         fake_host_settings_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_managed_identity_graph_membership_client",
+        fake_graph_builder,
     )
 
     monkeypatch.setattr(
@@ -291,6 +322,10 @@ def test_new_composition_port_delegates_exact_boundaries_and_runner(
             environment,
         ),
         (
+            "graph_membership",
+            TEAMS_MANAGED_IDENTITY_CLIENT_ID,
+        ),
+        (
             "observation_settings",
             environment,
         ),
@@ -302,6 +337,7 @@ def test_new_composition_port_delegates_exact_boundaries_and_runner(
             "bootstrap",
             app_settings,
             azure_sql_settings,
+            GRAPH_MEMBERSHIP_CHECKER,
             reader,
             _runner,
         ),
@@ -333,7 +369,11 @@ def test_new_composition_port_does_not_invoke_runner(
         )
 
     host_settings = SimpleNamespace(
-        app_settings=object(),
+        app_settings=SimpleNamespace(
+            managed_identity_client_id=(
+                TEAMS_MANAGED_IDENTITY_CLIENT_ID
+            ),
+        ),
         azure_sql_settings=object(),
     )
 
@@ -341,6 +381,12 @@ def test_new_composition_port_does_not_invoke_runner(
         module,
         "build_production_teams_host_settings",
         lambda environment: host_settings,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_managed_identity_graph_membership_client",
+        lambda **kwargs: GRAPH_MEMBERSHIP_CHECKER,
     )
 
     monkeypatch.setattr(
@@ -392,7 +438,11 @@ def test_new_composition_port_does_not_mutate_environment(
     )
 
     host_settings = SimpleNamespace(
-        app_settings=object(),
+        app_settings=SimpleNamespace(
+            managed_identity_client_id=(
+                TEAMS_MANAGED_IDENTITY_CLIENT_ID
+            ),
+        ),
         azure_sql_settings=object(),
     )
 
@@ -402,6 +452,12 @@ def test_new_composition_port_does_not_mutate_environment(
         lambda actual_environment: (
             host_settings
         ),
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_managed_identity_graph_membership_client",
+        lambda **kwargs: GRAPH_MEMBERSHIP_CHECKER,
     )
 
     monkeypatch.setattr(
@@ -461,6 +517,7 @@ def test_new_composition_port_remains_foundry_and_runtime_agnostic():
         "build_production_teams_hitl_app",
         "build_production_teams_hitl_app_with_communication",
         "build_production_teams_host_settings",
+        "build_managed_identity_graph_membership_client",
         "build_azure_vm_observation_settings",
         "build_azure_vm_observation_reader",
     )
@@ -499,6 +556,7 @@ def test_new_composition_port_remains_foundry_and_runtime_agnostic():
     required_factory = (
         "communication_runner",
         "build_production_teams_host_settings",
+        "build_managed_identity_graph_membership_client",
         "build_azure_vm_observation_settings",
         "build_azure_vm_observation_reader",
         "build_production_teams_hitl_app_with_communication",

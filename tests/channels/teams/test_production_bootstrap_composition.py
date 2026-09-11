@@ -21,6 +21,8 @@ TARGET_MODULE = (
     "src.channels.teams.production_bootstrap"
 )
 
+MEMBERSHIP_CHECKER = object()
+
 
 def _module():
     return importlib.import_module(
@@ -54,8 +56,8 @@ def _app_settings():
         teams_channel_tenant_id=(
             "channel-tenant-id"
         ),
-        approver_aad_object_id=(
-            "approver-object-id"
+        authorized_technicians_group_object_id=(
+            "55555555-5555-4555-8555-555555555555"
         ),
     )
 
@@ -96,8 +98,25 @@ def test_production_builder_has_exact_explicit_surface():
         == (
             "app_settings",
             "azure_sql_settings",
+            "membership_checker",
             "azure_vm_power_state_reader",
         )
+    )
+
+    membership_parameter = (
+        signature.parameters[
+            "membership_checker"
+        ]
+    )
+
+    assert (
+        membership_parameter.kind
+        is inspect.Parameter.KEYWORD_ONLY
+    )
+
+    assert (
+        membership_parameter.default
+        is inspect.Parameter.empty
     )
 
     reader_parameter = (
@@ -127,7 +146,7 @@ def test_production_builder_rejects_local_persistence_settings(
         client_secret="secret",
         bot_tenant_id="tenant",
         teams_channel_tenant_id="tenant",
-        approver_aad_object_id="approver",
+        authorized_technicians_group_object_id="55555555-5555-4555-8555-555555555555",
         pending_database_path=(
             tmp_path / "pending.db"
         ),
@@ -148,6 +167,9 @@ def test_production_builder_rejects_local_persistence_settings(
         module.build_production_teams_hitl_app(
             local_settings,
             _azure_sql_settings(),
+            membership_checker=(
+                MEMBERSHIP_CHECKER
+            ),
             azure_vm_power_state_reader=_reader(),
         )
 
@@ -165,6 +187,9 @@ def test_production_builder_rejects_unstructured_azure_sql_configuration():
                 "Database=forbidden;"
                 "Password=forbidden;"
             ),
+            membership_checker=(
+                MEMBERSHIP_CHECKER
+            ),
             azure_vm_power_state_reader=_reader(),
         )
 
@@ -178,6 +203,9 @@ def test_production_builder_requires_post_operation_reader():
         module.build_production_teams_hitl_app(
             _app_settings(),
             _azure_sql_settings(),
+            membership_checker=(
+                MEMBERSHIP_CHECKER
+            ),
             azure_vm_power_state_reader=None,
         )
 
@@ -191,6 +219,9 @@ def test_production_builder_rejects_reader_without_contract():
         module.build_production_teams_hitl_app(
             _app_settings(),
             _azure_sql_settings(),
+            membership_checker=(
+                MEMBERSHIP_CHECKER
+            ),
             azure_vm_power_state_reader=object(),
         )
 
@@ -224,12 +255,16 @@ def test_production_builder_composes_azure_sql_once_and_injects_exactly(
     def fake_build_teams(
         settings,
         *,
+        membership_checker,
         persistence,
         azure_vm_power_state_reader,
     ):
         teams_calls.append(
             {
                 "settings": settings,
+                "membership_checker": (
+                    membership_checker
+                ),
                 "persistence": persistence,
                 "azure_vm_power_state_reader": (
                     azure_vm_power_state_reader
@@ -256,6 +291,9 @@ def test_production_builder_composes_azure_sql_once_and_injects_exactly(
         .build_production_teams_hitl_app(
             app_settings,
             azure_sql_settings,
+            membership_checker=(
+                MEMBERSHIP_CHECKER
+            ),
             azure_vm_power_state_reader=reader,
         )
     )
@@ -275,6 +313,9 @@ def test_production_builder_composes_azure_sql_once_and_injects_exactly(
             {
                 "settings": (
                     app_settings
+                ),
+                "membership_checker": (
+                    MEMBERSHIP_CHECKER
                 ),
                 "persistence": (
                     persistence

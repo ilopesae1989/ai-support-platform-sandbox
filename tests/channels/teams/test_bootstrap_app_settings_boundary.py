@@ -11,12 +11,18 @@ from src.channels.teams import (
 )
 
 
+AUTHORIZED_GROUP_OBJECT_ID = (
+    "55555555-5555-4555-"
+    "8555-555555555555"
+)
+
+
 EXPECTED_APP_FIELDS = (
     "client_id",
     "client_secret",
     "bot_tenant_id",
     "teams_channel_tenant_id",
-    "approver_aad_object_id",
+    "authorized_technicians_group_object_id",
     "messaging_endpoint",
 )
 
@@ -26,7 +32,7 @@ EXPECTED_LOCAL_FIELDS = (
     "client_secret",
     "bot_tenant_id",
     "teams_channel_tenant_id",
-    "approver_aad_object_id",
+    "authorized_technicians_group_object_id",
     "pending_database_path",
     "checkpoint_path",
     "operation_dispatch_database_path",
@@ -34,6 +40,15 @@ EXPECTED_LOCAL_FIELDS = (
     "messaging_endpoint",
 )
 
+
+class MembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        return True
 
 
 class FakeApp:
@@ -70,6 +85,10 @@ class FakeConversationStore:
         )
 
 
+def _membership_checker():
+    return MembershipChecker()
+
+
 def _app_settings_type():
     settings_type = getattr(
         teams_bootstrap,
@@ -94,8 +113,8 @@ def _app_settings():
         teams_channel_tenant_id=(
             "channel-tenant"
         ),
-        approver_aad_object_id=(
-            "approver-id"
+        authorized_technicians_group_object_id=(
+            AUTHORIZED_GROUP_OBJECT_ID
         ),
     )
 
@@ -130,7 +149,7 @@ def test_app_settings_environment_loader_requires_no_local_persistence_paths(
         "CLIENT_SECRET",
         "TENANT_ID",
         "TEAMS_CHANNEL_TENANT_ID",
-        "TEAMS_HITL_APPROVER_AAD_OBJECT_ID",
+        "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID",
         "TEAMS_HITL_PENDING_DB",
         "TEAMS_HITL_CHECKPOINT_DIR",
         "TEAMS_OPERATION_DISPATCH_DB",
@@ -164,8 +183,8 @@ def test_app_settings_environment_loader_requires_no_local_persistence_paths(
     )
 
     monkeypatch.setenv(
-        "TEAMS_HITL_APPROVER_AAD_OBJECT_ID",
-        "approver-id",
+        "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID",
+        AUTHORIZED_GROUP_OBJECT_ID,
     )
 
     settings = (
@@ -174,8 +193,16 @@ def test_app_settings_environment_loader_requires_no_local_persistence_paths(
     )
 
     assert settings.client_id == "client-id"
-    assert settings.client_secret == "test-client-secret"
-    assert settings.bot_tenant_id == "bot-tenant"
+
+    assert (
+        settings.client_secret
+        == "test-client-secret"
+    )
+
+    assert (
+        settings.bot_tenant_id
+        == "bot-tenant"
+    )
 
     assert (
         settings.teams_channel_tenant_id
@@ -183,8 +210,9 @@ def test_app_settings_environment_loader_requires_no_local_persistence_paths(
     )
 
     assert (
-        settings.approver_aad_object_id
-        == "approver-id"
+        settings
+        .authorized_technicians_group_object_id
+        == AUTHORIZED_GROUP_OBJECT_ID
     )
 
     assert (
@@ -206,7 +234,9 @@ def test_injected_persistence_accepts_app_settings_without_local_paths(
             operation_dispatch_ledger=object(),
             wait_recheck_consumption_ledger=object(),
             continuation_store=object(),
-            conversation_store=FakeConversationStore(),
+            conversation_store=(
+                FakeConversationStore()
+            ),
         )
     )
 
@@ -247,11 +277,17 @@ def test_injected_persistence_accepts_app_settings_without_local_paths(
         teams_bootstrap
         .build_teams_hitl_app(
             settings,
+            membership_checker=(
+                _membership_checker()
+            ),
             persistence=persistence,
         )
     )
 
-    assert bootstrap.store is persistence.store
+    assert (
+        bootstrap.store
+        is persistence.store
+    )
 
     assert (
         bootstrap.checkpoint_storage
@@ -276,6 +312,11 @@ def test_injected_persistence_accepts_app_settings_without_local_paths(
     assert (
         bootstrap.conversation_store
         is persistence.conversation_store
+    )
+
+    assert (
+        bootstrap.dependencies.membership_checker
+        is not None
     )
 
 
@@ -309,7 +350,10 @@ def test_app_settings_without_injected_persistence_fails_closed(
         .TeamsHitlConfigurationError
     ):
         teams_bootstrap.build_teams_hitl_app(
-            settings
+            settings,
+            membership_checker=(
+                _membership_checker()
+            ),
         )
 
     assert local_builder_calls == []

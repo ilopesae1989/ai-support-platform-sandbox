@@ -45,8 +45,8 @@ def _valid_environment():
         "TEAMS_CHANNEL_TENANT_ID": (
             "channel-tenant-id"
         ),
-        "TEAMS_HITL_APPROVER_AAD_OBJECT_ID": (
-            "approver-object-id"
+        "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID": (
+            "55555555-5555-4555-8555-555555555555"
         ),
         "AZURE_SQL_SERVER": (
             "ai-support-platform-sbx"

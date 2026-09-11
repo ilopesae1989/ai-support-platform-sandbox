@@ -200,9 +200,29 @@ def test_fast_handler_contains_no_operational_await():
 
     assert target is not None
 
-    assert not any(
-        isinstance(node, ast.Await)
+    awaits = [
+        node
         for node in ast.walk(target)
+        if isinstance(node, ast.Await)
+    ]
+
+    assert len(awaits) == 1
+
+    awaited_value = awaits[0].value
+
+    assert isinstance(
+        awaited_value,
+        ast.Call,
+    )
+
+    assert isinstance(
+        awaited_value.func,
+        ast.Name,
+    )
+
+    assert (
+        awaited_value.func.id
+        == "authorize_teams_approval_invocation"
     )
 
     source = ast.unparse(target)

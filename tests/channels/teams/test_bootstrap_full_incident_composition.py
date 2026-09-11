@@ -13,13 +13,26 @@ from src.channels.teams.bootstrap import (
 )
 
 
+class FakeMembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        raise AssertionError(
+            "membership no debe ejecutarse "
+            "durante bootstrap."
+        )
+
+
 def create_settings(tmp_path):
     return TeamsHitlSettings(
         client_id="11111111-1111-1111-1111-111111111111",
         client_secret="test-secret",
         bot_tenant_id="22222222-2222-2222-2222-222222222222",
         teams_channel_tenant_id="33333333-3333-3333-3333-333333333333",
-        approver_aad_object_id="44444444-4444-4444-4444-444444444444",
+        authorized_technicians_group_object_id="44444444-4444-4444-4444-444444444444",
         pending_database_path=tmp_path / "pending.db",
         checkpoint_path=tmp_path / "checkpoints",
         operation_dispatch_database_path=(
@@ -165,7 +178,12 @@ def test_bootstrap_builds_durable_incident_authorities(
 
     settings = create_settings(tmp_path)
 
-    teams_bootstrap.build_teams_hitl_app(settings)
+    teams_bootstrap.build_teams_hitl_app(
+        settings,
+        membership_checker=(
+            FakeMembershipChecker()
+        ),
+    )
 
     assert fakes["calls"]["checkpoint_paths"] == [
         settings.checkpoint_path
@@ -195,6 +213,9 @@ def test_workflow_factory_builds_full_incident_workflow_with_durable_ledger(
 
     bootstrap = teams_bootstrap.build_teams_hitl_app(
         create_settings(tmp_path),
+        membership_checker=(
+            FakeMembershipChecker()
+        ),
         azure_vm_power_state_reader=reader,
     )
 
@@ -227,7 +248,10 @@ async def test_processor_closure_injects_same_checkpoint_storage(
     )
 
     bootstrap = teams_bootstrap.build_teams_hitl_app(
-        create_settings(tmp_path)
+        create_settings(tmp_path),
+        membership_checker=(
+            FakeMembershipChecker()
+        ),
     )
 
     assert (
@@ -266,7 +290,10 @@ def test_bootstrap_exposes_durable_incident_components(
     )
 
     bootstrap = teams_bootstrap.build_teams_hitl_app(
-        create_settings(tmp_path)
+        create_settings(tmp_path),
+        membership_checker=(
+            FakeMembershipChecker()
+        ),
     )
 
     assert (

@@ -8,7 +8,6 @@ from src.channels.teams.approval_authorization import (
     AuthorizedTeamsApprovalInvocation,
     ExactTeamsApprovalPolicy,
     TeamsApprovalAuthorizationError,
-    TeamsApprovalPrincipal,
     authorize_teams_approval_invocation,
 )
 
@@ -29,8 +28,65 @@ APPROVAL_ID = (
 )
 
 POLICY_ID = (
-    "teams-hitl-sandbox-v1"
+    "teams-hitl-technicians-group-v1"
 )
+
+AUTHORIZED_GROUP_OBJECT_ID = (
+    "55555555-5555-4555-"
+    "8555-555555555555"
+)
+
+OTHER_AAD_OBJECT_ID = (
+    "22222222-2222-4222-"
+    "8222-222222222222"
+)
+
+OTHER_TENANT_ID = (
+    "aaaaaaaa-aaaa-4aaa-"
+    "8aaa-aaaaaaaaaaaa"
+)
+
+
+class MembershipChecker:
+    def __init__(
+        self,
+        *,
+        members=(),
+    ):
+        self.members = set(
+            members
+        )
+
+        self.calls = []
+
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        self.calls.append(
+            (
+                user_object_id,
+                group_object_id,
+            )
+        )
+
+        return (
+            group_object_id
+            == AUTHORIZED_GROUP_OBJECT_ID
+            and user_object_id
+            in self.members
+        )
+
+
+def create_checker(
+    *,
+    members=(AAD_OBJECT_ID,),
+):
+    return MembershipChecker(
+        members=members
+    )
 
 
 def create_invocation(
@@ -38,70 +94,40 @@ def create_invocation(
     tenant_id: str = TENANT_ID,
     aad_object_id: str = AAD_OBJECT_ID,
 ):
-    activity = (
-        create_activity(
-            tenant_id=(
-                tenant_id
-            ),
-
-            aad_object_id=(
-                aad_object_id
-            ),
-
-            action_data={
-                "action": (
-                    "approval_decision"
-                ),
-
-                "approval_id": (
-                    APPROVAL_ID
-                ),
-
-                "decision": (
-                    "approve"
-                ),
-            },
-        )
+    activity = create_activity(
+        tenant_id=tenant_id,
+        aad_object_id=aad_object_id,
+        action_data={
+            "action": "approval_decision",
+            "approval_id": APPROVAL_ID,
+            "decision": "approve",
+        },
     )
 
-    return (
-        build_teams_approval_invocation(
-            activity
-        )
+    return build_teams_approval_invocation(
+        activity
     )
 
 
-def create_policy(
-) -> ExactTeamsApprovalPolicy:
+def create_policy():
     return ExactTeamsApprovalPolicy(
-        policy_id=(
-            POLICY_ID
-        ),
-
-        allowed_principals=(
-            TeamsApprovalPrincipal(
-                tenant_id=(
-                    TENANT_ID
-                ),
-
-                aad_object_id=(
-                    AAD_OBJECT_ID
-                ),
-            ),
+        policy_id=POLICY_ID,
+        tenant_id=TENANT_ID,
+        authorized_technicians_group_object_id=(
+            AUTHORIZED_GROUP_OBJECT_ID
         ),
     )
 
 
-def test_exact_authenticated_principal_is_authorized():
-    authorized = (
-        authorize_teams_approval_invocation(
-            invocation=(
-                create_invocation()
-            ),
+@pytest.mark.asyncio
+async def test_exact_authenticated_group_member_is_authorized():
+    checker = create_checker()
 
-            policy=(
-                create_policy()
-            ),
+    authorized = await (
+        authorize_teams_approval_invocation(
+            invocation=create_invocation(),
+            policy=create_policy(),
+            membership_checker=checker,
         )
     )
 
@@ -110,10 +136,7 @@ def test_exact_authenticated_principal_is_authorized():
         AuthorizedTeamsApprovalInvocation,
     )
 
-    assert (
-        authorized.policy_id
-        == POLICY_ID
-    )
+    assert authorized.policy_id == POLICY_ID
 
     assert (
         authorized.operator.tenant_id
@@ -130,82 +153,85 @@ def test_exact_authenticated_principal_is_authorized():
         == APPROVAL_ID
     )
 
+    assert checker.calls == [
+        (
+            AAD_OBJECT_ID,
+            AUTHORIZED_GROUP_OBJECT_ID,
+        )
+    ]
 
-def test_wrong_aad_object_id_is_rejected():
-    invocation = (
-        create_invocation(
-            aad_object_id=(
-                "22222222-2222-4222-"
-                "8222-222222222222"
-            )
+
+@pytest.mark.asyncio
+async def test_wrong_aad_object_id_is_rejected_when_not_group_member():
+    checker = create_checker()
+
+    invocation = create_invocation(
+        aad_object_id=(
+            OTHER_AAD_OBJECT_ID
         )
     )
 
     with pytest.raises(
         TeamsApprovalAuthorizationError,
     ):
-        authorize_teams_approval_invocation(
+        await authorize_teams_approval_invocation(
             invocation=invocation,
             policy=create_policy(),
+            membership_checker=checker,
         )
 
 
-def test_wrong_tenant_is_rejected():
-    invocation = (
-        create_invocation(
-            tenant_id=(
-                "aaaaaaaa-aaaa-4aaa-"
-                "8aaa-aaaaaaaaaaaa"
-            )
-        )
+@pytest.mark.asyncio
+async def test_wrong_tenant_is_rejected_before_membership():
+    checker = create_checker()
+
+    invocation = create_invocation(
+        tenant_id=OTHER_TENANT_ID
     )
 
     with pytest.raises(
         TeamsApprovalAuthorizationError,
     ):
-        authorize_teams_approval_invocation(
+        await authorize_teams_approval_invocation(
             invocation=invocation,
             policy=create_policy(),
+            membership_checker=checker,
         )
 
+    assert checker.calls == []
 
-def test_same_aad_object_id_in_other_tenant_is_rejected():
-    invocation = (
-        create_invocation(
-            tenant_id=(
-                "aaaaaaaa-aaaa-4aaa-"
-                "8aaa-aaaaaaaaaaaa"
-            ),
 
-            aad_object_id=(
-                AAD_OBJECT_ID
-            ),
-        )
+@pytest.mark.asyncio
+async def test_same_aad_object_id_in_other_tenant_is_rejected():
+    checker = create_checker()
+
+    invocation = create_invocation(
+        tenant_id=OTHER_TENANT_ID,
+        aad_object_id=AAD_OBJECT_ID,
     )
 
     with pytest.raises(
         TeamsApprovalAuthorizationError,
     ):
-        authorize_teams_approval_invocation(
+        await authorize_teams_approval_invocation(
             invocation=invocation,
             policy=create_policy(),
+            membership_checker=checker,
         )
 
+    assert checker.calls == []
 
-def test_policy_cannot_authorize_by_display_name():
-    invocation = (
-        create_invocation(
-            aad_object_id=(
-                "22222222-2222-4222-"
-                "8222-222222222222"
-            )
+
+@pytest.mark.asyncio
+async def test_policy_cannot_authorize_by_display_name():
+    checker = create_checker()
+
+    invocation = create_invocation(
+        aad_object_id=(
+            OTHER_AAD_OBJECT_ID
         )
     )
 
-    # El activity helper utiliza el mismo
-    # display_name "Operador Sandbox".
-    #
-    # Ese nombre no concede autorización.
     assert (
         invocation.operator.display_name
         == "Operador Sandbox"
@@ -214,34 +240,28 @@ def test_policy_cannot_authorize_by_display_name():
     with pytest.raises(
         TeamsApprovalAuthorizationError,
     ):
-        authorize_teams_approval_invocation(
+        await authorize_teams_approval_invocation(
             invocation=invocation,
             policy=create_policy(),
+            membership_checker=checker,
         )
 
 
-def test_authorized_invocation_contains_no_operational_authority():
-    authorized = (
+@pytest.mark.asyncio
+async def test_authorized_invocation_contains_no_operational_authority():
+    authorized = await (
         authorize_teams_approval_invocation(
-            invocation=(
-                create_invocation()
-            ),
-
-            policy=(
-                create_policy()
-            ),
+            invocation=create_invocation(),
+            policy=create_policy(),
+            membership_checker=create_checker(),
         )
     )
 
-    payload = (
-        authorized.model_dump(
-            mode="json"
-        )
+    payload = authorized.model_dump(
+        mode="json"
     )
 
-    assert set(
-        payload
-    ) == {
+    assert set(payload) == {
         "policy_id",
         "operator",
         "action",
@@ -269,65 +289,40 @@ def test_authorized_invocation_contains_no_operational_authority():
     ]
 
     for field in forbidden:
-        assert (
-            field
-            not in serialized
-        )
+        assert field not in serialized
 
 
-def test_empty_allowlist_is_rejected():
+def test_empty_group_object_id_is_rejected():
     with pytest.raises(
         ValidationError,
-        match="al menos un principal",
     ):
         ExactTeamsApprovalPolicy(
-            policy_id=(
-                POLICY_ID
-            ),
-
-            allowed_principals=(),
+            policy_id=POLICY_ID,
+            tenant_id=TENANT_ID,
+            authorized_technicians_group_object_id="",
         )
 
 
-def test_duplicate_principal_is_rejected():
-    principal = (
-        TeamsApprovalPrincipal(
-            tenant_id=(
-                TENANT_ID
-            ),
-
-            aad_object_id=(
-                AAD_OBJECT_ID
-            ),
-        )
-    )
-
+def test_malformed_group_object_id_is_rejected():
     with pytest.raises(
         ValidationError,
-        match="duplicados",
     ):
         ExactTeamsApprovalPolicy(
-            policy_id=(
-                POLICY_ID
-            ),
-
-            allowed_principals=(
-                principal,
-                principal,
+            policy_id=POLICY_ID,
+            tenant_id=TENANT_ID,
+            authorized_technicians_group_object_id=(
+                "not-a-guid"
             ),
         )
 
 
-def test_authorized_invocation_is_immutable():
-    authorized = (
+@pytest.mark.asyncio
+async def test_authorized_invocation_is_immutable():
+    authorized = await (
         authorize_teams_approval_invocation(
-            invocation=(
-                create_invocation()
-            ),
-
-            policy=(
-                create_policy()
-            ),
+            invocation=create_invocation(),
+            policy=create_policy(),
+            membership_checker=create_checker(),
         )
     )
 

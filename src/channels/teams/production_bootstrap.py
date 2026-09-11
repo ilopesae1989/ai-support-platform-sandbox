@@ -90,6 +90,7 @@ def build_production_teams_hitl_app(
     ),
     azure_sql_settings: AzureSqlManagedIdentitySettings,
     *,
+    membership_checker: object,
     azure_vm_power_state_reader: AzureVmPowerStateReader,
 ) -> ProductionTeamsHitlBootstrap:
     """
@@ -160,6 +161,9 @@ def build_production_teams_hitl_app(
 
     base_bootstrap = build_teams_hitl_app(
         app_settings,
+        membership_checker=(
+            membership_checker
+        ),
         persistence=persistence,
         azure_vm_power_state_reader=(
             azure_vm_power_state_reader
@@ -191,6 +195,7 @@ def build_production_teams_hitl_app_with_communication(
     ),
     azure_sql_settings: AzureSqlManagedIdentitySettings,
     *,
+    membership_checker: object,
     azure_vm_power_state_reader: AzureVmPowerStateReader,
     communication_runner: object,
 ) -> ProductionTeamsHitlBootstrap:
@@ -245,6 +250,9 @@ def build_production_teams_hitl_app_with_communication(
 
     base_bootstrap = build_teams_hitl_app(
         app_settings,
+        membership_checker=(
+            membership_checker
+        ),
         persistence=persistence,
         azure_vm_power_state_reader=(
             azure_vm_power_state_reader

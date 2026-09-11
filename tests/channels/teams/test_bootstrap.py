@@ -53,10 +53,24 @@ CLIENT_ID = (
     "8aaa-aaaaaaaaaaaa"
 )
 
-APPROVER_ID = (
+AUTHORIZED_GROUP_OBJECT_ID = (
     "69916319-588a-42a9-"
     "9109-b57c6d1c7501"
 )
+
+
+class MembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        return True
+
+
+def create_membership_checker():
+    return MembershipChecker()
 
 
 def configure_environment(
@@ -85,8 +99,8 @@ def configure_environment(
     )
 
     monkeypatch.setenv(
-        "TEAMS_HITL_APPROVER_AAD_OBJECT_ID",
-        APPROVER_ID,
+        "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID",
+        AUTHORIZED_GROUP_OBJECT_ID,
     )
 
     monkeypatch.setenv(
@@ -136,10 +150,7 @@ def test_settings_are_loaded_from_environment(
         .from_environment()
     )
 
-    assert (
-        settings.client_id
-        == CLIENT_ID
-    )
+    assert settings.client_id == CLIENT_ID
 
     assert (
         settings.bot_tenant_id
@@ -157,32 +168,24 @@ def test_settings_are_loaded_from_environment(
     )
 
     assert (
-        settings.approver_aad_object_id
-        == APPROVER_ID
+        settings
+        .authorized_technicians_group_object_id
+        == AUTHORIZED_GROUP_OBJECT_ID
     )
 
     assert (
         settings.pending_database_path
-        == (
-            tmp_path
-            / "pending-approvals.db"
-        )
+        == tmp_path / "pending-approvals.db"
     )
 
     assert (
         settings.checkpoint_path
-        == (
-            tmp_path
-            / "checkpoints"
-        )
+        == tmp_path / "checkpoints"
     )
 
     assert (
         settings.conversation_binding_database_path
-        == (
-            tmp_path
-            / "conversation-bindings.db"
-        )
+        == tmp_path / "conversation-bindings.db"
     )
 
 
@@ -193,7 +196,7 @@ def test_settings_are_loaded_from_environment(
         "CLIENT_SECRET",
         "TENANT_ID",
         "TEAMS_CHANNEL_TENANT_ID",
-        "TEAMS_HITL_APPROVER_AAD_OBJECT_ID",
+        "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID",
         "TEAMS_HITL_PENDING_DB",
         "TEAMS_HITL_CHECKPOINT_DIR",
         "TEAMS_CONVERSATION_BINDING_DB",
@@ -237,9 +240,7 @@ def test_secret_is_not_exposed_in_settings_repr(
 
     assert (
         "sandbox-secret-for-test-only"
-        not in repr(
-            settings
-        )
+        not in repr(settings)
     )
 
 
@@ -257,10 +258,11 @@ def test_bootstrap_builds_real_teams_app(
         .from_environment()
     )
 
-    bootstrap = (
-        build_teams_hitl_app(
-            settings
-        )
+    bootstrap = build_teams_hitl_app(
+        settings,
+        membership_checker=(
+            create_membership_checker()
+        ),
     )
 
     assert isinstance(
@@ -288,6 +290,11 @@ def test_bootstrap_builds_real_teams_app(
         TeamsApprovalHandlerDependencies,
     )
 
+    assert (
+        bootstrap.dependencies.membership_checker
+        is not None
+    )
+
     assert isinstance(
         bootstrap.conversation_store,
         SqliteTeamsConversationBindingStore,
@@ -306,7 +313,7 @@ def test_bootstrap_builds_real_teams_app(
     )
 
 
-def test_bootstrap_authorizes_only_exact_configured_principal(
+def test_bootstrap_governs_exact_tenant_and_group(
     monkeypatch,
     tmp_path,
 ):
@@ -315,32 +322,23 @@ def test_bootstrap_authorizes_only_exact_configured_principal(
         tmp_path=tmp_path,
     )
 
-    bootstrap = (
-        build_teams_hitl_app(
-            TeamsHitlSettings
-            .from_environment()
-        )
-    )
-
-    principals = (
-        bootstrap
-        .policy
-        .allowed_principals
+    bootstrap = build_teams_hitl_app(
+        TeamsHitlSettings.from_environment(),
+        membership_checker=(
+            create_membership_checker()
+        ),
     )
 
     assert (
-        len(principals)
-        == 1
-    )
-
-    assert (
-        principals[0].tenant_id
+        bootstrap.policy.tenant_id
         == CHANNEL_TENANT_ID
     )
 
     assert (
-        principals[0].aad_object_id
-        == APPROVER_ID
+        bootstrap
+        .policy
+        .authorized_technicians_group_object_id
+        == AUTHORIZED_GROUP_OBJECT_ID
     )
 
 
@@ -377,7 +375,10 @@ def test_bootstrap_registers_conversation_handler(
         teams_bootstrap
         .build_teams_hitl_app(
             TeamsHitlSettings
-            .from_environment()
+            .from_environment(),
+            membership_checker=(
+                create_membership_checker()
+            ),
         )
     )
 
@@ -419,10 +420,8 @@ def test_bootstrap_contains_no_operational_configuration(
         "checkpoint_id",
     }
 
-    assert (
-        forbidden.isdisjoint(
-            fields
-        )
+    assert forbidden.isdisjoint(
+        fields
     )
 
 
@@ -440,10 +439,11 @@ def test_bot_tenant_and_channel_tenant_are_separate_authorities(
         .from_environment()
     )
 
-    bootstrap = (
-        build_teams_hitl_app(
-            settings
-        )
+    bootstrap = build_teams_hitl_app(
+        settings,
+        membership_checker=(
+            create_membership_checker()
+        ),
     )
 
     assert (
@@ -464,17 +464,13 @@ def test_bot_tenant_and_channel_tenant_are_separate_authorities(
     )
 
     assert (
-        bootstrap
-        .policy
-        .allowed_principals[0]
-        .tenant_id
+        bootstrap.policy.tenant_id
         == CHANNEL_TENANT_ID
     )
 
     assert (
         bootstrap
         .policy
-        .allowed_principals[0]
-        .aad_object_id
-        == APPROVER_ID
+        .authorized_technicians_group_object_id
+        == AUTHORIZED_GROUP_OBJECT_ID
     )

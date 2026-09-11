@@ -59,7 +59,7 @@ def _local_settings(
             "3048dc87-43f0-4100-"
             "9acb-ae1971c79395"
         ),
-        approver_aad_object_id=(
+        authorized_technicians_group_object_id=(
             "69916319-588a-42a9-"
             "9109-b57c6d1c7501"
         ),

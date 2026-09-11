@@ -21,7 +21,7 @@ def configure_current_environment(monkeypatch, tmp_path):
         "TEAMS_CHANNEL_TENANT_ID": (
             "33333333-3333-3333-3333-333333333333"
         ),
-        "TEAMS_HITL_APPROVER_AAD_OBJECT_ID": (
+        "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID": (
             "44444444-4444-4444-4444-444444444444"
         ),
         "TEAMS_HITL_PENDING_DB": str(

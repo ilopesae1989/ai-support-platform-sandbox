@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import (
     BaseModel,
     ConfigDict,
     field_validator,
-    model_validator,
 )
 
 from .approval_invocation import (
@@ -23,101 +24,66 @@ from src.runtime.procedure.approval_channel import (
 class TeamsApprovalAuthorizationError(
     PermissionError
 ):
-    """
-    El operador Teams está identificado, pero
-    no está autorizado para aprobar/rechazar
-    operaciones HITL.
-    """
-
     pass
 
 
-class TeamsApprovalPrincipal(
-    BaseModel
-):
-    """
-    Principal exacto autorizado para HITL.
-
-    La identidad está compuesta por:
-
-        tenant_id
-        aad_object_id
-
-    No se autoriza por nombre visible,
-    Teams user id ni conversación.
-    """
-
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-    )
-
-    tenant_id: str
-    aad_object_id: str
-
-    @field_validator(
-        "tenant_id",
-        "aad_object_id",
-    )
-    @classmethod
-    def validate_exact_identity(
-        cls,
-        value: str,
-    ) -> str:
-        if not isinstance(
+def _require_exact_string(
+    *,
+    name: str,
+    value: str,
+) -> str:
+    if (
+        not isinstance(
             value,
             str,
-        ):
-            raise ValueError(
-                "La identidad autorizada debe "
-                "ser string."
-            )
+        )
+        or not value
+        or not value.strip()
+        or value != value.strip()
+    ):
+        raise ValueError(
+            f"{name} debe ser un string "
+            "exacto no vacío."
+        )
 
-        if not value:
-            raise ValueError(
-                "La identidad autorizada no "
-                "puede estar vacía."
-            )
+    return value
 
-        if not value.strip():
-            raise ValueError(
-                "La identidad autorizada no "
-                "puede contener sólo espacios."
-            )
 
-        if (
+def _require_canonical_uuid(
+    *,
+    name: str,
+    value: str,
+) -> str:
+    value = _require_exact_string(
+        name=name,
+        value=value,
+    )
+
+    try:
+        parsed = UUID(
             value
-            != value.strip()
-        ):
-            raise ValueError(
-                "La identidad autorizada no "
-                "puede contener espacios al "
-                "inicio o al final."
-            )
+        )
+    except (
+        ValueError,
+        TypeError,
+        AttributeError,
+    ):
+        raise ValueError(
+            f"{name} debe ser un UUID canónico."
+        ) from None
 
-        return value
+    if str(parsed) != value:
+        raise ValueError(
+            f"{name} debe usar representación "
+            "UUID canónica."
+        )
+
+    return value
 
 
 class ExactTeamsApprovalPolicy(
     BaseModel
 ):
-    """
-    Política exacta de autorización para el MVP.
-
-    NO existe:
-
-    - allow-all;
-    - wildcard;
-    - fuzzy matching;
-    - autorización por display_name;
-    - autorización por teams_user_id;
-    - selección mediante LLM.
-
-    La implementación productiva podrá sustituirse
-    posteriormente por Microsoft Entra App Roles
-    sin modificar el contrato del canal.
-    """
-
     model_config = ConfigDict(
         extra="forbid",
         frozen=True,
@@ -125,93 +91,45 @@ class ExactTeamsApprovalPolicy(
 
     policy_id: str
 
-    allowed_principals: tuple[
-        TeamsApprovalPrincipal,
-        ...,
-    ]
+    tenant_id: str
+
+    authorized_technicians_group_object_id: str
 
     @field_validator(
-        "policy_id"
+        "policy_id",
+        "tenant_id",
     )
     @classmethod
-    def validate_policy_id(
+    def validate_exact_string(
+        cls,
+        value: str,
+        info,
+    ) -> str:
+        return _require_exact_string(
+            name=info.field_name,
+            value=value,
+        )
+
+    @field_validator(
+        "authorized_technicians_group_object_id"
+    )
+    @classmethod
+    def validate_group_object_id(
         cls,
         value: str,
     ) -> str:
-        if (
-            not isinstance(
-                value,
-                str,
-            )
-            or not value
-            or not value.strip()
-            or value != value.strip()
-        ):
-            raise ValueError(
-                "policy_id debe ser un string "
-                "no vacío y exacto."
-            )
-
-        return value
-
-    @model_validator(
-        mode="after"
-    )
-    def validate_principals(
-        self,
-    ):
-        if not self.allowed_principals:
-            raise ValueError(
-                "La política HITL debe contener "
-                "al menos un principal autorizado."
-            )
-
-        identities = [
-            (
-                principal.tenant_id,
-                principal.aad_object_id,
-            )
-            for principal
-            in self.allowed_principals
-        ]
-
-        if (
-            len(identities)
-            != len(
-                set(
-                    identities
-                )
-            )
-        ):
-            raise ValueError(
-                "La política HITL contiene "
-                "principales duplicados."
-            )
-
-        return self
+        return _require_canonical_uuid(
+            name=(
+                "authorized_technicians_"
+                "group_object_id"
+            ),
+            value=value,
+        )
 
 
 class AuthorizedTeamsApprovalInvocation(
     BaseModel
 ):
-    """
-    Resultado de superar explícitamente la
-    frontera de autorización Teams.
-
-    Sigue sin contener ninguna autoridad
-    operacional.
-
-    Sólo certifica que:
-
-        identidad autenticada
-            +
-        decisión mínima
-            +
-        policy Python
-            ↓
-        operador autorizado
-    """
-
     model_config = ConfigDict(
         extra="forbid",
         frozen=True,
@@ -224,23 +142,12 @@ class AuthorizedTeamsApprovalInvocation(
     action: ApprovalChannelAction
 
 
-def authorize_teams_approval_invocation(
+async def authorize_teams_approval_invocation(
     *,
     invocation: TeamsApprovalInvocation,
     policy: ExactTeamsApprovalPolicy,
+    membership_checker: object,
 ) -> AuthorizedTeamsApprovalInvocation:
-    """
-    Autoriza mediante coincidencia exacta de:
-
-        tenant_id
-        aad_object_id
-
-    El canal no decide la política.
-
-    El usuario no puede proporcionar ni modificar
-    la allowlist desde Action.Execute.data.
-    """
-
     if not isinstance(
         invocation,
         TeamsApprovalInvocation,
@@ -259,41 +166,58 @@ def authorize_teams_approval_invocation(
             "ExactTeamsApprovalPolicy."
         )
 
-    identity = (
-        invocation.operator.tenant_id,
-        invocation.operator.aad_object_id,
+    if (
+        invocation.operator.tenant_id
+        != policy.tenant_id
+    ):
+        raise TeamsApprovalAuthorizationError(
+            "El operador Teams no está "
+            "autorizado para decisiones HITL."
+        )
+
+    membership_method = getattr(
+        membership_checker,
+        "is_transitive_member",
+        None,
     )
 
-    allowed_identities = {
-        (
-            principal.tenant_id,
-            principal.aad_object_id,
-        )
-        for principal
-        in policy.allowed_principals
-    }
-
-    if (
-        identity
-        not in allowed_identities
+    if not callable(
+        membership_method
     ):
-        raise (
-            TeamsApprovalAuthorizationError(
-                "El operador Teams no está "
-                "autorizado para realizar "
-                "decisiones HITL."
-            )
+        raise TeamsApprovalAuthorizationError(
+            "No existe una autoridad válida "
+            "de membership."
+        )
+
+    try:
+        is_member = await membership_method(
+            user_object_id=(
+                invocation.operator.aad_object_id
+            ),
+            group_object_id=(
+                policy
+                .authorized_technicians_group_object_id
+            ),
+        )
+    except Exception:
+        raise TeamsApprovalAuthorizationError(
+            "No pudo demostrarse la "
+            "autorización del operador Teams."
+        ) from None
+
+    if is_member is not True:
+        raise TeamsApprovalAuthorizationError(
+            "El operador Teams no está "
+            "autorizado para decisiones HITL."
         )
 
     return AuthorizedTeamsApprovalInvocation(
         policy_id=(
             policy.policy_id
         ),
-
         operator=(
             invocation.operator
         ),
-
         action=(
             invocation.action
         ),

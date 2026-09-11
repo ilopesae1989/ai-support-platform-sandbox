@@ -90,6 +90,8 @@ class TeamsApprovalHandlerDependencies:
 
     policy: ExactTeamsApprovalPolicy
 
+    membership_checker: object
+
     store: PendingApprovalStore
 
     workflow_factory: WorkflowFactory
@@ -236,13 +238,17 @@ async def handle_teams_approval_action(
         )
 
         authorized = (
-            authorize_teams_approval_invocation(
+            await authorize_teams_approval_invocation(
                 invocation=(
                     invocation
                 ),
 
                 policy=(
                     dependencies.policy
+                ),
+
+                membership_checker=(
+                    dependencies.membership_checker
                 ),
             )
         )

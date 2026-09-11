@@ -125,9 +125,9 @@ def build_production_teams_host_settings(
             environment=environment,
             name="TEAMS_CHANNEL_TENANT_ID",
         ),
-        approver_aad_object_id=_required_value(
+        authorized_technicians_group_object_id=_required_value(
             environment=environment,
-            name="TEAMS_HITL_APPROVER_AAD_OBJECT_ID",
+            name="TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID",
         ),
     )
 

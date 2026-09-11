@@ -10,6 +10,10 @@ from src.channels.teams.production_settings import (
     build_production_teams_host_settings,
 )
 
+from src.channels.teams.graph_group_membership import (
+    build_managed_identity_graph_membership_client,
+)
+
 from src.workflows.incident_resolution.azure_vm_observation_reader import (
     build_azure_vm_observation_reader,
 )
@@ -36,6 +40,16 @@ def build_production_teams_host(
         )
     )
 
+    membership_checker = (
+        build_managed_identity_graph_membership_client(
+            managed_identity_client_id=(
+                host_settings
+                .app_settings
+                .managed_identity_client_id
+            )
+        )
+    )
+
     observation_settings = (
         build_azure_vm_observation_settings(
             environment
@@ -51,6 +65,9 @@ def build_production_teams_host(
     return build_production_teams_hitl_app(
         host_settings.app_settings,
         host_settings.azure_sql_settings,
+        membership_checker=(
+            membership_checker
+        ),
         azure_vm_power_state_reader=reader,
     )
 
@@ -86,6 +103,16 @@ def build_production_teams_host_with_communication(
         )
     )
 
+    membership_checker = (
+        build_managed_identity_graph_membership_client(
+            managed_identity_client_id=(
+                host_settings
+                .app_settings
+                .managed_identity_client_id
+            )
+        )
+    )
+
     observation_settings = (
         build_azure_vm_observation_settings(
             environment
@@ -102,6 +129,9 @@ def build_production_teams_host_with_communication(
         build_production_teams_hitl_app_with_communication(
             host_settings.app_settings,
             host_settings.azure_sql_settings,
+            membership_checker=(
+                membership_checker
+            ),
             azure_vm_power_state_reader=reader,
             communication_runner=(
                 communication_runner

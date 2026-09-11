@@ -11,6 +11,19 @@ from tests.channels.teams.test_bootstrap_outbound_composition import (
 )
 
 
+class FakeMembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        raise AssertionError(
+            "membership no debe ejecutarse "
+            "durante bootstrap."
+        )
+
+
 def test_build_teams_hitl_app_accepts_optional_keyword_only_communication_runner():
     signature = inspect.signature(
         teams_bootstrap.build_teams_hitl_app
@@ -71,6 +84,9 @@ async def test_bootstrap_forwards_exact_runner_only_to_terminal_presenter(
     bootstrap = (
         teams_bootstrap.build_teams_hitl_app(
             create_settings(tmp_path),
+            membership_checker=(
+                FakeMembershipChecker()
+            ),
             communication_runner=(
                 communication_runner
             ),
@@ -136,7 +152,10 @@ async def test_default_none_is_forwarded_to_preserve_deterministic_path(
 
     bootstrap = (
         teams_bootstrap.build_teams_hitl_app(
-            create_settings(tmp_path)
+            create_settings(tmp_path),
+            membership_checker=(
+                FakeMembershipChecker()
+            ),
         )
     )
 

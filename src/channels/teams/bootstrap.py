@@ -52,7 +52,6 @@ from src.workflows.incident_resolution.workflow import (
 
 from .approval_authorization import (
     ExactTeamsApprovalPolicy,
-    TeamsApprovalPrincipal,
 )
 
 from .incident_approval_handoff_handler import (
@@ -149,7 +148,7 @@ class TeamsHitlAppSettings:
 
     teams_channel_tenant_id: str
 
-    approver_aad_object_id: str
+    authorized_technicians_group_object_id: str
 
     messaging_endpoint: str = (
         "/api/messages"
@@ -184,9 +183,9 @@ class TeamsHitlAppSettings:
                 )
             ),
 
-            approver_aad_object_id=(
+            authorized_technicians_group_object_id=(
                 _required_environment_value(
-                    "TEAMS_HITL_APPROVER_AAD_OBJECT_ID"
+                    "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID"
                 )
             ),
         )
@@ -219,7 +218,7 @@ class TeamsManagedIdentityAppSettings:
 
     teams_channel_tenant_id: str
 
-    approver_aad_object_id: str
+    authorized_technicians_group_object_id: str
 
     messaging_endpoint: str = (
         "/api/messages"
@@ -296,7 +295,7 @@ class TeamsHitlSettings:
 
     teams_channel_tenant_id: str
 
-    approver_aad_object_id: str
+    authorized_technicians_group_object_id: str
 
     pending_database_path: Path
 
@@ -363,9 +362,9 @@ class TeamsHitlSettings:
                 )
             ),
 
-            approver_aad_object_id=(
+            authorized_technicians_group_object_id=(
                 _required_environment_value(
-                    "TEAMS_HITL_APPROVER_AAD_OBJECT_ID"
+                    "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID"
                 )
             ),
 
@@ -537,6 +536,7 @@ def build_teams_hitl_app(
         | TeamsManagedIdentityAppSettings
     ),
     *,
+    membership_checker: object,
     persistence: (
         TeamsHitlPersistence | None
     ) = None,
@@ -574,6 +574,20 @@ def build_teams_hitl_app(
             "settings debe ser TeamsHitlSettings, "
             "TeamsHitlAppSettings o "
             "TeamsManagedIdentityAppSettings."
+        )
+
+    membership_method = getattr(
+        membership_checker,
+        "is_transitive_member",
+        None,
+    )
+
+    if not callable(
+        membership_method
+    ):
+        raise TeamsHitlConfigurationError(
+            "membership_checker debe implementar "
+            "is_transitive_member()."
         )
 
     if persistence is None:
@@ -636,25 +650,19 @@ def build_teams_hitl_app(
     policy = (
         ExactTeamsApprovalPolicy(
             policy_id=(
-                "teams-hitl-sandbox-v1"
+                "teams-hitl-technicians-group-v1"
             ),
 
-            allowed_principals=(
-                TeamsApprovalPrincipal(
-                    tenant_id=(
-                        settings.teams_channel_tenant_id
-                    ),
+            tenant_id=(
+                settings.teams_channel_tenant_id
+            ),
 
-                    aad_object_id=(
-                        settings
-                        .approver_aad_object_id
-                    ),
-                ),
+            authorized_technicians_group_object_id=(
+                settings
+                .authorized_technicians_group_object_id
             ),
         )
     )
-
-
 
 
     def workflow_factory():
@@ -693,6 +701,10 @@ def build_teams_hitl_app(
         TeamsApprovalHandlerDependencies(
             policy=(
                 policy
+            ),
+
+            membership_checker=(
+                membership_checker
             ),
 
             store=(

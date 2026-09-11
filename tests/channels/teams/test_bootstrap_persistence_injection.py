@@ -23,6 +23,19 @@ EXPECTED_PERSISTENCE_FIELDS = (
 )
 
 
+class FakeMembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        raise AssertionError(
+            "membership no debe ejecutarse "
+            "durante bootstrap."
+        )
+
+
 class FakeConversationStore:
     def upsert(
         self,
@@ -62,7 +75,7 @@ def _settings(
             "3048dc87-43f0-4100-"
             "9acb-ae1971c79395"
         ),
-        approver_aad_object_id=(
+        authorized_technicians_group_object_id=(
             "69916319-588a-42a9-"
             "9109-b57c6d1c7501"
         ),
@@ -312,6 +325,9 @@ def test_injected_persistence_is_used_exactly_without_local_store_creation(
         .build_teams_hitl_app(
             _settings(
                 tmp_path
+            ),
+            membership_checker=(
+                FakeMembershipChecker()
             ),
             persistence=persistence,
         )

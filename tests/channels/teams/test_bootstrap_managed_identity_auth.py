@@ -21,7 +21,7 @@ EXPECTED_MANAGED_IDENTITY_FIELDS = (
     "managed_identity_client_id",
     "bot_tenant_id",
     "teams_channel_tenant_id",
-    "approver_aad_object_id",
+    "authorized_technicians_group_object_id",
     "messaging_endpoint",
 )
 
@@ -74,6 +74,20 @@ class FakePowerStateReader:
         )
 
 
+class MembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        return True
+
+
+def _membership_checker():
+    return MembershipChecker()
+
+
 def _managed_identity_settings_type():
     settings_type = getattr(
         teams_bootstrap,
@@ -106,8 +120,8 @@ def _managed_identity_settings(
         teams_channel_tenant_id=(
             "channel-tenant-id"
         ),
-        approver_aad_object_id=(
-            "approver-object-id"
+        authorized_technicians_group_object_id=(
+            "55555555-5555-4555-8555-555555555555"
         ),
     )
 
@@ -275,8 +289,8 @@ def test_managed_identity_settings_reject_invalid_identity_identifiers():
                 teams_channel_tenant_id=(
                     "channel-tenant-id"
                 ),
-                approver_aad_object_id=(
-                    "approver-object-id"
+                authorized_technicians_group_object_id=(
+                    "55555555-5555-4555-8555-555555555555"
                 ),
             )
 
@@ -327,6 +341,9 @@ def test_managed_identity_app_settings_require_injected_persistence(
     ):
         teams_bootstrap.build_teams_hitl_app(
             settings,
+            membership_checker=(
+                _membership_checker()
+            ),
             azure_vm_power_state_reader=(
                 FakePowerStateReader()
             ),
@@ -352,6 +369,9 @@ def test_system_assigned_managed_identity_is_passed_to_teams_without_secret(
 
     teams_bootstrap.build_teams_hitl_app(
         settings,
+        membership_checker=(
+            _membership_checker()
+        ),
         persistence=_persistence(),
         azure_vm_power_state_reader=(
             FakePowerStateReader()
@@ -401,6 +421,9 @@ def test_user_assigned_managed_identity_is_passed_to_teams_without_secret(
 
     teams_bootstrap.build_teams_hitl_app(
         settings,
+        membership_checker=(
+            _membership_checker()
+        ),
         persistence=_persistence(),
         azure_vm_power_state_reader=(
             FakePowerStateReader()
@@ -453,8 +476,8 @@ def test_existing_client_secret_app_settings_path_remains_unchanged(
             teams_channel_tenant_id=(
                 "channel-tenant-id"
             ),
-            approver_aad_object_id=(
-                "approver-object-id"
+            authorized_technicians_group_object_id=(
+                "55555555-5555-4555-8555-555555555555"
             ),
         )
     )
@@ -467,6 +490,9 @@ def test_existing_client_secret_app_settings_path_remains_unchanged(
 
     teams_bootstrap.build_teams_hitl_app(
         settings,
+        membership_checker=(
+            _membership_checker()
+        ),
         persistence=_persistence(),
         azure_vm_power_state_reader=(
             FakePowerStateReader()
@@ -548,6 +574,7 @@ def test_production_composition_accepts_managed_identity_app_settings(
     )
 
     reader = FakePowerStateReader()
+    membership_checker = _membership_checker()
 
     persistence = object()
     bootstrap = object()
@@ -567,6 +594,7 @@ def test_production_composition_accepts_managed_identity_app_settings(
     def fake_build_teams(
         app_settings,
         *,
+        membership_checker,
         persistence,
         azure_vm_power_state_reader,
     ):
@@ -603,6 +631,9 @@ def test_production_composition_accepts_managed_identity_app_settings(
         .build_production_teams_hitl_app(
             settings,
             azure_sql_settings,
+            membership_checker=(
+                membership_checker
+            ),
             azure_vm_power_state_reader=(
                 reader
             ),

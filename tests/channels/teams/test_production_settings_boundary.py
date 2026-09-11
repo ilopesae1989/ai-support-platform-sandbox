@@ -36,7 +36,7 @@ REQUIRED_ENVIRONMENT_NAMES = (
     "MANAGED_IDENTITY_CLIENT_ID",
     "TENANT_ID",
     "TEAMS_CHANNEL_TENANT_ID",
-    "TEAMS_HITL_APPROVER_AAD_OBJECT_ID",
+    "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID",
     "AZURE_SQL_SERVER",
     "AZURE_SQL_DATABASE",
 )
@@ -70,8 +70,8 @@ def _base_environment():
         "TEAMS_CHANNEL_TENANT_ID": (
             "channel-tenant-id"
         ),
-        "TEAMS_HITL_APPROVER_AAD_OBJECT_ID": (
-            "approver-object-id"
+        "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID": (
+            "55555555-5555-4555-8555-555555555555"
         ),
         "AZURE_SQL_SERVER": (
             "ai-support-platform-sbx"
@@ -170,8 +170,8 @@ def test_system_assigned_host_settings_are_structured_without_secrets():
     assert (
         settings
         .app_settings
-        .approver_aad_object_id
-        == "approver-object-id"
+        .authorized_technicians_group_object_id
+        == "55555555-5555-4555-8555-555555555555"
     )
 
     assert (

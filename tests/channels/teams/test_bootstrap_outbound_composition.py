@@ -7,6 +7,19 @@ from src.channels.teams.bootstrap import (
 )
 
 
+class FakeMembershipChecker:
+    async def is_transitive_member(
+        self,
+        *,
+        user_object_id,
+        group_object_id,
+    ):
+        raise AssertionError(
+            "membership no debe ejecutarse "
+            "durante bootstrap."
+        )
+
+
 def create_settings(tmp_path):
     return TeamsHitlSettings(
         client_id="11111111-1111-1111-1111-111111111111",
@@ -15,7 +28,7 @@ def create_settings(tmp_path):
         teams_channel_tenant_id=(
             "33333333-3333-3333-3333-333333333333"
         ),
-        approver_aad_object_id=(
+        authorized_technicians_group_object_id=(
             "44444444-4444-4444-4444-444444444444"
         ),
         pending_database_path=tmp_path / "pending.db",
@@ -61,7 +74,10 @@ def test_bootstrap_builds_outbound_from_exact_app_and_conversation_store(
     )
 
     bootstrap = teams_bootstrap.build_teams_hitl_app(
-        create_settings(tmp_path)
+        create_settings(tmp_path),
+        membership_checker=(
+            FakeMembershipChecker()
+        ),
     )
 
     assert calls == [
@@ -84,7 +100,10 @@ def test_bootstrap_exposes_same_governed_outbound(
     )
 
     bootstrap = teams_bootstrap.build_teams_hitl_app(
-        create_settings(tmp_path)
+        create_settings(tmp_path),
+        membership_checker=(
+            FakeMembershipChecker()
+        ),
     )
 
     assert len(calls) == 1
