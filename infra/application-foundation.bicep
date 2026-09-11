@@ -4,6 +4,7 @@ param networkResourceGroupName string
 param dataResourceGroupName string
 param applicationResourceGroupName string
 param location string
+param sqlLocation string
 param vnetName string
 param vnetAddressPrefix string
 param containerAppsSubnetName string
@@ -61,8 +62,9 @@ module applicationSql './sql/application-sql-foundation.bicep' = {
   params: {
     sqlServerName: sqlServerName
     sqlDatabaseName: sqlDatabaseName
-    location: location
+    sqlLocation: sqlLocation
     sqlRuntimeIdentityName: sqlRuntimeIdentityName
+    sqlRuntimeIdentityLocation: location
     sqlEntraAdminLogin: sqlEntraAdminLogin
     sqlEntraAdminObjectId: sqlEntraAdminObjectId
     tenantId: tenantId

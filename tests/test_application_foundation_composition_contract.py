@@ -14,6 +14,7 @@ EXPECTED_PARAMETERS = {
     "dataResourceGroupName": "string",
     "applicationResourceGroupName": "string",
     "location": "string",
+    "sqlLocation": "string",
     "vnetName": "string",
     "vnetAddressPrefix": "string",
     "containerAppsSubnetName": "string",
@@ -200,8 +201,9 @@ def test_sql_module_receives_only_external_sql_bootstrap_contract():
     required = (
         "sqlServerName: sqlServerName",
         "sqlDatabaseName: sqlDatabaseName",
-        "location: location",
+        "sqlLocation: sqlLocation",
         "sqlRuntimeIdentityName: sqlRuntimeIdentityName",
+        "sqlRuntimeIdentityLocation: location",
         "sqlEntraAdminLogin: sqlEntraAdminLogin",
         "sqlEntraAdminObjectId: sqlEntraAdminObjectId",
         "tenantId: tenantId",

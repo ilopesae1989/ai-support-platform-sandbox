@@ -1,7 +1,8 @@
 param sqlServerName string
 param sqlDatabaseName string
-param location string
+param sqlLocation string
 param sqlRuntimeIdentityName string
+param sqlRuntimeIdentityLocation string
 param sqlEntraAdminLogin string
 param sqlEntraAdminObjectId string
 param tenantId string
@@ -12,12 +13,12 @@ param databaseMaxSizeBytes int
 
 resource sqlRuntimeIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: sqlRuntimeIdentityName
-  location: location
+  location: sqlRuntimeIdentityLocation
 }
 
 resource sqlServer 'Microsoft.Sql/servers@2025-01-01' = {
   name: sqlServerName
-  location: location
+  location: sqlLocation
   properties: {
     administrators: {
       administratorType: 'ActiveDirectory'
@@ -36,7 +37,7 @@ resource sqlServer 'Microsoft.Sql/servers@2025-01-01' = {
 resource sqlDatabase 'Microsoft.Sql/servers/databases@2025-01-01' = {
   parent: sqlServer
   name: sqlDatabaseName
-  location: location
+  location: sqlLocation
   sku: {
     name: databaseSkuName
     tier: databaseSkuTier

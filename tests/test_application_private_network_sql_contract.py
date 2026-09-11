@@ -237,8 +237,9 @@ def test_productive_sql_has_exact_external_parameter_surface():
         declarations=(
             "param sqlServerName string",
             "param sqlDatabaseName string",
-            "param location string",
+            "param sqlLocation string",
             "param sqlRuntimeIdentityName string",
+            "param sqlRuntimeIdentityLocation string",
             "param sqlEntraAdminLogin string",
             "param sqlEntraAdminObjectId string",
             "param tenantId string",
@@ -267,7 +268,7 @@ def test_productive_sql_creates_dedicated_runtime_uami():
     )
 
     assert "name: sqlRuntimeIdentityName" in text
-    assert "location: location" in text
+    assert "location: sqlRuntimeIdentityLocation" in text
 
 
 def test_productive_sql_is_entra_only_without_sql_credentials():
@@ -424,3 +425,18 @@ def test_sql_private_link_binds_private_dns_zone_group():
 
     for fragment in required:
         assert fragment in text
+
+def test_productive_sql_decouples_runtime_identity_from_sql_region():
+    text = _text(SQL)
+
+    assert "param location string" not in text
+    assert "param sqlLocation string" in text
+    assert "param sqlRuntimeIdentityLocation string" in text
+
+    assert text.count(
+        "location: sqlRuntimeIdentityLocation"
+    ) == 1
+
+    assert text.count(
+        "location: sqlLocation"
+    ) == 2
