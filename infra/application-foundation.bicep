@@ -35,7 +35,7 @@ param containerMemory string
 param clientId string
 param teamsManagedIdentityClientId string
 param teamsChannelTenantId string
-param teamsHitlApproverAadObjectId string
+param teamsAuthorizedTechniciansGroupObjectId string
 param foundryProjectEndpoint string
 param foundryManagedIdentityClientId string
 param azureVmReaderManagedIdentityClientId string
@@ -106,7 +106,7 @@ module applicationHost './container-apps/application-host.bicep' = {
     teamsManagedIdentityClientId: teamsManagedIdentityClientId
     tenantId: tenantId
     teamsChannelTenantId: teamsChannelTenantId
-    teamsHitlApproverAadObjectId: teamsHitlApproverAadObjectId
+    teamsAuthorizedTechniciansGroupObjectId: teamsAuthorizedTechniciansGroupObjectId
     azureSqlServer: applicationSql.outputs.sqlServerFqdn
     azureSqlDatabase: applicationSql.outputs.sqlDatabaseName
     azureSqlManagedIdentityClientId: applicationSql.outputs.sqlRuntimeIdentityClientId

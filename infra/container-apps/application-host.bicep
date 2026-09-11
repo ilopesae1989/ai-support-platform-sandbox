@@ -15,7 +15,7 @@ param clientId string
 param teamsManagedIdentityClientId string
 param tenantId string
 param teamsChannelTenantId string
-param teamsHitlApproverAadObjectId string
+param teamsAuthorizedTechniciansGroupObjectId string
 param azureSqlServer string
 param azureSqlDatabase string
 param azureSqlManagedIdentityClientId string
@@ -119,8 +119,8 @@ resource applicationHost 'Microsoft.App/containerApps@2026-01-01' = {
               value: teamsChannelTenantId
             }
             {
-              name: 'TEAMS_HITL_APPROVER_AAD_OBJECT_ID'
-              value: teamsHitlApproverAadObjectId
+              name: 'TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID'
+              value: teamsAuthorizedTechniciansGroupObjectId
             }
             {
               name: 'AZURE_SQL_SERVER'

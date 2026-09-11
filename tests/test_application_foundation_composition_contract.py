@@ -45,7 +45,7 @@ EXPECTED_PARAMETERS = {
     "clientId": "string",
     "teamsManagedIdentityClientId": "string",
     "teamsChannelTenantId": "string",
-    "teamsHitlApproverAadObjectId": "string",
+    "teamsAuthorizedTechniciansGroupObjectId": "string",
     "foundryProjectEndpoint": "string",
     "foundryManagedIdentityClientId": "string",
     "azureVmReaderManagedIdentityClientId": "string",
@@ -293,8 +293,8 @@ def test_host_preserves_existing_certified_external_boundaries():
         "tenantId: tenantId",
         "teamsChannelTenantId: teamsChannelTenantId",
         (
-            "teamsHitlApproverAadObjectId: "
-            "teamsHitlApproverAadObjectId"
+            "teamsAuthorizedTechniciansGroupObjectId: "
+            "teamsAuthorizedTechniciansGroupObjectId"
         ),
         "foundryProjectEndpoint: foundryProjectEndpoint",
         (

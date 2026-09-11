@@ -27,7 +27,7 @@ EXPECTED_PARAMETERS = {
     "teamsManagedIdentityClientId": "string",
     "tenantId": "string",
     "teamsChannelTenantId": "string",
-    "teamsHitlApproverAadObjectId": "string",
+    "teamsAuthorizedTechniciansGroupObjectId": "string",
     "azureSqlServer": "string",
     "azureSqlDatabase": "string",
     "azureSqlManagedIdentityClientId": "string",
@@ -46,8 +46,8 @@ EXPECTED_ENVIRONMENT_VALUES = {
     "TEAMS_CHANNEL_TENANT_ID": (
         "teamsChannelTenantId"
     ),
-    "TEAMS_HITL_APPROVER_AAD_OBJECT_ID": (
-        "teamsHitlApproverAadObjectId"
+    "TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID": (
+        "teamsAuthorizedTechniciansGroupObjectId"
     ),
     "AZURE_SQL_SERVER": "azureSqlServer",
     "AZURE_SQL_DATABASE": "azureSqlDatabase",
