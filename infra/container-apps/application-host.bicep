@@ -27,9 +27,6 @@ resource applicationEnvironment 'Microsoft.App/managedEnvironments@2026-01-01' =
   name: environmentName
   location: location
   properties: {
-    appLogsConfiguration: {
-      destination: 'none'
-    }
     publicNetworkAccess: 'Enabled'
     vnetConfiguration: {
       infrastructureSubnetId: infrastructureSubnetId

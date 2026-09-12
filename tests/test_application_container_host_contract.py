@@ -162,11 +162,8 @@ def test_host_creates_dedicated_consumption_environment_without_reuse():
     assert "name: environmentName" in text
     assert "location: location" in text
 
-    assert re.search(
-        r"appLogsConfiguration:\s*\{\s*"
-        r"destination:\s*'none'\s*\}",
-        compact,
-    )
+    assert "appLogsConfiguration" not in text
+    assert "destination: 'none'" not in text
 
     assert (
         "publicNetworkAccess: 'Enabled'"
