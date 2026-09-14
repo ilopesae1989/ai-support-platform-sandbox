@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+import pytest
 
+pytestmark = pytest.mark.local_container
 
 IMAGE = (
     "ai-support-platform-sandbox:"

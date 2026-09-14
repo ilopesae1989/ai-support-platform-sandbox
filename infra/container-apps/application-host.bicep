@@ -28,6 +28,16 @@ resource applicationEnvironment 'Microsoft.App/managedEnvironments@2026-01-01' =
   location: location
   properties: {
     publicNetworkAccess: 'Enabled'
+    peerAuthentication: {
+      mtls: {
+        enabled: false
+      }
+    }
+    peerTrafficConfiguration: {
+      encryption: {
+        enabled: false
+      }
+    }
     vnetConfiguration: {
       infrastructureSubnetId: infrastructureSubnetId
       internal: false
@@ -59,6 +69,7 @@ resource applicationHost 'Microsoft.App/containerApps@2026-01-01' = {
     workloadProfileName: 'Consumption'
     configuration: {
       activeRevisionsMode: 'Single'
+      maxInactiveRevisions: 100
       registries: [
         {
           server: registryServer

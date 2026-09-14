@@ -16,6 +16,7 @@ resource applicationVnet 'Microsoft.Network/virtualNetworks@2025-05-01' = {
         vnetAddressPrefix
       ]
     }
+    privateEndpointVNetPolicies: 'Disabled'
   }
 }
 
@@ -24,6 +25,7 @@ resource containerAppsSubnet 'Microsoft.Network/virtualNetworks/subnets@2025-05-
   name: containerAppsSubnetName
   properties: {
     addressPrefix: containerAppsSubnetPrefix
+    privateEndpointNetworkPolicies: 'Disabled'
     delegations: [
       {
         name: 'Microsoft.App-environments'

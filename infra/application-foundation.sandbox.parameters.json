@@ -1,0 +1,126 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "networkResourceGroupName": {
+      "value": "rg-icenter-sandbox-integration"
+    },
+    "dataResourceGroupName": {
+      "value": "rg-icenter-sandbox-data"
+    },
+    "applicationResourceGroupName": {
+      "value": "rg-icenter-sandbox-application"
+    },
+    "location": {
+      "value": "northeurope"
+    },
+    "sqlLocation": {
+      "value": "eastus2"
+    },
+    "vnetName": {
+      "value": "vnet-app-runtime-icenter-sbx-ne"
+    },
+    "vnetAddressPrefix": {
+      "value": "10.240.0.0/24"
+    },
+    "containerAppsSubnetName": {
+      "value": "snet-containerapps-runtime"
+    },
+    "containerAppsSubnetPrefix": {
+      "value": "10.240.0.0/26"
+    },
+    "privateEndpointSubnetName": {
+      "value": "snet-private-endpoints"
+    },
+    "privateEndpointSubnetPrefix": {
+      "value": "10.240.0.64/27"
+    },
+    "privateDnsZoneName": {
+      "value": "privatelink.database.windows.net"
+    },
+    "sqlServerName": {
+      "value": "sql-icenter-app-sbx-eus2-557fda"
+    },
+    "sqlDatabaseName": {
+      "value": "sqldb-ai-support-platform-sbx"
+    },
+    "sqlRuntimeIdentityName": {
+      "value": "id-sql-runtime-icenter-sbx"
+    },
+    "sqlEntraAdminLogin": {
+      "value": "ilopesae_emeal.nttdata.com#EXT#@NTTDiCenterAILab.onmicrosoft.com"
+    },
+    "sqlEntraAdminObjectId": {
+      "value": "497a925f-15f1-4583-9d15-29b65590bbcf"
+    },
+    "tenantId": {
+      "value": "0cb40b2b-6cfc-4c63-bf7b-da710ea390cb"
+    },
+    "databaseSkuName": {
+      "value": "Basic"
+    },
+    "databaseSkuTier": {
+      "value": "Basic"
+    },
+    "databaseSkuCapacity": {
+      "value": 5
+    },
+    "databaseMaxSizeBytes": {
+      "value": 2147483648
+    },
+    "privateEndpointName": {
+      "value": "pe-sql-app-runtime-icenter-sbx"
+    },
+    "environmentName": {
+      "value": "cae-app-runtime-icenter-sbx"
+    },
+    "containerAppName": {
+      "value": "ca-app-runtime-icenter-sbx"
+    },
+    "imageByDigest": {
+      "value": "acricentersbx4c9f25e9.azurecr.io/ai-support-platform@sha256:02ffeed77179778e64118dc308a3f0b9993e58e288589e6da7dfcecf839e99eb"
+    },
+    "registryServer": {
+      "value": "acricentersbx4c9f25e9.azurecr.io"
+    },
+    "imagePullIdentityResourceId": {
+      "value": "/subscriptions/557fdabc-f3b6-4c24-a9ae-e9e89b5ad172/resourcegroups/rg-icenter-sandbox-integration/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-acr-pull-icenter-sbx"
+    },
+    "teamsIdentityResourceId": {
+      "value": "/subscriptions/557fdabc-f3b6-4c24-a9ae-e9e89b5ad172/resourcegroups/rg-icenter-sandbox-integration/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-teams-runtime-icenter-sbx"
+    },
+    "azureVmReaderIdentityResourceId": {
+      "value": "/subscriptions/557fdabc-f3b6-4c24-a9ae-e9e89b5ad172/resourcegroups/rg-icenter-sandbox-integration/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-vm-reader-icenter-sbx"
+    },
+    "foundryIdentityResourceId": {
+      "value": "/subscriptions/557fdabc-f3b6-4c24-a9ae-e9e89b5ad172/resourcegroups/rg-icenter-sandbox-integration/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-foundry-communication-icenter-sbx"
+    },
+    "containerCpu": {
+      "value": "0.5"
+    },
+    "containerMemory": {
+      "value": "1Gi"
+    },
+    "clientId": {
+      "value": "e89605d4-0a6e-49bb-ae00-4c42a002b6a5"
+    },
+    "teamsManagedIdentityClientId": {
+      "value": "7fa09b7a-cc8f-48e5-af88-1600d924c799"
+    },
+    "teamsChannelTenantId": {
+      "value": "0cb40b2b-6cfc-4c63-bf7b-da710ea390cb"
+    },
+    "teamsAuthorizedTechniciansGroupObjectId": {
+      "value": "2130c010-a41d-4fe5-a9ed-1ef525d26a1a"
+    },
+    "foundryProjectEndpoint": {
+      "value": "https://aif-icenter-sbx-eus2.services.ai.azure.com/api/projects/aifproj-icenter-sbx"
+    },
+    "foundryManagedIdentityClientId": {
+      "value": "4be6b5ed-6c61-447d-8dc5-eded7c03e56c"
+    },
+    "azureVmReaderManagedIdentityClientId": {
+      "value": "5dfd5c10-53b1-4067-b33c-be7b9fe8a60b"
+    }
+  }
+}

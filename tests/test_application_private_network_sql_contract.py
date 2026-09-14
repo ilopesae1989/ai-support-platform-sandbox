@@ -440,3 +440,18 @@ def test_productive_sql_decouples_runtime_identity_from_sql_region():
     assert text.count(
         "location: sqlLocation"
     ) == 2
+
+
+def test_both_productive_subnets_explicitly_preserve_disabled_private_endpoint_network_policies():
+    text = _text(NETWORK)
+
+    assert text.count(
+        "privateEndpointNetworkPolicies: 'Disabled'"
+    ) == 2
+
+def test_productive_vnet_explicitly_preserves_private_endpoint_vnet_policies():
+    text = _text(NETWORK)
+
+    assert text.count(
+        "privateEndpointVNetPolicies: 'Disabled'"
+    ) == 1

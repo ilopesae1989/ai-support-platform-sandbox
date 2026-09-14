@@ -461,3 +461,34 @@ def test_host_module_exposes_only_required_downstream_outputs():
         "applicationHost.properties.configuration.ingress.fqdn"
         in text
     )
+
+def test_host_explicitly_preserves_live_max_inactive_revisions():
+    text = _text()
+
+    assert "maxInactiveRevisions: 100" in text
+
+
+def test_environment_explicitly_preserves_live_peer_mtls_state():
+    compact = _compact()
+
+    assert re.search(
+        r"peerAuthentication:\s*\{\s*"
+        r"mtls:\s*\{\s*"
+        r"enabled:\s*false\s*"
+        r"\}\s*"
+        r"\}",
+        compact,
+    )
+
+
+def test_environment_explicitly_preserves_live_peer_traffic_encryption_state():
+    compact = _compact()
+
+    assert re.search(
+        r"peerTrafficConfiguration:\s*\{\s*"
+        r"encryption:\s*\{\s*"
+        r"enabled:\s*false\s*"
+        r"\}\s*"
+        r"\}",
+        compact,
+    )
