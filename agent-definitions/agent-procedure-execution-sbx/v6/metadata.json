@@ -1,0 +1,13 @@
+{
+  "agent_key": "procedure_execution",
+  "agent_name": "agent-procedure-execution-sbx",
+  "instructions_sha256": "B29B9B983237D0A0E75AC8507F54E6EEEA012A3C3B0C7497167A5C853F08117B",
+  "instructions_source": "Microsoft Foundry Agent Service",
+  "knowledge_base": "kb-icenter-support-sbx",
+  "model": "gpt-5-mini-sbx",
+  "role": "procedure_execution",
+  "source_control_purpose": "desired_agent_configuration",
+  "status": "active",
+  "tool_count": 1,
+  "version": "6"
+}

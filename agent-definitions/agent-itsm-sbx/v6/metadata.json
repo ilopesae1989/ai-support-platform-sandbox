@@ -1,0 +1,13 @@
+{
+  "agent_key": "itsm",
+  "agent_name": "agent-itsm-sbx",
+  "instructions_sha256": "2A4731DE6B83F05944CB1474B8B2FF3BCE4426CEBADE8D5EFE323B144B723F30",
+  "instructions_source": "Microsoft Foundry Agent Service",
+  "knowledge_base": null,
+  "model": "gpt-5-mini-sbx",
+  "role": "itsm",
+  "source_control_purpose": "desired_agent_configuration",
+  "status": "active",
+  "tool_count": 0,
+  "version": "6"
+}
