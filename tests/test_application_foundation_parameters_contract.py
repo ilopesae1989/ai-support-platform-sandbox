@@ -82,7 +82,7 @@ EXPECTED_VALUES = {
     "containerMemory": "1Gi",
     "clientId": "e89605d4-0a6e-49bb-ae00-4c42a002b6a5",
     "teamsManagedIdentityClientId": "7fa09b7a-cc8f-48e5-af88-1600d924c799",
-    "teamsChannelTenantId": "0cb40b2b-6cfc-4c63-bf7b-da710ea390cb",
+    "teamsChannelTenantId": "3048dc87-43f0-4100-9acb-ae1971c79395",
     "teamsAuthorizedTechniciansGroupObjectId": (
         "2130c010-a41d-4fe5-a9ed-1ef525d26a1a"
     ),
@@ -133,6 +133,11 @@ def test_application_foundation_sandbox_parameter_artifact_contract():
         observed[name] = envelope["value"]
 
     assert observed == EXPECTED_VALUES
+
+    assert (
+        observed["teamsChannelTenantId"]
+        != observed["tenantId"]
+    )
 
     text = PARAMETERS.read_text(
         encoding="utf-8"
