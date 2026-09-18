@@ -220,6 +220,8 @@ class TeamsManagedIdentityAppSettings:
 
     authorized_technicians_group_object_id: str
 
+    authorization_directory_tenant_id: str | None = None
+
     messaging_endpoint: str = (
         "/api/messages"
     )
@@ -537,6 +539,7 @@ def build_teams_hitl_app(
     ),
     *,
     membership_checker: object,
+    operator_identity_resolver: object | None = None,
     persistence: (
         TeamsHitlPersistence | None
     ) = None,
@@ -657,6 +660,14 @@ def build_teams_hitl_app(
                 settings.teams_channel_tenant_id
             ),
 
+            authorization_directory_tenant_id=(
+                getattr(
+                    settings,
+                    "authorization_directory_tenant_id",
+                    None,
+                )
+            ),
+
             authorized_technicians_group_object_id=(
                 settings
                 .authorized_technicians_group_object_id
@@ -705,6 +716,10 @@ def build_teams_hitl_app(
 
             membership_checker=(
                 membership_checker
+            ),
+
+            operator_identity_resolver=(
+                operator_identity_resolver
             ),
 
             store=(

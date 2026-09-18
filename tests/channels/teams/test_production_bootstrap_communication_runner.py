@@ -99,6 +99,7 @@ def test_historical_builder_surface_remains_exact_and_new_port_is_additive():
         "azure_sql_settings",
         "membership_checker",
         "azure_vm_power_state_reader",
+        "operator_identity_resolver",
     )
 
     factory = getattr(
@@ -123,6 +124,7 @@ def test_historical_builder_surface_remains_exact_and_new_port_is_additive():
         "membership_checker",
         "azure_vm_power_state_reader",
         "communication_runner",
+        "operator_identity_resolver",
     )
 
     membership_parameter = (

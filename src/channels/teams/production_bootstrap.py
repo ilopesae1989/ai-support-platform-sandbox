@@ -92,6 +92,7 @@ def build_production_teams_hitl_app(
     *,
     membership_checker: object,
     azure_vm_power_state_reader: AzureVmPowerStateReader,
+    operator_identity_resolver: object | None = None,
 ) -> ProductionTeamsHitlBootstrap:
     """
     Compone el boundary Teams productivo.
@@ -159,16 +160,31 @@ def build_production_teams_hitl_app(
         )
     )
 
-    base_bootstrap = build_teams_hitl_app(
-        app_settings,
-        membership_checker=(
-            membership_checker
-        ),
-        persistence=persistence,
-        azure_vm_power_state_reader=(
-            azure_vm_power_state_reader
-        ),
-    )
+    if operator_identity_resolver is None:
+        base_bootstrap = build_teams_hitl_app(
+            app_settings,
+            membership_checker=(
+                membership_checker
+            ),
+            persistence=persistence,
+            azure_vm_power_state_reader=(
+                azure_vm_power_state_reader
+            ),
+        )
+    else:
+        base_bootstrap = build_teams_hitl_app(
+            app_settings,
+            membership_checker=(
+                membership_checker
+            ),
+            operator_identity_resolver=(
+                operator_identity_resolver
+            ),
+            persistence=persistence,
+            azure_vm_power_state_reader=(
+                azure_vm_power_state_reader
+            ),
+        )
 
     # Compatibilidad estricta con composition tests
     # históricos que sustituyen el persistence builder
@@ -198,6 +214,7 @@ def build_production_teams_hitl_app_with_communication(
     membership_checker: object,
     azure_vm_power_state_reader: AzureVmPowerStateReader,
     communication_runner: object,
+    operator_identity_resolver: object | None = None,
 ) -> ProductionTeamsHitlBootstrap:
     if not isinstance(
         app_settings,
@@ -248,19 +265,37 @@ def build_production_teams_hitl_app_with_communication(
         )
     )
 
-    base_bootstrap = build_teams_hitl_app(
-        app_settings,
-        membership_checker=(
-            membership_checker
-        ),
-        persistence=persistence,
-        azure_vm_power_state_reader=(
-            azure_vm_power_state_reader
-        ),
-        communication_runner=(
-            communication_runner
-        ),
-    )
+    if operator_identity_resolver is None:
+        base_bootstrap = build_teams_hitl_app(
+            app_settings,
+            membership_checker=(
+                membership_checker
+            ),
+            persistence=persistence,
+            azure_vm_power_state_reader=(
+                azure_vm_power_state_reader
+            ),
+            communication_runner=(
+                communication_runner
+            ),
+        )
+    else:
+        base_bootstrap = build_teams_hitl_app(
+            app_settings,
+            membership_checker=(
+                membership_checker
+            ),
+            operator_identity_resolver=(
+                operator_identity_resolver
+            ),
+            persistence=persistence,
+            azure_vm_power_state_reader=(
+                azure_vm_power_state_reader
+            ),
+            communication_runner=(
+                communication_runner
+            ),
+        )
 
     if not isinstance(
         persistence,

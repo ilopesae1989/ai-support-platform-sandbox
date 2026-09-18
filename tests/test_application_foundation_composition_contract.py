@@ -46,6 +46,8 @@ EXPECTED_PARAMETERS = {
     "clientId": "string",
     "teamsManagedIdentityClientId": "string",
     "teamsChannelTenantId": "string",
+    "teamsAuthorizationDirectoryTenantId": "string",
+    "teamsAuthorizationIdentityMappingsJson": "string",
     "teamsAuthorizedTechniciansGroupObjectId": "string",
     "foundryProjectEndpoint": "string",
     "foundryManagedIdentityClientId": "string",

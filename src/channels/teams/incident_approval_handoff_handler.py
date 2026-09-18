@@ -107,6 +107,8 @@ class TeamsApprovalHandlerDependencies:
 
     processor: Processor
 
+    operator_identity_resolver: object | None = None
+
 
 def enqueue_authorized_teams_incident_approval(
     *,
@@ -205,6 +207,10 @@ async def handle_teams_approval_action(
 
                 membership_checker=(
                     dependencies.membership_checker
+                ),
+
+                operator_identity_resolver=(
+                    dependencies.operator_identity_resolver
                 ),
             )
         )

@@ -14,6 +14,10 @@ from src.channels.teams.graph_group_membership import (
     build_managed_identity_graph_membership_client,
 )
 
+from src.channels.teams.authorization_identity_resolver import (
+    build_exact_teams_authorization_object_id_resolver,
+)
+
 from src.workflows.incident_resolution.azure_vm_observation_reader import (
     build_azure_vm_observation_reader,
 )
@@ -61,6 +65,33 @@ def build_production_teams_host(
             observation_settings
         )
     )
+
+    authorization_identity_mappings = getattr(
+        host_settings,
+        "authorization_identity_mappings",
+        (),
+    )
+
+    if authorization_identity_mappings:
+        operator_identity_resolver = (
+            build_exact_teams_authorization_object_id_resolver(
+                mappings=(
+                    authorization_identity_mappings
+                )
+            )
+        )
+
+        return build_production_teams_hitl_app(
+            host_settings.app_settings,
+            host_settings.azure_sql_settings,
+            membership_checker=(
+                membership_checker
+            ),
+            azure_vm_power_state_reader=reader,
+            operator_identity_resolver=(
+                operator_identity_resolver
+            ),
+        )
 
     return build_production_teams_hitl_app(
         host_settings.app_settings,
@@ -124,6 +155,38 @@ def build_production_teams_host_with_communication(
             observation_settings
         )
     )
+
+    authorization_identity_mappings = getattr(
+        host_settings,
+        "authorization_identity_mappings",
+        (),
+    )
+
+    if authorization_identity_mappings:
+        operator_identity_resolver = (
+            build_exact_teams_authorization_object_id_resolver(
+                mappings=(
+                    authorization_identity_mappings
+                )
+            )
+        )
+
+        return (
+            build_production_teams_hitl_app_with_communication(
+                host_settings.app_settings,
+                host_settings.azure_sql_settings,
+                membership_checker=(
+                    membership_checker
+                ),
+                azure_vm_power_state_reader=reader,
+                communication_runner=(
+                    communication_runner
+                ),
+                operator_identity_resolver=(
+                    operator_identity_resolver
+                ),
+            )
+        )
 
     return (
         build_production_teams_hitl_app_with_communication(

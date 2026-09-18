@@ -93,6 +93,8 @@ class ExactTeamsApprovalPolicy(
 
     tenant_id: str
 
+    authorization_directory_tenant_id: str | None = None
+
     authorized_technicians_group_object_id: str
 
     @field_validator(
@@ -107,6 +109,22 @@ class ExactTeamsApprovalPolicy(
     ) -> str:
         return _require_exact_string(
             name=info.field_name,
+            value=value,
+        )
+
+    @field_validator(
+        "authorization_directory_tenant_id"
+    )
+    @classmethod
+    def validate_authorization_directory_tenant_id(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        return _require_exact_string(
+            name="authorization_directory_tenant_id",
             value=value,
         )
 
@@ -147,6 +165,7 @@ async def authorize_teams_approval_invocation(
     invocation: TeamsApprovalInvocation,
     policy: ExactTeamsApprovalPolicy,
     membership_checker: object,
+    operator_identity_resolver: object | None = None,
 ) -> AuthorizedTeamsApprovalInvocation:
     if not isinstance(
         invocation,
@@ -175,6 +194,65 @@ async def authorize_teams_approval_invocation(
             "autorizado para decisiones HITL."
         )
 
+    authorization_directory_tenant_id = (
+        policy.authorization_directory_tenant_id
+        if policy.authorization_directory_tenant_id
+        is not None
+        else policy.tenant_id
+    )
+
+    authorization_user_object_id = (
+        invocation.operator.aad_object_id
+    )
+
+    if (
+        authorization_directory_tenant_id
+        != invocation.operator.tenant_id
+    ):
+        resolver_method = getattr(
+            operator_identity_resolver,
+            "resolve_authorization_user_object_id",
+            None,
+        )
+
+        if not callable(
+            resolver_method
+        ):
+            raise TeamsApprovalAuthorizationError(
+                "No existe una autoridad válida "
+                "de correlación de identidad."
+            )
+
+        try:
+            authorization_user_object_id = await (
+                resolver_method(
+                    source_tenant_id=(
+                        invocation.operator.tenant_id
+                    ),
+                    source_user_object_id=(
+                        invocation.operator.aad_object_id
+                    ),
+                    target_tenant_id=(
+                        authorization_directory_tenant_id
+                    ),
+                )
+            )
+
+            authorization_user_object_id = (
+                _require_canonical_uuid(
+                    name="authorization_user_object_id",
+                    value=(
+                        authorization_user_object_id
+                    ),
+                )
+            )
+
+        except Exception:
+            raise TeamsApprovalAuthorizationError(
+                "No pudo demostrarse la correlación "
+                "exacta de identidad del operador."
+            ) from None
+
     membership_method = getattr(
         membership_checker,
         "is_transitive_member",
@@ -192,7 +270,7 @@ async def authorize_teams_approval_invocation(
     try:
         is_member = await membership_method(
             user_object_id=(
-                invocation.operator.aad_object_id
+                authorization_user_object_id
             ),
             group_object_id=(
                 policy

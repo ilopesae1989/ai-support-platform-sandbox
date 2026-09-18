@@ -83,6 +83,15 @@ EXPECTED_VALUES = {
     "clientId": "e89605d4-0a6e-49bb-ae00-4c42a002b6a5",
     "teamsManagedIdentityClientId": "7fa09b7a-cc8f-48e5-af88-1600d924c799",
     "teamsChannelTenantId": "3048dc87-43f0-4100-9acb-ae1971c79395",
+    "teamsAuthorizationDirectoryTenantId": (
+        "0cb40b2b-6cfc-4c63-bf7b-da710ea390cb"
+    ),
+    "teamsAuthorizationIdentityMappingsJson": (
+        '[{"sourceTenantId":"3048dc87-43f0-4100-9acb-ae1971c79395",'
+        '"sourceUserObjectId":"69916319-588a-42a9-9109-b57c6d1c7501",'
+        '"targetTenantId":"0cb40b2b-6cfc-4c63-bf7b-da710ea390cb",'
+        '"targetUserObjectId":"497a925f-15f1-4583-9d15-29b65590bbcf"}]'
+    ),
     "teamsAuthorizedTechniciansGroupObjectId": (
         "2130c010-a41d-4fe5-a9ed-1ef525d26a1a"
     ),
@@ -121,7 +130,7 @@ def test_application_foundation_sandbox_parameter_artifact_contract():
     parameters = payload["parameters"]
 
     assert isinstance(parameters, dict)
-    assert len(parameters) == 40
+    assert len(parameters) == 42
     assert set(parameters) == set(EXPECTED_VALUES)
 
     observed = {}

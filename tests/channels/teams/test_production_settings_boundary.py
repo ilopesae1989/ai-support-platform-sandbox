@@ -108,6 +108,7 @@ def test_production_host_settings_contract_has_exact_surface():
     ) == (
         "app_settings",
         "azure_sql_settings",
+        "authorization_identity_mappings",
     )
 
     assert callable(

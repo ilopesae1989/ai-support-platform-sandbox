@@ -22,6 +22,7 @@ EXPECTED_MANAGED_IDENTITY_FIELDS = (
     "bot_tenant_id",
     "teams_channel_tenant_id",
     "authorized_technicians_group_object_id",
+    "authorization_directory_tenant_id",
     "messaging_endpoint",
 )
 

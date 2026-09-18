@@ -15,6 +15,8 @@ param clientId string
 param teamsManagedIdentityClientId string
 param tenantId string
 param teamsChannelTenantId string
+param teamsAuthorizationDirectoryTenantId string
+param teamsAuthorizationIdentityMappingsJson string
 param teamsAuthorizedTechniciansGroupObjectId string
 param azureSqlServer string
 param azureSqlDatabase string
@@ -125,6 +127,14 @@ resource applicationHost 'Microsoft.App/containerApps@2026-01-01' = {
             {
               name: 'TEAMS_CHANNEL_TENANT_ID'
               value: teamsChannelTenantId
+            }
+            {
+              name: 'TEAMS_AUTHORIZATION_DIRECTORY_TENANT_ID'
+              value: teamsAuthorizationDirectoryTenantId
+            }
+            {
+              name: 'TEAMS_AUTHORIZATION_IDENTITY_MAPPINGS_JSON'
+              value: teamsAuthorizationIdentityMappingsJson
             }
             {
               name: 'TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID'

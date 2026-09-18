@@ -100,6 +100,7 @@ def test_production_builder_has_exact_explicit_surface():
             "azure_sql_settings",
             "membership_checker",
             "azure_vm_power_state_reader",
+            "operator_identity_resolver",
         )
     )
 

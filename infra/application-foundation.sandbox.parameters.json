@@ -110,6 +110,12 @@
     "teamsChannelTenantId": {
       "value": "3048dc87-43f0-4100-9acb-ae1971c79395"
     },
+    "teamsAuthorizationDirectoryTenantId": {
+      "value": "0cb40b2b-6cfc-4c63-bf7b-da710ea390cb"
+    },
+    "teamsAuthorizationIdentityMappingsJson": {
+      "value": "[{\"sourceTenantId\":\"3048dc87-43f0-4100-9acb-ae1971c79395\",\"sourceUserObjectId\":\"69916319-588a-42a9-9109-b57c6d1c7501\",\"targetTenantId\":\"0cb40b2b-6cfc-4c63-bf7b-da710ea390cb\",\"targetUserObjectId\":\"497a925f-15f1-4583-9d15-29b65590bbcf\"}]"
+    },
     "teamsAuthorizedTechniciansGroupObjectId": {
       "value": "2130c010-a41d-4fe5-a9ed-1ef525d26a1a"
     },

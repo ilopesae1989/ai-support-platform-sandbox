@@ -98,6 +98,7 @@ def _require_group_contract():
     ) == {
         "policy_id",
         "tenant_id",
+        "authorization_directory_tenant_id",
         "authorized_technicians_group_object_id",
     }
 
@@ -123,6 +124,7 @@ def _require_group_contract():
         "invocation",
         "policy",
         "membership_checker",
+        "operator_identity_resolver",
     )
 
     return (
