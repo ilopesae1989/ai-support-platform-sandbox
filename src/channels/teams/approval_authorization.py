@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import logging
+
 from uuid import UUID
 
 from pydantic import (
@@ -18,6 +21,15 @@ from .operator_identity import (
 
 from src.runtime.procedure.approval_channel import (
     ApprovalChannelAction,
+)
+
+
+_LOGGER = logging.getLogger(
+    __name__
+)
+
+_DENIAL_EVENT_NAME = (
+    "teams_hitl_authorization_denied_v1"
 )
 
 
@@ -284,6 +296,71 @@ async def authorize_teams_approval_invocation(
         ) from None
 
     if is_member is not True:
+        denial_evidence = {
+            "event": (
+                _DENIAL_EVENT_NAME
+            ),
+
+            "reason": (
+                "group_membership_false"
+            ),
+
+            "approval_id": (
+                invocation
+                .action
+                .approval_id
+            ),
+
+            "decision": (
+                invocation
+                .action
+                .decision
+                .value
+            ),
+
+            "policy_id": (
+                policy
+                .policy_id
+            ),
+
+            "source_tenant_id": (
+                invocation
+                .operator
+                .tenant_id
+            ),
+
+            "source_user_object_id": (
+                invocation
+                .operator
+                .aad_object_id
+            ),
+
+            "authorization_tenant_id": (
+                authorization_directory_tenant_id
+            ),
+
+            "authorization_user_object_id": (
+                authorization_user_object_id
+            ),
+
+            "group_object_id": (
+                policy
+                .authorized_technicians_group_object_id
+            ),
+        }
+
+        _LOGGER.warning(
+            json.dumps(
+                denial_evidence,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(
+                    ",",
+                    ":",
+                ),
+            )
+        )
+
         raise TeamsApprovalAuthorizationError(
             "El operador Teams no está "
             "autorizado para decisiones HITL."
