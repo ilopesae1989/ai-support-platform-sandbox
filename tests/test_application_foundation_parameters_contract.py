@@ -51,7 +51,7 @@ EXPECTED_VALUES = {
         "acricentersbx4c9f25e9.azurecr.io/"
         "ai-support-platform@"
         "sha256:"
-        "7b88ccab9fdbe2fb4445669431d668f24747909456824fb13d288cb0f756af48"
+        "34e592ba96b947fe7ed19c346b2754ad9452f2cd304252a68da773d09f7c50e0"
     ),
     "registryServer": "acricentersbx4c9f25e9.azurecr.io",
     "imagePullIdentityResourceId": (
