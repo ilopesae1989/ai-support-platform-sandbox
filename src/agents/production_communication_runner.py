@@ -13,7 +13,7 @@ from src.agents.production_settings import (
 )
 
 
-def build_foundry_production_communication_runner(
+def build_foundry_production_agents(
     settings,
 ):
     if not isinstance(
@@ -31,11 +31,21 @@ def build_foundry_production_communication_runner(
         )
     )
 
-    agents = FoundryAgents(
+    return FoundryAgents(
         project_endpoint=(
             settings.project_endpoint
         ),
         credential=credential,
+    )
+
+
+def build_foundry_production_communication_runner(
+    settings,
+):
+    agents = (
+        build_foundry_production_agents(
+            settings
+        )
     )
 
     return agents.run_communication

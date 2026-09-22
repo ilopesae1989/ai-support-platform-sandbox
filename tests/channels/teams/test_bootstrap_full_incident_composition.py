@@ -310,3 +310,91 @@ def test_bootstrap_exposes_durable_incident_components(
         bootstrap.wait_recheck_consumption_ledger
         is fakes["wait_recheck_ledger"]
     )
+
+# TDD_PHASE23_PRODUCTION_INCIDENT_MANAGED_IDENTITY_BASE_BOOTSTRAP_RED
+def test_phase23_production_incident_managed_identity_base_bootstrap_injection(
+    monkeypatch,
+    tmp_path,
+):
+    """
+    El bootstrap Teams debe recibir el bundle cognitivo como
+    dependencia explícita y entregarlo al incident workflow.
+
+    Teams no construye FoundryAgents ni credenciales.
+    """
+
+    fakes = install_future_component_fakes(
+        monkeypatch=monkeypatch,
+    )
+
+    incident_agents = object()
+    captured = []
+
+    def fake_incident_workflow_builder(
+        *,
+        agents,
+        operation_dispatch_ledger,
+        wait_recheck_consumption_ledger,
+        azure_vm_power_state_reader,
+    ):
+        captured.append(
+            {
+                "agents": agents,
+                "operation_dispatch_ledger":
+                    operation_dispatch_ledger,
+                "wait_recheck_consumption_ledger":
+                    wait_recheck_consumption_ledger,
+                "azure_vm_power_state_reader":
+                    azure_vm_power_state_reader,
+            }
+        )
+
+        return fakes[
+            "incident_workflow"
+        ]
+
+    monkeypatch.setattr(
+        teams_bootstrap,
+        "build_incident_resolution_workflow",
+        fake_incident_workflow_builder,
+        raising=False,
+    )
+
+    reader = object()
+
+    bootstrap = (
+        teams_bootstrap
+        .build_teams_hitl_app(
+            create_settings(
+                tmp_path
+            ),
+            membership_checker=(
+                FakeMembershipChecker()
+            ),
+            azure_vm_power_state_reader=reader,
+            incident_agents=incident_agents,
+        )
+    )
+
+    workflow = (
+        bootstrap
+        .dependencies
+        .workflow_factory()
+    )
+
+    assert (
+        workflow
+        is fakes["incident_workflow"]
+    )
+
+    assert captured == [
+        {
+            "agents": incident_agents,
+            "operation_dispatch_ledger":
+                fakes["dispatch_ledger"],
+            "wait_recheck_consumption_ledger":
+                fakes["wait_recheck_ledger"],
+            "azure_vm_power_state_reader":
+                reader,
+        }
+    ]

@@ -90,6 +90,7 @@ def test_application_production_root_rejects_unstructured_environment_before_dep
     assert calls == []
 
 
+
 def test_application_root_composes_exact_foundry_and_teams_chain(
     monkeypatch,
 ):
@@ -101,6 +102,22 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
 
     foundry_settings = object()
     bootstrap = object()
+
+    async def communication_runner(
+        request,
+    ):
+        return request
+
+    class FakeProductionAgents:
+        pass
+
+    incident_agents = (
+        FakeProductionAgents()
+    )
+
+    incident_agents.run_communication = (
+        communication_runner
+    )
 
     calls = []
 
@@ -116,28 +133,30 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
 
         return foundry_settings
 
-    def fake_runner_builder(
+    def fake_agents_builder(
         actual_settings,
     ):
         calls.append(
             (
-                "communication_runner",
+                "foundry_agents",
                 actual_settings,
             )
         )
 
-        return _communication_runner
+        return incident_agents
 
     def fake_teams_builder(
         actual_environment,
         *,
         communication_runner,
+        incident_agents,
     ):
         calls.append(
             (
                 "teams_host",
                 actual_environment,
                 communication_runner,
+                incident_agents,
             )
         )
 
@@ -151,13 +170,13 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
 
     monkeypatch.setattr(
         module,
-        "build_foundry_production_communication_runner",
-        fake_runner_builder,
+        "build_foundry_production_agents",
+        fake_agents_builder,
     )
 
     monkeypatch.setattr(
         module,
-        "build_production_teams_host_with_communication",
+        "build_production_teams_host_with_communication_and_incident_agents",
         fake_teams_builder,
     )
 
@@ -176,13 +195,14 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
             environment,
         ),
         (
-            "communication_runner",
+            "foundry_agents",
             foundry_settings,
         ),
         (
             "teams_host",
             environment,
-            _communication_runner,
+            communication_runner,
+            incident_agents,
         ),
     ]
 
@@ -236,6 +256,7 @@ def test_application_root_fails_closed_if_runner_factory_returns_non_callable(
     assert teams_calls == []
 
 
+
 def test_application_root_does_not_mutate_environment(
     monkeypatch,
 ):
@@ -252,6 +273,22 @@ def test_application_root_does_not_mutate_environment(
         environment
     )
 
+    async def communication_runner(
+        request,
+    ):
+        return request
+
+    class FakeProductionAgents:
+        pass
+
+    incident_agents = (
+        FakeProductionAgents()
+    )
+
+    incident_agents.run_communication = (
+        communication_runner
+    )
+
     monkeypatch.setattr(
         module,
         "build_foundry_production_settings",
@@ -260,15 +297,13 @@ def test_application_root_does_not_mutate_environment(
 
     monkeypatch.setattr(
         module,
-        "build_foundry_production_communication_runner",
-        lambda actual_settings: (
-            _communication_runner
-        ),
+        "build_foundry_production_agents",
+        lambda actual_settings: incident_agents,
     )
 
     monkeypatch.setattr(
         module,
-        "build_production_teams_host_with_communication",
+        "build_production_teams_host_with_communication_and_incident_agents",
         lambda *args, **kwargs: object(),
     )
 
@@ -347,3 +382,161 @@ def test_application_root_owns_composition_without_direct_runtime_or_credential_
     ]
 
     assert direct_runner_calls == []
+
+# TDD_PHASE23_PRODUCTION_INCIDENT_MANAGED_IDENTITY_APPLICATION_ROOT_RED
+def test_phase23_production_incident_managed_identity_application_root_shared_agents(
+    monkeypatch,
+):
+    """
+    El composition root construye un único bundle cognitivo
+    productivo y reutiliza exactamente ese objeto para:
+
+        - communication_runner;
+        - incident-resolution.
+
+    Así ningún pipeline cognitivo productivo puede caer en
+    FoundryAgents() -> AzureCliCredential().
+    """
+
+    module = _module()
+
+    environment = {
+        "EXPLICIT": "mapping",
+    }
+
+    foundry_settings = object()
+    bootstrap = object()
+
+    async def communication_runner(
+        request,
+    ):
+        return request
+
+    class FakeProductionAgents:
+        pass
+
+    incident_agents = (
+        FakeProductionAgents()
+    )
+
+    incident_agents.run_communication = (
+        communication_runner
+    )
+
+    calls = []
+
+    def fake_settings_builder(
+        actual_environment,
+    ):
+        calls.append(
+            (
+                "settings",
+                actual_environment,
+            )
+        )
+
+        return foundry_settings
+
+    def fake_agents_builder(
+        actual_settings,
+    ):
+        calls.append(
+            (
+                "agents",
+                actual_settings,
+            )
+        )
+
+        return incident_agents
+
+    def fake_teams_builder(
+        actual_environment,
+        *,
+        communication_runner,
+        incident_agents,
+    ):
+        calls.append(
+            (
+                "teams",
+                actual_environment,
+                communication_runner,
+                incident_agents,
+            )
+        )
+
+        return bootstrap
+
+    def forbidden_legacy_runner(
+        actual_settings,
+    ):
+        raise AssertionError(
+            "El application root no debe construir "
+            "un segundo bundle sólo para comunicación."
+        )
+
+    def forbidden_legacy_teams(
+        *args,
+        **kwargs,
+    ):
+        raise AssertionError(
+            "El application root debe usar el port "
+            "que propaga incident_agents."
+        )
+
+    monkeypatch.setattr(
+        module,
+        "build_foundry_production_settings",
+        fake_settings_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_foundry_production_agents",
+        fake_agents_builder,
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_production_teams_host_with_communication_and_incident_agents",
+        fake_teams_builder,
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_foundry_production_communication_runner",
+        forbidden_legacy_runner,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_production_teams_host_with_communication",
+        forbidden_legacy_teams,
+    )
+
+    result = (
+        module
+        .build_production_application(
+            environment
+        )
+    )
+
+    assert result is bootstrap
+
+    assert calls == [
+        (
+            "settings",
+            environment,
+        ),
+        (
+            "agents",
+            foundry_settings,
+        ),
+        (
+            "teams",
+            environment,
+            communication_runner,
+            incident_agents,
+        ),
+    ]

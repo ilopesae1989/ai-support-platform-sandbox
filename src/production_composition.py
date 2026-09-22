@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from src.agents.production_communication_runner import (
     build_foundry_production_communication_runner,
+    build_foundry_production_agents,
 )
 
 from src.agents.production_settings import (
@@ -12,6 +13,7 @@ from src.agents.production_settings import (
 
 from src.channels.teams.production_composition import (
     build_production_teams_host_with_communication,
+    build_production_teams_host_with_communication_and_incident_agents,
 )
 
 
@@ -32,25 +34,34 @@ def build_production_application(
         )
     )
 
-    communication_runner = (
-        build_foundry_production_communication_runner(
+    incident_agents = (
+        build_foundry_production_agents(
             foundry_settings
         )
+    )
+
+    communication_runner = getattr(
+        incident_agents,
+        "run_communication",
+        None,
     )
 
     if not callable(
         communication_runner
     ):
         raise TypeError(
-            "communication_runner compuesto debe "
-            "ser callable."
+            "incident_agents debe exponer "
+            "run_communication callable."
         )
 
     return (
-        build_production_teams_host_with_communication(
+        build_production_teams_host_with_communication_and_incident_agents(
             environment,
             communication_runner=(
                 communication_runner
+            ),
+            incident_agents=(
+                incident_agents
             ),
         )
     )

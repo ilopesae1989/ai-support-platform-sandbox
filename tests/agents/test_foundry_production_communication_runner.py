@@ -390,3 +390,89 @@ def test_runner_composition_has_no_environment_channel_session_tool_or_mcp_autho
 
     for fragment in forbidden:
         assert fragment not in lowered
+
+# TDD_PHASE23_PRODUCTION_INCIDENT_MANAGED_IDENTITY_AGENTS_FACTORY_RED
+def test_phase23_production_incident_managed_identity_agents_factory(
+    monkeypatch,
+):
+    """
+    Producción debe disponer de un factory explícito de
+    FoundryAgents respaldado por la credencial productiva.
+
+    Ningún workflow productivo debe depender del fallback
+    AzureCliCredential de FoundryAgents().
+    """
+
+    module = _module()
+    factory = getattr(
+        module,
+        "build_foundry_production_agents",
+        None,
+    )
+
+    assert callable(factory)
+
+    settings = _settings()
+    credential = object()
+
+    credential_calls = []
+    construction_calls = []
+
+    class FakeFoundryAgents:
+        def __init__(
+            self,
+            *args,
+            **kwargs,
+        ):
+            construction_calls.append(
+                (
+                    args,
+                    kwargs,
+                )
+            )
+
+    def fake_credential_builder(
+        actual_settings,
+    ):
+        credential_calls.append(
+            actual_settings
+        )
+
+        return credential
+
+    monkeypatch.setattr(
+        module,
+        "build_foundry_production_credential",
+        fake_credential_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "FoundryAgents",
+        FakeFoundryAgents,
+    )
+
+    result = factory(
+        settings
+    )
+
+    assert credential_calls == [
+        settings,
+    ]
+
+    assert construction_calls == [
+        (
+            (),
+            {
+                "project_endpoint": (
+                    PROJECT_ENDPOINT
+                ),
+                "credential": credential,
+            },
+        ),
+    ]
+
+    assert isinstance(
+        result,
+        FakeFoundryAgents,
+    )

@@ -586,3 +586,189 @@ def test_new_composition_port_remains_foundry_and_runtime_agnostic():
 
     for fragment in factory_forbidden:
         assert fragment not in factory_lowered
+
+# TDD_PHASE23_PRODUCTION_INCIDENT_MANAGED_IDENTITY_PROD_HOST_RED
+def test_phase23_production_incident_managed_identity_production_host_additive_port(
+    monkeypatch,
+):
+    """
+    La capa host debe permanecer Foundry-agnostic y limitarse
+    a propagar el bundle cognitivo explícito.
+    """
+
+    module = _module()
+
+    factory = getattr(
+        module,
+        "build_production_teams_host_with_communication_and_incident_agents",
+        None,
+    )
+
+    assert callable(factory)
+
+    environment = {
+        "EXPLICIT": "mapping",
+    }
+
+    incident_agents = object()
+
+    app_settings = SimpleNamespace(
+        managed_identity_client_id=(
+            TEAMS_MANAGED_IDENTITY_CLIENT_ID
+        ),
+    )
+
+    sql_settings = object()
+
+    host_settings = SimpleNamespace(
+        app_settings=app_settings,
+        azure_sql_settings=(
+            sql_settings
+        ),
+        authorization_identity_mappings=(),
+    )
+
+    observation_settings = object()
+    reader = object()
+    bootstrap = object()
+
+    calls = []
+
+    def fake_host_settings_builder(
+        actual_environment,
+    ):
+        calls.append(
+            (
+                "host_settings",
+                actual_environment,
+            )
+        )
+
+        return host_settings
+
+    def fake_graph_builder(
+        *,
+        managed_identity_client_id,
+    ):
+        calls.append(
+            (
+                "graph_membership",
+                managed_identity_client_id,
+            )
+        )
+
+        return GRAPH_MEMBERSHIP_CHECKER
+
+    def fake_observation_settings_builder(
+        actual_environment,
+    ):
+        calls.append(
+            (
+                "observation_settings",
+                actual_environment,
+            )
+        )
+
+        return observation_settings
+
+    def fake_reader_builder(
+        actual_settings,
+    ):
+        calls.append(
+            (
+                "reader",
+                actual_settings,
+            )
+        )
+
+        return reader
+
+    def fake_bootstrap_builder(
+        actual_app_settings,
+        actual_sql_settings,
+        *,
+        membership_checker,
+        azure_vm_power_state_reader,
+        communication_runner,
+        incident_agents,
+    ):
+        calls.append(
+            (
+                "bootstrap",
+                actual_app_settings,
+                actual_sql_settings,
+                membership_checker,
+                azure_vm_power_state_reader,
+                communication_runner,
+                incident_agents,
+            )
+        )
+
+        return bootstrap
+
+    monkeypatch.setattr(
+        module,
+        "build_production_teams_host_settings",
+        fake_host_settings_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_managed_identity_graph_membership_client",
+        fake_graph_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_azure_vm_observation_settings",
+        fake_observation_settings_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_azure_vm_observation_reader",
+        fake_reader_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_production_teams_hitl_app_with_communication_and_incident_agents",
+        fake_bootstrap_builder,
+        raising=False,
+    )
+
+    result = factory(
+        environment,
+        communication_runner=_runner,
+        incident_agents=incident_agents,
+    )
+
+    assert result is bootstrap
+
+    assert calls == [
+        (
+            "host_settings",
+            environment,
+        ),
+        (
+            "graph_membership",
+            TEAMS_MANAGED_IDENTITY_CLIENT_ID,
+        ),
+        (
+            "observation_settings",
+            environment,
+        ),
+        (
+            "reader",
+            observation_settings,
+        ),
+        (
+            "bootstrap",
+            app_settings,
+            sql_settings,
+            GRAPH_MEMBERSHIP_CHECKER,
+            reader,
+            _runner,
+            incident_agents,
+        ),
+    ]

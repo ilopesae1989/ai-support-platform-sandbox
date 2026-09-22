@@ -547,6 +547,7 @@ def build_teams_hitl_app(
         AzureVmPowerStateReader | None
     ) = None,
     communication_runner: object | None = None,
+    incident_agents: object | None = None,
 ) -> TeamsHitlBootstrap:
     """
     Construye la aplicación Teams y registra
@@ -687,6 +688,13 @@ def build_teams_hitl_app(
                 ),
                 azure_vm_power_state_reader=(
                     azure_vm_power_state_reader
+                ),
+                **(
+                    {
+                        "agents": incident_agents
+                    }
+                    if incident_agents is not None
+                    else {}
                 ),
             )
         )

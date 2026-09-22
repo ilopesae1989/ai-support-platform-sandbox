@@ -307,3 +307,127 @@ def build_production_teams_hitl_app_with_communication(
         base_bootstrap=base_bootstrap,
         persistence=persistence,
     )
+
+def build_production_teams_hitl_app_with_communication_and_incident_agents(
+    app_settings: (
+        TeamsHitlAppSettings
+        | TeamsManagedIdentityAppSettings
+    ),
+    azure_sql_settings: AzureSqlManagedIdentitySettings,
+    *,
+    membership_checker: object,
+    azure_vm_power_state_reader: AzureVmPowerStateReader,
+    communication_runner: object,
+    incident_agents: object,
+    operator_identity_resolver: object | None = None,
+) -> ProductionTeamsHitlBootstrap:
+    """
+    Port productivo aditivo que propaga un bundle
+    cognitivo ya compuesto al incident workflow.
+
+    No construye credenciales ni conoce Foundry.
+    """
+
+    if not isinstance(
+        app_settings,
+        (
+            TeamsHitlAppSettings,
+            TeamsManagedIdentityAppSettings,
+        ),
+    ):
+        raise TypeError(
+            "app_settings debe ser "
+            "TeamsHitlAppSettings o "
+            "TeamsManagedIdentityAppSettings."
+        )
+
+    if not isinstance(
+        azure_sql_settings,
+        AzureSqlManagedIdentitySettings,
+    ):
+        raise TypeError(
+            "azure_sql_settings debe ser "
+            "AzureSqlManagedIdentitySettings."
+        )
+
+    read_power_state = getattr(
+        azure_vm_power_state_reader,
+        "read_power_state",
+        None,
+    )
+
+    if not callable(
+        read_power_state
+    ):
+        raise TypeError(
+            "azure_vm_power_state_reader debe "
+            "implementar read_power_state()."
+        )
+
+    if not callable(
+        communication_runner
+    ):
+        raise TypeError(
+            "communication_runner debe ser callable."
+        )
+
+    if incident_agents is None:
+        raise TypeError(
+            "incident_agents debe existir."
+        )
+
+    persistence = (
+        build_azure_sql_teams_hitl_persistence(
+            azure_sql_settings
+        )
+    )
+
+    if operator_identity_resolver is None:
+        base_bootstrap = build_teams_hitl_app(
+            app_settings,
+            membership_checker=(
+                membership_checker
+            ),
+            persistence=persistence,
+            azure_vm_power_state_reader=(
+                azure_vm_power_state_reader
+            ),
+            communication_runner=(
+                communication_runner
+            ),
+            incident_agents=(
+                incident_agents
+            ),
+        )
+
+    else:
+        base_bootstrap = build_teams_hitl_app(
+            app_settings,
+            membership_checker=(
+                membership_checker
+            ),
+            operator_identity_resolver=(
+                operator_identity_resolver
+            ),
+            persistence=persistence,
+            azure_vm_power_state_reader=(
+                azure_vm_power_state_reader
+            ),
+            communication_runner=(
+                communication_runner
+            ),
+            incident_agents=(
+                incident_agents
+            ),
+        )
+
+    if not isinstance(
+        persistence,
+        AzureSqlTeamsHitlPersistence,
+    ):
+        return base_bootstrap
+
+    return _wrap_productive_bootstrap(
+        base_bootstrap=base_bootstrap,
+        persistence=persistence,
+    )

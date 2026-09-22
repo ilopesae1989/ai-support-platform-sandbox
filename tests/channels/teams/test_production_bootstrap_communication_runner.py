@@ -443,3 +443,117 @@ def test_production_bootstrap_port_remains_foundry_agnostic():
 
     for fragment in factory_forbidden:
         assert fragment not in factory_lowered
+
+# TDD_PHASE23_PRODUCTION_INCIDENT_MANAGED_IDENTITY_PROD_BOOTSTRAP_RED
+def test_phase23_production_incident_managed_identity_production_bootstrap_additive_port(
+    monkeypatch,
+):
+    """
+    El port productivo enriquecido debe ser aditivo.
+
+    Los ports históricos permanecen disponibles y el nuevo
+    port transporta incident_agents sin conocer Foundry.
+    """
+
+    module = _module()
+
+    factory = getattr(
+        module,
+        "build_production_teams_hitl_app_with_communication_and_incident_agents",
+        None,
+    )
+
+    assert callable(factory)
+
+    app_settings = _app_settings()
+    sql_settings = _azure_sql_settings()
+
+    reader = FakeReader()
+    incident_agents = object()
+    persistence = object()
+    bootstrap = object()
+
+    async def communication_runner(
+        request,
+    ):
+        return request
+
+    calls = []
+
+    def fake_persistence_builder(
+        actual_settings,
+    ):
+        calls.append(
+            (
+                "persistence",
+                actual_settings,
+            )
+        )
+
+        return persistence
+
+    def fake_base_builder(
+        actual_app_settings,
+        *,
+        membership_checker,
+        persistence,
+        azure_vm_power_state_reader,
+        communication_runner,
+        incident_agents,
+    ):
+        calls.append(
+            (
+                "base",
+                actual_app_settings,
+                membership_checker,
+                persistence,
+                azure_vm_power_state_reader,
+                communication_runner,
+                incident_agents,
+            )
+        )
+
+        return bootstrap
+
+    monkeypatch.setattr(
+        module,
+        "build_azure_sql_teams_hitl_persistence",
+        fake_persistence_builder,
+    )
+
+    monkeypatch.setattr(
+        module,
+        "build_teams_hitl_app",
+        fake_base_builder,
+    )
+
+    result = factory(
+        app_settings,
+        sql_settings,
+        membership_checker=(
+            MEMBERSHIP_CHECKER
+        ),
+        azure_vm_power_state_reader=reader,
+        communication_runner=(
+            communication_runner
+        ),
+        incident_agents=incident_agents,
+    )
+
+    assert result is bootstrap
+
+    assert calls == [
+        (
+            "persistence",
+            sql_settings,
+        ),
+        (
+            "base",
+            app_settings,
+            MEMBERSHIP_CHECKER,
+            persistence,
+            reader,
+            communication_runner,
+            incident_agents,
+        ),
+    ]
