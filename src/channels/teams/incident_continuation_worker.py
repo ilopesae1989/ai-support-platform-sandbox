@@ -45,6 +45,9 @@ TerminalNotifier = Callable[
 ]
 
 
+MAX_PREAPPROVAL_RECOVERY_ATTEMPTS = 3
+
+
 class IncidentContinuationWorkerOutcome(
     str,
     Enum,
@@ -235,32 +238,29 @@ class IncidentContinuationWorker:
 
         except Exception as exc:
             #
-            # Sólo intentamos recuperación si
-            # approval_store demuestra que el
-            # processor todavía NO cruzó
-            # store.claim().
+            # Antes de decidir recovery comprobamos
+            # el estado durable de la aprobación.
             #
+            # Un fallo de esta lectura tampoco puede
+            # habilitar un retry automático.
+            #
+            error_name = (
+                type(exc).__name__
+            )
+
             try:
-                dependencies.continuation_store.recover_claimed_before_approval(
-                    approval_id=(
+                (
+                    approval_status,
+                    approved_decision,
+                ) = (
+                    dependencies
+                    .approval_store
+                    .get_consumption_record(
                         approval_id
-                    ),
-                    worker_id=(
-                        dependencies.worker_id
-                    ),
-                    approval_store=(
-                        dependencies
-                        .approval_store
-                    ),
+                    )
                 )
 
-            except IncidentContinuationClaimError:
-                #
-                # La aprobación ya fue consumida
-                # o el claim no pertenece al worker.
-                #
-                # No existe replay automático.
-                #
+            except Exception:
                 dependencies.continuation_store.fail(
                     approval_id=(
                         approval_id
@@ -269,7 +269,7 @@ class IncidentContinuationWorker:
                         dependencies.worker_id
                     ),
                     error=(
-                        type(exc).__name__
+                        error_name
                     ),
                 )
 
@@ -278,11 +278,100 @@ class IncidentContinuationWorker:
                     .FAILED_CLOSED
                 )
 
-            else:
+            #
+            # Sólo existe recovery automático cuando:
+            #
+            # - la aprobación sigue pending;
+            # - no existe decisión consumida;
+            # - todavía no se agotó el presupuesto
+            #   explícito de recovery pre-claim.
+            #
+            if (
+                approval_status
+                == "pending"
+                and approved_decision
+                is None
+            ):
+                if (
+                    job.attempt_count
+                    >= MAX_PREAPPROVAL_RECOVERY_ATTEMPTS
+                ):
+                    dependencies.continuation_store.fail(
+                        approval_id=(
+                            approval_id
+                        ),
+                        worker_id=(
+                            dependencies.worker_id
+                        ),
+                        error=(
+                            error_name
+                        ),
+                    )
+
+                    return (
+                        IncidentContinuationWorkerOutcome
+                        .FAILED_CLOSED
+                    )
+
+                try:
+                    dependencies.continuation_store.recover_claimed_before_approval(
+                        approval_id=(
+                            approval_id
+                        ),
+                        worker_id=(
+                            dependencies.worker_id
+                        ),
+                        approval_store=(
+                            dependencies
+                            .approval_store
+                        ),
+                    )
+
+                except IncidentContinuationClaimError:
+                    dependencies.continuation_store.fail(
+                        approval_id=(
+                            approval_id
+                        ),
+                        worker_id=(
+                            dependencies.worker_id
+                        ),
+                        error=(
+                            error_name
+                        ),
+                    )
+
+                    return (
+                        IncidentContinuationWorkerOutcome
+                        .FAILED_CLOSED
+                    )
+
                 return (
                     IncidentContinuationWorkerOutcome
                     .REQUEUED_PREAPPROVAL
                 )
+
+            #
+            # Claimed/completed o cualquier estado
+            # distinto de pending+NULL:
+            #
+            # nunca requeue.
+            #
+            dependencies.continuation_store.fail(
+                approval_id=(
+                    approval_id
+                ),
+                worker_id=(
+                    dependencies.worker_id
+                ),
+                error=(
+                    error_name
+                ),
+            )
+
+            return (
+                IncidentContinuationWorkerOutcome
+                .FAILED_CLOSED
+            )
 
     async def run(
         self,

@@ -54,6 +54,7 @@ from .approval_invocation import (
 
 from .incident_continuation_store import (
     IncidentContinuationConflictError,
+    IncidentContinuationStatus,
     IncidentContinuationStore,
 )
 
@@ -157,9 +158,31 @@ def enqueue_authorized_teams_incident_approval(
             "con la invocación autorizada."
         )
 
-    continuation_store.enqueue(
-        invocation
+    continuation_job = (
+        continuation_store.enqueue(
+            invocation
+        )
     )
+
+    #
+    # Un handoff FAILED es terminal.
+    #
+    # Aunque la ApprovalCorrelation pueda seguir
+    # pending/NULL porque el fallo ocurrió antes
+    # del approval claim, el worker no reclamará
+    # de nuevo un continuation FAILED.
+    #
+    # No devolvemos ACK positivo para una decisión
+    # que ya no dispone de trabajo durable ejecutable.
+    #
+    if (
+        continuation_job.status
+        == IncidentContinuationStatus.FAILED
+    ):
+        raise IncidentContinuationConflictError(
+            "approval_id pertenece a un "
+            "continuation job terminal FAILED."
+        )
 
     return instruction.approved
 

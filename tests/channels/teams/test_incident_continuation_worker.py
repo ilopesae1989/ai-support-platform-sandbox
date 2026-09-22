@@ -413,3 +413,100 @@ async def test_idle_worker_has_no_side_effect(
         == IncidentContinuationWorkerOutcome
         .IDLE
     )
+
+# TDD_PHASE23_PREAPPROVAL_RECOVERY_BUDGET_RED
+@pytest.mark.asyncio
+async def test_phase23_preapproval_recovery_is_bounded_fail_closed(
+    tmp_path,
+):
+    """
+    Un fallo repetible ANTES del approval claim no puede
+    producir un retry loop durable ilimitado.
+
+    Contrato esperado:
+
+        attempt 1 -> requeue
+        attempt 2 -> requeue
+        attempt 3 -> fail closed
+
+    La approval permanece pending / undecided porque
+    ningún intento alcanzó store.claim().
+    """
+
+    continuation, approval = (
+        _stores(
+            tmp_path
+        )
+    )
+
+    processor_calls = []
+
+    async def processor(
+        **kwargs,
+    ):
+        processor_calls.append(
+            True
+        )
+
+        raise RuntimeError(
+            "synthetic persistent preapproval failure"
+        )
+
+    async def notifier(
+        **kwargs,
+    ):
+        raise AssertionError(
+            "notifier no debe ejecutarse"
+        )
+
+    worker = IncidentContinuationWorker(
+        IncidentContinuationWorkerDependencies(
+            continuation_store=continuation,
+            approval_store=approval,
+            workflow_factory=lambda: object(),
+            processor=processor,
+            terminal_notifier=notifier,
+            worker_id="worker-phase23-bounded",
+        )
+    )
+
+    outcomes = [
+        await worker.process_next_once(),
+        await worker.process_next_once(),
+        await worker.process_next_once(),
+    ]
+
+    assert outcomes == [
+        IncidentContinuationWorkerOutcome.REQUEUED_PREAPPROVAL,
+        IncidentContinuationWorkerOutcome.REQUEUED_PREAPPROVAL,
+        IncidentContinuationWorkerOutcome.FAILED_CLOSED,
+    ]
+
+    final = continuation.get(
+        APPROVAL_ID
+    )
+
+    assert (
+        final.status
+        == IncidentContinuationStatus.FAILED
+    )
+
+    assert final.attempt_count == 3
+
+    assert (
+        final.last_error
+        == "RuntimeError"
+    )
+
+    status, decision = (
+        approval.get_consumption_record(
+            APPROVAL_ID
+        )
+    )
+
+    assert status == "pending"
+    assert decision is None
+
+    assert len(
+        processor_calls
+    ) == 3

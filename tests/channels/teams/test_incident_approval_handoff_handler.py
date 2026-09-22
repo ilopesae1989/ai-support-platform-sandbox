@@ -230,3 +230,79 @@ def test_fast_handler_contains_no_operational_await():
     assert "workflow.run" not in source
     assert "workflow_factory" not in source
     assert ".processor" not in source
+
+# TDD_PHASE23_FAILED_CONTINUATION_REPLAY_RED
+def test_phase23_failed_continuation_rejects_exact_replay(
+    tmp_path,
+):
+    """
+    Un continuation job terminal FAILED no puede
+    aceptar de nuevo el mismo Action.Execute como
+    si existiera trabajo pendiente.
+
+    La aprobación puede seguir pending/NULL porque
+    el fallo ocurrió antes de store.claim(), pero
+    el handoff FAILED es terminal y no será
+    reclamado por ningún worker.
+    """
+
+    approval, continuation = _stores(
+        tmp_path
+    )
+
+    invocation = _invocation(
+        ApprovalDecision.REJECT
+    )
+
+    enqueue_authorized_teams_incident_approval(
+        invocation=invocation,
+        store=approval,
+        continuation_store=continuation,
+    )
+
+    claimed = continuation.claim_next(
+        worker_id="worker-phase23-terminal"
+    )
+
+    assert claimed is not None
+
+    failed = continuation.fail(
+        approval_id=APPROVAL_ID,
+        worker_id="worker-phase23-terminal",
+        error="SyntheticPreApprovalFailure",
+    )
+
+    assert (
+        failed.status
+        == IncidentContinuationStatus.FAILED
+    )
+
+    assert (
+        approval.get_consumption_record(
+            APPROVAL_ID
+        )
+        == (
+            "pending",
+            None,
+        )
+    )
+
+    with pytest.raises(
+        IncidentContinuationConflictError,
+    ):
+        enqueue_authorized_teams_incident_approval(
+            invocation=invocation,
+            store=approval,
+            continuation_store=continuation,
+        )
+
+    final = continuation.get(
+        APPROVAL_ID
+    )
+
+    assert (
+        final.status
+        == IncidentContinuationStatus.FAILED
+    )
+
+    assert final.attempt_count == 1

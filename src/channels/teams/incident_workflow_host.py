@@ -7,6 +7,19 @@ from typing import (
 from .approval_bridge import (
     notify_registered_teams_approval,
     register_pending_approval_correlation,
+    resolve_pending_approval_checkpoint,
+)
+
+from src.communication.context import (
+    SafeCommunicationContext,
+)
+
+from src.communication.context_state import (
+    SAFE_COMMUNICATION_CONTEXT_STATE_KEY,
+)
+
+from pydantic import (
+    ValidationError,
 )
 
 from src.workflows.incident_resolution.workflow_input import (
@@ -47,6 +60,81 @@ def _require_exact_string(
         )
 
     return value
+
+
+def _validate_pending_checkpoint_authority(
+    *,
+    checkpoint: Any,
+    expected_workflow_name: str,
+) -> None:
+    """
+    Valida antes de persistir/notificar que el
+    checkpoint HITL puede ser consumido por el
+    mismo workflow productivo.
+
+    También exige el snapshot comunicable que el
+    processor recuperará antes del approval claim.
+
+    Fail-closed:
+    ninguna tarjeta Teams debe publicarse si este
+    contrato no se cumple.
+    """
+
+    checkpoint_workflow_name = (
+        _require_exact_string(
+            name="checkpoint.workflow_name",
+            value=getattr(
+                checkpoint,
+                "workflow_name",
+                None,
+            ),
+        )
+    )
+
+    if (
+        checkpoint_workflow_name
+        != expected_workflow_name
+    ):
+        raise IncidentWorkflowHostError(
+            "El checkpoint HITL pertenece a un "
+            "workflow diferente del workflow "
+            "productivo que deberá reanudarlo."
+        )
+
+    state = getattr(
+        checkpoint,
+        "state",
+        None,
+    )
+
+    if type(state) is not dict:
+        raise IncidentWorkflowHostError(
+            "El checkpoint HITL no contiene "
+            "shared state válido."
+        )
+
+    if (
+        SAFE_COMMUNICATION_CONTEXT_STATE_KEY
+        not in state
+    ):
+        raise IncidentWorkflowHostError(
+            "El checkpoint HITL no contiene "
+            "safe_communication_context."
+        )
+
+    try:
+        SafeCommunicationContext.model_validate(
+            state[
+                SAFE_COMMUNICATION_CONTEXT_STATE_KEY
+            ]
+        )
+
+    except ValidationError as exc:
+        raise IncidentWorkflowHostError(
+            "El safe_communication_context del "
+            "checkpoint HITL no supera validación "
+            "estricta."
+        ) from exc
 
 
 async def run_incident_until_teams_approval(
@@ -190,6 +278,26 @@ async def run_incident_until_teams_approval(
         workflow_name=(
             workflow_name
         )
+    )
+
+    #
+    # Antes de persistir cualquier correlación o
+    # publicar Teams, el checkpoint exacto debe
+    # pertenecer al workflow resumible y contener
+    # el contexto seguro requerido posteriormente.
+    #
+    pending_checkpoint = (
+        resolve_pending_approval_checkpoint(
+            checkpoints=checkpoints,
+            request_id=request_id,
+        )
+    )
+
+    _validate_pending_checkpoint_authority(
+        checkpoint=pending_checkpoint,
+        expected_workflow_name=(
+            workflow_name
+        ),
     )
 
     #

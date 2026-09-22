@@ -1,5 +1,6 @@
 from dataclasses import (
     dataclass,
+    field,
 )
 
 import pytest
@@ -38,6 +39,31 @@ class FakeRequestInfoEvent:
 class FakeCheckpoint:
     checkpoint_id: str
     pending_request_info_events: dict
+
+    workflow_name: str = (
+        "incident-resolution"
+    )
+
+    state: dict = field(
+        default_factory=lambda: {
+            "safe_communication_context": {
+                "alert_id": "ALT-HOST-TEST-001",
+                "technical_domain": "azure",
+                "corporate_criticality": "high",
+                "affected_resource": "vm-test",
+                "technical_summary": (
+                    "Synthetic host checkpoint "
+                    "communication context."
+                ),
+                "procedure_id": (
+                    "PROC-HOST-TEST-001"
+                ),
+                "procedure_name": (
+                    "Host test procedure"
+                ),
+            }
+        }
+    )
 
 
 class FakeWorkflow:
@@ -643,3 +669,216 @@ def _create_host_normalized_alert():
         resource_group="rg-test",
         vm_name="vm-test",
     )
+
+
+# TDD_PHASE23_FOREIGN_WORKFLOW_CHECKPOINT_RED
+@pytest.mark.asyncio
+async def test_phase23_host_rejects_foreign_workflow_checkpoint_before_registration(
+    monkeypatch,
+):
+    """
+    Una approval productiva no puede registrarse ni
+    publicarse si el checkpoint HITL pertenece a otro
+    workflow.
+
+    El worker productivo reconstruye
+    incident-resolution; por tanto un checkpoint
+    procedure-runtime no es una autoridad resumible
+    válida para ese worker.
+    """
+
+    from types import SimpleNamespace
+
+    import src.channels.teams.incident_workflow_host as host
+
+    request = create_request()
+
+    event = FakeRequestInfoEvent(
+        type="request_info",
+        request_id=REQUEST_ID,
+        data=request,
+    )
+
+    workflow = FakeWorkflow(
+        [
+            event,
+        ]
+    )
+
+    checkpoint = SimpleNamespace(
+        checkpoint_id=CHECKPOINT_ID,
+        workflow_name="procedure-runtime",
+        state={
+            "safe_communication_context": {
+                "synthetic": "present"
+            }
+        },
+        pending_request_info_events={
+            REQUEST_ID: {
+                "request_id": REQUEST_ID,
+            }
+        },
+    )
+
+    storage = FakeCheckpointStorage(
+        workflow=workflow,
+        checkpoints=[
+            checkpoint,
+        ],
+    )
+
+    register_calls = []
+    notify_calls = []
+
+    def fake_register(
+        **kwargs,
+    ):
+        register_calls.append(
+            kwargs
+        )
+
+        return object()
+
+    async def fake_notify(
+        **kwargs,
+    ):
+        notify_calls.append(
+            kwargs
+        )
+
+        return object()
+
+    monkeypatch.setattr(
+        host,
+        "register_pending_approval_correlation",
+        fake_register,
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        host,
+        "notify_registered_teams_approval",
+        fake_notify,
+        raising=False,
+    )
+
+    with pytest.raises(
+        host.IncidentWorkflowHostError,
+        match="workflow",
+    ):
+        await host.run_incident_until_teams_approval(
+            workflow=workflow,
+            alert=_create_host_normalized_alert(),
+            checkpoint_storage=storage,
+            store=object(),
+            outbound=object(),
+            tenant_id=TENANT_ID,
+            conversation_id=CONVERSATION_ID,
+        )
+
+    assert register_calls == []
+    assert notify_calls == []
+
+
+# TDD_PHASE23_SAFE_COMMUNICATION_CHECKPOINT_RED
+@pytest.mark.asyncio
+async def test_phase23_host_rejects_checkpoint_without_safe_communication_context_before_registration(
+    monkeypatch,
+):
+    """
+    La approval productiva no debe llegar a Teams
+    cuando el checkpoint exacto carece del snapshot
+    que el processor necesita antes del claim.
+    """
+
+    from types import SimpleNamespace
+
+    import src.channels.teams.incident_workflow_host as host
+
+    request = create_request()
+
+    event = FakeRequestInfoEvent(
+        type="request_info",
+        request_id=REQUEST_ID,
+        data=request,
+    )
+
+    workflow = FakeWorkflow(
+        [
+            event,
+        ]
+    )
+
+    checkpoint = SimpleNamespace(
+        checkpoint_id=CHECKPOINT_ID,
+        workflow_name="incident-resolution",
+        state={
+            "procedure_runtime_state": {
+                "synthetic": "present"
+            }
+        },
+        pending_request_info_events={
+            REQUEST_ID: {
+                "request_id": REQUEST_ID,
+            }
+        },
+    )
+
+    storage = FakeCheckpointStorage(
+        workflow=workflow,
+        checkpoints=[
+            checkpoint,
+        ],
+    )
+
+    register_calls = []
+    notify_calls = []
+
+    def fake_register(
+        **kwargs,
+    ):
+        register_calls.append(
+            kwargs
+        )
+
+        return object()
+
+    async def fake_notify(
+        **kwargs,
+    ):
+        notify_calls.append(
+            kwargs
+        )
+
+        return object()
+
+    monkeypatch.setattr(
+        host,
+        "register_pending_approval_correlation",
+        fake_register,
+        raising=False,
+    )
+
+    monkeypatch.setattr(
+        host,
+        "notify_registered_teams_approval",
+        fake_notify,
+        raising=False,
+    )
+
+    with pytest.raises(
+        host.IncidentWorkflowHostError,
+        match="safe_communication_context",
+    ):
+        await host.run_incident_until_teams_approval(
+            workflow=workflow,
+            alert=_create_host_normalized_alert(),
+            checkpoint_storage=storage,
+            store=object(),
+            outbound=object(),
+            tenant_id=TENANT_ID,
+            conversation_id=CONVERSATION_ID,
+        )
+
+    assert register_calls == []
+    assert notify_calls == []
