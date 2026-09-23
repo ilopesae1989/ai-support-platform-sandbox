@@ -116,6 +116,7 @@ class FoundryAgents:
         ] | None = None,
         *,
         credential: object | None = None,
+        allow_preview: bool = False,
     ) -> None:
         self._project_endpoint = (
             project_endpoint
@@ -142,6 +143,8 @@ class FoundryAgents:
             if credential is not None
             else AzureCliCredential()
         )
+
+        self._allow_preview = allow_preview
 
         #
         # Contextos Azure Operations iniciados por esta
@@ -228,6 +231,10 @@ class FoundryAgents:
 
             credential=(
                 self._credential
+            ),
+
+            allow_preview=(
+                self._allow_preview
             ),
 
             default_options=(

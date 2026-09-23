@@ -36,6 +36,7 @@ def build_foundry_production_agents(
             settings.project_endpoint
         ),
         credential=credential,
+        allow_preview=True,
     )
 
 

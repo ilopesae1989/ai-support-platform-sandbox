@@ -224,6 +224,7 @@ def test_runner_factory_constructs_foundry_agents_once_with_exact_dependencies(
                     PROJECT_ENDPOINT
                 ),
                 "credential": credential,
+                "allow_preview": True,
             },
         ),
     ]
@@ -468,6 +469,7 @@ def test_phase23_production_incident_managed_identity_agents_factory(
                     PROJECT_ENDPOINT
                 ),
                 "credential": credential,
+                "allow_preview": True,
             },
         ),
     ]
