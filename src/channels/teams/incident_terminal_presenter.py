@@ -9,15 +9,25 @@ from src.runtime.procedure.models import (
     WorkflowStatus,
 )
 
+from src.runtime.procedure.approval_channel import (
+    ApprovalDecision,
+)
+
+from src.runtime.procedure.workflow import (
+    ApprovalOutcome,
+)
+
 from src.communication.context import (
     SafeCommunicationContext,
 )
 
 from src.communication.contracts import (
+    CommunicationRequest,
     CommunicationResult,
 )
 
 from src.communication.projection import (
+    build_rejected_approval_communication_request,
     build_runtime_communication_request,
 )
 
@@ -158,6 +168,47 @@ def render_incident_terminal_result(
     )
 
 
+
+
+def _render_rejected_communication_request(
+    request: CommunicationRequest,
+) -> str:
+    if type(
+        request
+    ) is not CommunicationRequest:
+        raise IncidentTerminalPresentationError(
+            "request debe ser CommunicationRequest "
+            "exacto."
+        )
+
+    if (
+        request.event_type
+        != "operation_rejected"
+    ):
+        raise IncidentTerminalPresentationError(
+            "El renderer de rechazo requiere "
+            "event_type=operation_rejected."
+        )
+
+    if (
+        request.procedure_id
+        is None
+        or request.procedure_name
+        is None
+    ):
+        raise IncidentTerminalPresentationError(
+            "El rechazo comunicable requiere "
+            "procedimiento."
+        )
+
+    return (
+        "⛔ Operación rechazada.\n"
+        "No se ha ejecutado la acción solicitada.\n"
+        f"Procedimiento: {request.procedure_id} - "
+        f"{request.procedure_name}"
+    )
+
+
 def _render_communication_result(
     result: CommunicationResult,
 ) -> str:
@@ -199,7 +250,7 @@ async def notify_teams_incident_terminal_result(
     Python proyecta primero el estado gobernado.
 
     Si falla únicamente la capa cognitiva se usa
-    el renderer determinista existente.
+    un renderer determinista.
     """
 
     if not isinstance(
@@ -217,40 +268,80 @@ async def notify_teams_incident_terminal_result(
         None,
     )
 
-    if not isinstance(
+    safe_communication_context = getattr(
+        processed,
+        "safe_communication_context",
+        None,
+    )
+
+    if isinstance(
         workflow_result,
         ProcedureRuntimeState,
     ):
-        raise IncidentTerminalPresentationError(
-            "processed no contiene un "
-            "ProcedureRuntimeState terminal."
+        result_conversation_id = (
+            workflow_result.conversation_id
         )
 
-    result_conversation_id = (
-        workflow_result.conversation_id
-    )
+        if (
+            result_conversation_id is not None
+            and result_conversation_id
+            != invocation.operator.conversation_id
+        ):
+            raise IncidentTerminalPresentationError(
+                "conversation_id terminal no coincide "
+                "con la identidad Teams autorizada."
+            )
 
-    if (
-        result_conversation_id is not None
-        and result_conversation_id
-        != invocation.operator.conversation_id
-    ):
-        raise IncidentTerminalPresentationError(
-            "conversation_id terminal no coincide "
-            "con la identidad Teams autorizada."
-        )
+        if communication_runner is None:
+            text = render_incident_terminal_result(
+                workflow_result
+            )
 
-    if communication_runner is None:
-        text = render_incident_terminal_result(
-            workflow_result
-        )
+        else:
+            if type(
+                safe_communication_context
+            ) is not SafeCommunicationContext:
+                raise IncidentTerminalPresentationError(
+                    "processed no contiene "
+                    "SafeCommunicationContext exacto."
+                )
 
-    else:
-        safe_communication_context = getattr(
-            processed,
-            "safe_communication_context",
-            None,
-        )
+            communication_request = (
+                build_runtime_communication_request(
+                    context=(
+                        safe_communication_context
+                    ),
+                    state=workflow_result,
+                )
+            )
+
+            try:
+                communication_result = await (
+                    communication_runner(
+                        communication_request
+                    )
+                )
+
+                text = _render_communication_result(
+                    communication_result
+                )
+
+            except Exception:
+                text = render_incident_terminal_result(
+                    workflow_result
+                )
+
+    elif type(
+        workflow_result
+    ) is ApprovalOutcome:
+        if (
+            invocation.action.decision
+            != ApprovalDecision.REJECT
+        ):
+            raise IncidentTerminalPresentationError(
+                "ApprovalOutcome de rechazo requiere "
+                "una decisión Teams reject autorizada."
+            )
 
         if type(
             safe_communication_context
@@ -261,29 +352,45 @@ async def notify_teams_incident_terminal_result(
             )
 
         communication_request = (
-            build_runtime_communication_request(
+            build_rejected_approval_communication_request(
                 context=(
                     safe_communication_context
                 ),
-                state=workflow_result,
+                outcome=workflow_result,
             )
         )
 
-        try:
-            communication_result = await (
-                communication_runner(
+        if communication_runner is None:
+            text = (
+                _render_rejected_communication_request(
                     communication_request
                 )
             )
 
-            text = _render_communication_result(
-                communication_result
-            )
+        else:
+            try:
+                communication_result = await (
+                    communication_runner(
+                        communication_request
+                    )
+                )
 
-        except Exception:
-            text = render_incident_terminal_result(
-                workflow_result
-            )
+                text = _render_communication_result(
+                    communication_result
+                )
+
+            except Exception:
+                text = (
+                    _render_rejected_communication_request(
+                        communication_request
+                    )
+                )
+
+    else:
+        raise IncidentTerminalPresentationError(
+            "processed no contiene un resultado "
+            "terminal soportado."
+        )
 
     return await send_teams_message(
         dependencies=outbound,

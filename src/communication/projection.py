@@ -15,6 +15,10 @@ from src.runtime.procedure.models import (
     WorkflowStatus,
 )
 
+from src.runtime.procedure.workflow import (
+    ApprovalOutcome,
+)
+
 from src.workflows.incident_resolution.models import (
     TriagedAlertContext,
 )
@@ -394,4 +398,114 @@ def build_runtime_communication_request(
         escalation_team=(
             trusted_state.escalation_team
         ),
+    )
+
+def build_rejected_approval_communication_request(
+    *,
+    context: SafeCommunicationContext,
+    outcome: ApprovalOutcome,
+) -> CommunicationRequest:
+    """
+    Proyecta únicamente hechos comunicables para
+    un REJECT HITL terminal.
+
+    ApprovalOutcome confirma exclusivamente el
+    resultado de la decisión HITL.
+
+    SafeCommunicationContext aporta únicamente el
+    snapshot comunicable previamente gobernado.
+
+    Ninguno de los dos concede autoridad operacional
+    ni expone parámetros, capabilities o routing.
+    """
+
+    trusted_context = (
+        _require_safe_context(
+            context
+        )
+    )
+
+    if type(
+        outcome
+    ) is not ApprovalOutcome:
+        raise TypeError(
+            "outcome debe ser exactamente "
+            "ApprovalOutcome."
+        )
+
+    if (
+        outcome.approved
+        is not False
+    ):
+        raise CommunicationProjectionError(
+            "La proyección de rechazo requiere "
+            "approved=false."
+        )
+
+    if (
+        outcome.status
+        != "blocked"
+    ):
+        raise CommunicationProjectionError(
+            "La proyección de rechazo requiere "
+            "status=blocked."
+        )
+
+    if (
+        not isinstance(
+            outcome.workflow_id,
+            str,
+        )
+        or not outcome.workflow_id
+        or not outcome.workflow_id.strip()
+        or (
+            outcome.workflow_id
+            != outcome.workflow_id.strip()
+        )
+    ):
+        raise CommunicationProjectionError(
+            "El rechazo requiere workflow_id "
+            "exacto no vacío."
+        )
+
+    if (
+        trusted_context.procedure_id
+        is None
+        or trusted_context.procedure_name
+        is None
+    ):
+        raise CommunicationProjectionError(
+            "La comunicación de rechazo requiere "
+            "procedimiento en el contexto seguro."
+        )
+
+    return CommunicationRequest(
+        event_type="operation_rejected",
+        alert_id=(
+            trusted_context.alert_id
+        ),
+        technical_domain=(
+            trusted_context.technical_domain
+        ),
+        corporate_criticality=(
+            trusted_context.corporate_criticality
+        ),
+        affected_resource=(
+            trusted_context.affected_resource
+        ),
+        technical_summary=(
+            trusted_context.technical_summary
+        ),
+        procedure_id=(
+            trusted_context.procedure_id
+        ),
+        procedure_name=(
+            trusted_context.procedure_name
+        ),
+        status_summary=(
+            "The operator rejected the "
+            "requested operation."
+        ),
+        escalation_required=False,
+        escalation_team=None,
     )

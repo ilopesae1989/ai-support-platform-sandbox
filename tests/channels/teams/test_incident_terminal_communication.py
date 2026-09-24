@@ -467,3 +467,169 @@ def test_presenter_cognitive_boundary_is_injected_and_non_authoritative():
 
     for value in forbidden:
         assert value.casefold() not in source
+# TDD_PHASE23_R16_REJECT_APPROVAL_OUTCOME_COGNITIVE_RED
+@pytest.mark.asyncio
+async def test_rejected_approval_outcome_projects_safe_operation_rejected_communication(
+    monkeypatch,
+):
+    """
+    El host productivo inyecta communication_runner.
+
+    El REJECT debe proyectarse a CommunicationRequest
+    únicamente desde ApprovalOutcome terminal y
+    SafeCommunicationContext.
+    """
+    from src.channels.teams.approval_authorization import (
+        AuthorizedTeamsApprovalInvocation,
+    )
+
+    from src.channels.teams.operator_identity import (
+        TeamsOperatorIdentity,
+    )
+
+    from src.runtime.procedure.approval_channel import (
+        ApprovalChannelAction,
+        ApprovalDecision,
+    )
+
+    from src.runtime.procedure.workflow import (
+        ApprovalOutcome,
+    )
+
+    captured = {
+        "requests": [],
+        "sends": [],
+    }
+
+    async def fake_runner(
+        request,
+    ):
+        captured["requests"].append(
+            request
+        )
+
+        return CommunicationResult(
+            headline="Operation rejected",
+            summary=(
+                "The requested operation "
+                "was rejected."
+            ),
+            details=[
+                "No operational action was executed.",
+            ],
+        )
+
+    async def fake_send(
+        **kwargs,
+    ):
+        captured["sends"].append(
+            kwargs
+        )
+
+        return "reject-cognitive-sent"
+
+    monkeypatch.setattr(
+        "src.channels.teams."
+        "incident_terminal_presenter."
+        "send_teams_message",
+        fake_send,
+    )
+
+    base = _invocation()
+
+    invocation = (
+        AuthorizedTeamsApprovalInvocation(
+            policy_id=base.policy_id,
+            operator=TeamsOperatorIdentity(
+                **base.operator.model_dump()
+            ),
+            action=ApprovalChannelAction(
+                approval_id=(
+                    base.action.approval_id
+                ),
+                decision=ApprovalDecision.REJECT,
+            ),
+        )
+    )
+
+    processed = SimpleNamespace(
+        workflow_result=ApprovalOutcome(
+            workflow_id="wf-terminal-test",
+            approved=False,
+            status="blocked",
+        ),
+        safe_communication_context=(
+            _safe_context()
+        ),
+    )
+
+    result = await (
+        notify_teams_incident_terminal_result(
+            invocation=invocation,
+            processed=processed,
+            outbound=object(),
+            communication_runner=(
+                fake_runner
+            ),
+        )
+    )
+
+    assert result == "reject-cognitive-sent"
+
+    assert len(
+        captured["requests"]
+    ) == 1
+
+    request = (
+        captured["requests"][0]
+    )
+
+    assert type(
+        request
+    ) is CommunicationRequest
+
+    assert (
+        request.event_type
+        == "operation_rejected"
+    )
+
+    assert (
+        request.alert_id
+        == "alert-terminal-test"
+    )
+
+    assert (
+        request.procedure_id
+        == "PROC-TERMINAL-001"
+    )
+
+    serialized = repr(
+        request.model_dump(
+            mode="json"
+        )
+    )
+
+    for forbidden in (
+        "apr-terminal-test",
+        "conversation-terminal-test",
+        "target_resource",
+        "resolved_parameters",
+        "capability_id",
+        "operation_action",
+        "azure.vm.start",
+    ):
+        assert forbidden not in serialized
+
+    assert len(
+        captured["sends"]
+    ) == 1
+
+    assert (
+        captured["sends"][0]["tenant_id"]
+        == invocation.operator.tenant_id
+    )
+
+    assert (
+        captured["sends"][0]["conversation_id"]
+        == invocation.operator.conversation_id
+    )

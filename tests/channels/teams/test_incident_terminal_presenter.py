@@ -261,3 +261,145 @@ async def test_notifier_rejects_conversation_substitution(
                 outbound=object(),
             )
         )
+# TDD_PHASE23_R16_REJECT_APPROVAL_OUTCOME_DETERMINISTIC_RED
+@pytest.mark.asyncio
+async def test_rejected_approval_outcome_uses_safe_context_for_deterministic_notification(
+    monkeypatch,
+):
+    """
+    El REJECT conserva ApprovalOutcome como output real
+    del workflow.
+
+    El presenter debe poder comunicarlo usando únicamente
+    el SafeCommunicationContext ya gobernado.
+
+    No reconstruye autoridad operacional desde Teams.
+    """
+    from src.communication.context import (
+        SafeCommunicationContext,
+    )
+
+    from src.runtime.procedure.workflow import (
+        ApprovalOutcome,
+    )
+
+    captured = {}
+
+    async def fake_send(
+        *,
+        dependencies,
+        tenant_id,
+        conversation_id,
+        text,
+    ):
+        captured["tenant_id"] = tenant_id
+        captured["conversation_id"] = (
+            conversation_id
+        )
+        captured["text"] = text
+
+        return "reject-outcome-sent"
+
+    monkeypatch.setattr(
+        "src.channels.teams."
+        "incident_terminal_presenter."
+        "send_teams_message",
+        fake_send,
+    )
+
+    invocation = (
+        AuthorizedTeamsApprovalInvocation(
+            policy_id=(
+                "teams-hitl-sandbox-v1"
+            ),
+            operator=TeamsOperatorIdentity(
+                tenant_id="tenant-terminal-test",
+                aad_object_id="aad-terminal-test",
+                teams_user_id="teams-terminal-test",
+                conversation_id=(
+                    "conversation-terminal-test"
+                ),
+                display_name="Terminal Tester",
+            ),
+            action=ApprovalChannelAction(
+                approval_id="apr-terminal-test",
+                decision=ApprovalDecision.REJECT,
+            ),
+        )
+    )
+
+    safe_context = SafeCommunicationContext(
+        alert_id="alert-terminal-test",
+        technical_domain="azure",
+        corporate_criticality="high",
+        affected_resource="vm-terminal-safe",
+        technical_summary=(
+            "Synthetic terminal incident."
+        ),
+        procedure_id="PROC-TERMINAL-001",
+        procedure_name=(
+            "Procedimiento terminal test"
+        ),
+    )
+
+    processed = SimpleNamespace(
+        workflow_result=ApprovalOutcome(
+            workflow_id="wf-terminal-test",
+            approved=False,
+            status="blocked",
+        ),
+        safe_communication_context=(
+            safe_context
+        ),
+    )
+
+    result = await (
+        notify_teams_incident_terminal_result(
+            invocation=invocation,
+            processed=processed,
+            outbound=object(),
+        )
+    )
+
+    assert result == "reject-outcome-sent"
+
+    assert (
+        captured["tenant_id"]
+        == invocation.operator.tenant_id
+    )
+
+    assert (
+        captured["conversation_id"]
+        == invocation.operator.conversation_id
+    )
+
+    assert (
+        "Operación rechazada"
+        in captured["text"]
+    )
+
+    assert (
+        "No se ha ejecutado"
+        in captured["text"]
+    )
+
+    assert (
+        "PROC-TERMINAL-001"
+        in captured["text"]
+    )
+
+    lower = (
+        captured["text"]
+        .lower()
+    )
+
+    for forbidden in (
+        "subscription_id",
+        "resource_group",
+        "capability_id",
+        "resolved_parameters",
+        "operation_action",
+        "target_resource",
+        "azure.vm.start",
+    ):
+        assert forbidden not in lower
