@@ -24,6 +24,13 @@ from src.communication.contracts import (
     CommunicationRequest,
     CommunicationResult,
 )
+from src.review.agent_adapter import (
+    ReviewAgentAdapter,
+)
+from src.review.contracts import (
+    ReviewRequest,
+    ReviewResult,
+)
 
 from .audit import AgentInvocationMetadata
 from .catalog import (
@@ -648,6 +655,46 @@ class FoundryAgents:
         )
 
         adapter = CommunicationAgentAdapter(
+            runner=agent
+        )
+
+        return await adapter.run(
+            request
+        )
+
+
+    async def run_review(
+        self,
+        request: ReviewRequest,
+    ) -> ReviewResult:
+        """
+        Invoca exclusivamente Reviewer sobre una
+        ReviewRequest ya construida por Python.
+
+        Reviewer es cognitivo y no operacional:
+        no decide routing, HITL, herramientas,
+        destinatarios ni ejecución.
+        """
+
+        if type(request) is not ReviewRequest:
+            raise TypeError(
+                "request debe ser exactamente "
+                "ReviewRequest."
+            )
+
+        definition = self.get_definition(
+            AgentKey.REVIEWER
+        )
+
+        self._register_invocation(
+            definition
+        )
+
+        agent = self._create_agent(
+            definition
+        )
+
+        adapter = ReviewAgentAdapter(
             runner=agent
         )
 

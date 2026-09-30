@@ -319,6 +319,7 @@ def build_production_teams_hitl_app_with_communication_and_incident_agents(
     azure_vm_power_state_reader: AzureVmPowerStateReader,
     communication_runner: object,
     incident_agents: object,
+    review_runner: object | None = None,
     operator_identity_resolver: object | None = None,
 ) -> ProductionTeamsHitlBootstrap:
     """
@@ -371,6 +372,18 @@ def build_production_teams_hitl_app_with_communication_and_incident_agents(
             "communication_runner debe ser callable."
         )
 
+    if (
+        review_runner is not None
+        and not callable(
+            review_runner
+        )
+    ):
+        raise TypeError(
+            "review_runner debe ser callable "
+            "cuando se proporciona."
+        )
+
+
     if incident_agents is None:
         raise TypeError(
             "incident_agents debe existir."
@@ -395,6 +408,11 @@ def build_production_teams_hitl_app_with_communication_and_incident_agents(
             communication_runner=(
                 communication_runner
             ),
+            **(
+                {"review_runner": review_runner}
+                if review_runner is not None
+                else {}
+            ),
             incident_agents=(
                 incident_agents
             ),
@@ -415,6 +433,11 @@ def build_production_teams_hitl_app_with_communication_and_incident_agents(
             ),
             communication_runner=(
                 communication_runner
+            ),
+            **(
+                {"review_runner": review_runner}
+                if review_runner is not None
+                else {}
             ),
             incident_agents=(
                 incident_agents

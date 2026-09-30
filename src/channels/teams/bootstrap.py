@@ -547,6 +547,7 @@ def build_teams_hitl_app(
         AzureVmPowerStateReader | None
     ) = None,
     communication_runner: object | None = None,
+    review_runner: object | None = None,
     incident_agents: object | None = None,
 ) -> TeamsHitlBootstrap:
     """
@@ -585,6 +586,17 @@ def build_teams_hitl_app(
         "is_transitive_member",
         None,
     )
+
+    if (
+        review_runner is not None
+        and not callable(
+            review_runner
+        )
+    ):
+        raise TypeError(
+            "review_runner debe ser callable "
+            "cuando se proporciona."
+        )
 
     if not callable(
         membership_method
@@ -823,6 +835,13 @@ def build_teams_hitl_app(
                 outbound=outbound,
                 communication_runner=(
                     communication_runner
+                ),
+                **(
+                    {
+                        "review_runner": review_runner
+                    }
+                    if review_runner is not None
+                    else {}
                 ),
             )
         )

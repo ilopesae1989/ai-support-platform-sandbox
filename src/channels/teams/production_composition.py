@@ -212,6 +212,7 @@ def build_production_teams_host_with_communication_and_incident_agents(
     *,
     communication_runner: object,
     incident_agents: object,
+    review_runner: object | None = None,
 ):
     """
     Propaga dependencias ya compuestas.
@@ -234,6 +235,18 @@ def build_production_teams_host_with_communication_and_incident_agents(
         raise TypeError(
             "communication_runner debe ser callable."
         )
+
+    if (
+        review_runner is not None
+        and not callable(
+            review_runner
+        )
+    ):
+        raise TypeError(
+            "review_runner debe ser callable "
+            "cuando se proporciona."
+        )
+
 
     if incident_agents is None:
         raise TypeError(
@@ -313,6 +326,11 @@ def build_production_teams_host_with_communication_and_incident_agents(
             azure_vm_power_state_reader=reader,
             communication_runner=(
                 communication_runner
+            ),
+            **(
+                {"review_runner": review_runner}
+                if review_runner is not None
+                else {}
             ),
             incident_agents=(
                 incident_agents

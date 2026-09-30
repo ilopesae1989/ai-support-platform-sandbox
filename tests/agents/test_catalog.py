@@ -17,6 +17,7 @@ def test_catalog_contains_all_agents():
         AgentKey.AZURE_OPERATIONS,
         AgentKey.ITSM,
         AgentKey.COMMUNICATION,
+        AgentKey.REVIEWER,
     }
 
 
@@ -31,6 +32,7 @@ def test_catalog_uses_expected_sandbox_versions(
         "FOUNDRY_AGENT_AZURE_OPERATIONS_VERSION",
         "FOUNDRY_AGENT_ITSM_VERSION",
         "FOUNDRY_AGENT_COMMUNICATION_VERSION",
+        "FOUNDRY_AGENT_REVIEWER_VERSION",
     ]:
         monkeypatch.delenv(
             variable,
@@ -85,6 +87,16 @@ def test_catalog_uses_expected_sandbox_versions(
     assert (
         catalog[AgentKey.COMMUNICATION].version
         == "1"
+    )
+
+    assert (
+        catalog[AgentKey.REVIEWER].name
+        == "agent-reviewer-sbx"
+    )
+
+    assert (
+        catalog[AgentKey.REVIEWER].version
+        == "3"
     )
 
 

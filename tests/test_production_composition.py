@@ -29,6 +29,12 @@ async def _communication_runner(
     return request
 
 
+async def _review_runner(
+    request,
+):
+    return request
+
+
 def test_application_production_root_has_exact_sync_surface():
     module = _module()
 
@@ -119,6 +125,10 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
         communication_runner
     )
 
+    incident_agents.run_review = (
+        _review_runner
+    )
+
     calls = []
 
     def fake_foundry_settings_builder(
@@ -149,6 +159,7 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
         actual_environment,
         *,
         communication_runner,
+        review_runner,
         incident_agents,
     ):
         calls.append(
@@ -156,6 +167,7 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
                 "teams_host",
                 actual_environment,
                 communication_runner,
+                review_runner,
                 incident_agents,
             )
         )
@@ -202,6 +214,7 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
             "teams_host",
             environment,
             communication_runner,
+            _review_runner,
             incident_agents,
         ),
     ]
@@ -287,6 +300,10 @@ def test_application_root_does_not_mutate_environment(
 
     incident_agents.run_communication = (
         communication_runner
+    )
+
+    incident_agents.run_review = (
+        _review_runner
     )
 
     monkeypatch.setattr(
@@ -423,6 +440,10 @@ def test_phase23_production_incident_managed_identity_application_root_shared_ag
         communication_runner
     )
 
+    incident_agents.run_review = (
+        _review_runner
+    )
+
     calls = []
 
     def fake_settings_builder(
@@ -453,6 +474,7 @@ def test_phase23_production_incident_managed_identity_application_root_shared_ag
         actual_environment,
         *,
         communication_runner,
+        review_runner,
         incident_agents,
     ):
         calls.append(
@@ -460,6 +482,7 @@ def test_phase23_production_incident_managed_identity_application_root_shared_ag
                 "teams",
                 actual_environment,
                 communication_runner,
+                review_runner,
                 incident_agents,
             )
         )
@@ -537,6 +560,7 @@ def test_phase23_production_incident_managed_identity_application_root_shared_ag
             "teams",
             environment,
             communication_runner,
+            _review_runner,
             incident_agents,
         ),
     ]

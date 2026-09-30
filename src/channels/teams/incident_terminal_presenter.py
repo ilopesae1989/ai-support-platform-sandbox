@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 from typing import Any
 
 from src.runtime.procedure.models import (
@@ -29,6 +32,11 @@ from src.communication.contracts import (
 from src.communication.projection import (
     build_rejected_approval_communication_request,
     build_runtime_communication_request,
+)
+
+from src.review.policy import (
+    assess_review,
+    build_review_request,
 )
 
 from .approval_authorization import (
@@ -233,12 +241,44 @@ def _render_communication_result(
     )
 
 
+def _build_terminal_review_id(
+    request: CommunicationRequest,
+    candidate: CommunicationResult,
+) -> str:
+    payload = {
+        "context": request.model_dump(
+            mode="json"
+        ),
+        "candidate": candidate.model_dump(
+            mode="json"
+        ),
+    }
+
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode(
+        "utf-8"
+    )
+
+    return (
+        "review-terminal-"
+        + hashlib.sha256(
+            encoded
+        ).hexdigest()[:32]
+    )
+
+
 async def notify_teams_incident_terminal_result(
     *,
     invocation: AuthorizedTeamsApprovalInvocation,
     processed: Any,
     outbound: TeamsOutboundDependencies,
     communication_runner: Any | None = None,
+    review_runner: Any | None = None,
 ):
     """
     Publica el resultado terminal gobernado.
@@ -315,21 +355,66 @@ async def notify_teams_incident_terminal_result(
                 )
             )
 
-            try:
-                communication_result = await (
-                    communication_runner(
-                        communication_request
-                    )
-                )
-
-                text = _render_communication_result(
-                    communication_result
-                )
-
-            except Exception:
+            if review_runner is None:
                 text = render_incident_terminal_result(
                     workflow_result
                 )
+
+            else:
+                try:
+                    communication_result = await (
+                        communication_runner(
+                            communication_request
+                        )
+                    )
+
+                    review_request = (
+                        build_review_request(
+                            review_id=(
+                                _build_terminal_review_id(
+                                    communication_request,
+                                    communication_result,
+                                )
+                            ),
+                            context=(
+                                communication_request
+                            ),
+                            candidate=(
+                                communication_result
+                            ),
+                        )
+                    )
+
+                    review_result = await (
+                        review_runner(
+                            review_request
+                        )
+                    )
+
+                    assessment = assess_review(
+                        request=review_request,
+                        result=review_result,
+                    )
+
+                    if assessment.verdict == "pass":
+                        text = (
+                            _render_communication_result(
+                                communication_result
+                            )
+                        )
+                    else:
+                        text = (
+                            render_incident_terminal_result(
+                                workflow_result
+                            )
+                        )
+
+                except Exception:
+                    text = (
+                        render_incident_terminal_result(
+                            workflow_result
+                        )
+                    )
 
     elif type(
         workflow_result
@@ -360,7 +445,10 @@ async def notify_teams_incident_terminal_result(
             )
         )
 
-        if communication_runner is None:
+        if (
+            communication_runner is None
+            or review_runner is None
+        ):
             text = (
                 _render_rejected_communication_request(
                     communication_request
@@ -375,9 +463,46 @@ async def notify_teams_incident_terminal_result(
                     )
                 )
 
-                text = _render_communication_result(
-                    communication_result
+                review_request = (
+                    build_review_request(
+                        review_id=(
+                            _build_terminal_review_id(
+                                communication_request,
+                                communication_result,
+                            )
+                        ),
+                        context=(
+                            communication_request
+                        ),
+                        candidate=(
+                            communication_result
+                        ),
+                    )
                 )
+
+                review_result = await (
+                    review_runner(
+                        review_request
+                    )
+                )
+
+                assessment = assess_review(
+                    request=review_request,
+                    result=review_result,
+                )
+
+                if assessment.verdict == "pass":
+                    text = (
+                        _render_communication_result(
+                            communication_result
+                        )
+                    )
+                else:
+                    text = (
+                        _render_rejected_communication_request(
+                            communication_request
+                        )
+                    )
 
             except Exception:
                 text = (

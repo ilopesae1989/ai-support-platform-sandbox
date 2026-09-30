@@ -54,11 +54,28 @@ def build_production_application(
             "run_communication callable."
         )
 
+    review_runner = getattr(
+        incident_agents,
+        "run_review",
+        None,
+    )
+
+    if not callable(
+        review_runner
+    ):
+        raise TypeError(
+            "incident_agents debe exponer "
+            "run_review callable."
+        )
+
     return (
         build_production_teams_host_with_communication_and_incident_agents(
             environment,
             communication_runner=(
                 communication_runner
+            ),
+            review_runner=(
+                review_runner
             ),
             incident_agents=(
                 incident_agents

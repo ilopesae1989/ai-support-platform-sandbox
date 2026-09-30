@@ -81,6 +81,56 @@ def _communication_result():
     )
 
 
+def _review_pass_result(
+    request,
+):
+    from src.review.contracts import (
+        REQUIRED_REVIEW_CRITERIA,
+        ReviewResult,
+    )
+    from src.review.policy import (
+        review_request_sha256,
+    )
+
+    return ReviewResult.model_validate(
+        {
+            "review_id": request.review_id,
+            "request_sha256": (
+                review_request_sha256(
+                    request
+                )
+            ),
+            "criteria_version": (
+                request.criteria_version
+            ),
+            "findings": [
+                {
+                    "criterion": criterion,
+                    "outcome": "pass",
+                    "reason": (
+                        "Synthetic admissible review "
+                        "for presenter integration test."
+                    ),
+                    "evidence_refs": [
+                        "/candidate/summary",
+                    ],
+                }
+                for criterion in (
+                    REQUIRED_REVIEW_CRITERIA
+                )
+            ],
+        }
+    )
+
+
+async def _pass_review_runner(
+    request,
+):
+    return _review_pass_result(
+        request
+    )
+
+
 @pytest.mark.asyncio
 async def test_presenter_projects_governed_request_before_cognitive_call(
     monkeypatch,
@@ -123,6 +173,9 @@ async def test_presenter_projects_governed_request_before_cognitive_call(
             outbound=object(),
             communication_runner=(
                 fake_communication_runner
+            ),
+            review_runner=(
+                _pass_review_runner
             ),
         )
     )
@@ -207,6 +260,9 @@ async def test_presenter_renders_validated_communication_result(
             communication_runner=(
                 fake_communication_runner
             ),
+            review_runner=(
+                _pass_review_runner
+            ),
         )
     )
 
@@ -259,6 +315,9 @@ async def test_cognitive_failure_uses_deterministic_terminal_fallback(
             communication_runner=(
                 failing_communication_runner
             ),
+            review_runner=(
+                _pass_review_runner
+            ),
         )
     )
 
@@ -307,6 +366,9 @@ async def test_cognitive_path_keeps_authorized_teams_destination(
             outbound=object(),
             communication_runner=(
                 fake_communication_runner
+            ),
+            review_runner=(
+                _pass_review_runner
             ),
         )
     )
@@ -570,6 +632,9 @@ async def test_rejected_approval_outcome_projects_safe_operation_rejected_commun
             outbound=object(),
             communication_runner=(
                 fake_runner
+            ),
+            review_runner=(
+                _pass_review_runner
             ),
         )
     )

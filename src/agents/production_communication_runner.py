@@ -50,3 +50,15 @@ def build_foundry_production_communication_runner(
     )
 
     return agents.run_communication
+
+
+def build_foundry_production_review_runner(
+    settings,
+):
+    agents = (
+        build_foundry_production_agents(
+            settings
+        )
+    )
+
+    return agents.run_review

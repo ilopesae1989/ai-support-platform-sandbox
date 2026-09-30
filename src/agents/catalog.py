@@ -13,6 +13,7 @@ class AgentKey(StrEnum):
     AZURE_OPERATIONS = "azure_operations"
     ITSM = "itsm"
     COMMUNICATION = "communication"
+    REVIEWER = "reviewer"
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,11 @@ _DEFAULT_AGENT_CATALOG: dict[
         name="agent-communication-sbx",
         version="1",
     ),
+    AgentKey.REVIEWER: FoundryAgentDefinition(
+        key=AgentKey.REVIEWER,
+        name="agent-reviewer-sbx",
+        version="3",
+    ),
 }
 
 
@@ -111,6 +117,9 @@ AGENT_VERSION_ENV_VARS: Mapping[
 
         AgentKey.COMMUNICATION:
             "FOUNDRY_AGENT_COMMUNICATION_VERSION",
+
+        AgentKey.REVIEWER:
+            "FOUNDRY_AGENT_REVIEWER_VERSION",
     }
 )
 
