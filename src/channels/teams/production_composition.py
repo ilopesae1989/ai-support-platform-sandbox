@@ -307,6 +307,11 @@ def build_production_teams_host_with_communication_and_incident_agents(
                 communication_runner=(
                     communication_runner
                 ),
+                **(
+                    {"review_runner": review_runner}
+                    if review_runner is not None
+                    else {}
+                ),
                 incident_agents=(
                     incident_agents
                 ),
