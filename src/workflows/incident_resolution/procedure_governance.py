@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import json
+
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 
 from .procedure_catalog import ProcedureCatalog
+
+
+PROCEDURE_GOVERNANCE_SCHEMA_VERSION = "1.0"
 
 
 class ProcedureGovernanceError(ValueError):
@@ -295,3 +301,165 @@ class ProcedureGovernanceRegistry:
             )
 
         return item
+
+def _unique_governance_json_object(
+    pairs: list[tuple[str, object]],
+) -> dict[str, object]:
+    result: dict[str, object] = {}
+
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(
+                "JSON contiene miembros duplicados."
+            )
+
+        result[key] = value
+
+    return result
+
+
+def _read_governance_manifest(
+    path: Path,
+) -> object:
+    try:
+        return json.loads(
+            path.read_text(
+                encoding="utf-8"
+            ),
+            object_pairs_hook=(
+                _unique_governance_json_object
+            ),
+        )
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        ValueError,
+    ):
+        raise ProcedureGovernanceError(
+            "No pudo cargarse el manifiesto "
+            "de procedure governance."
+        ) from None
+
+
+def load_procedure_governance(
+    path,
+    *,
+    catalog: ProcedureCatalog,
+) -> ProcedureGovernanceRegistry:
+    """
+    Carga metadata declarativa de governance
+    y la vincula a un ProcedureCatalog explícito.
+
+    No concede capability, HITL ni autoridad
+    operacional.
+    """
+
+    payload = _read_governance_manifest(
+        Path(path)
+    )
+
+    if (
+        not isinstance(
+            payload,
+            dict,
+        )
+        or set(payload)
+        != {
+            "schema_version",
+            "procedures",
+        }
+    ):
+        raise ProcedureGovernanceError(
+            "Manifiesto de governance raíz inválido."
+        )
+
+    if (
+        payload["schema_version"]
+        != PROCEDURE_GOVERNANCE_SCHEMA_VERSION
+    ):
+        raise ProcedureGovernanceError(
+            "schema_version de governance "
+            "no soportada."
+        )
+
+    procedures = payload[
+        "procedures"
+    ]
+
+    if type(procedures) is not list:
+        raise ProcedureGovernanceError(
+            "procedures debe ser array JSON."
+        )
+
+    expected_record_keys = {
+        "procedure_id",
+        "procedure_version",
+        "owner",
+        "governance_approval_status",
+        "governance_approval_reference",
+        "compatible_previous_versions",
+        "rollback_version",
+    }
+
+    metadata: list[
+        ProcedureGovernanceMetadata
+    ] = []
+
+    for raw_item in procedures:
+        if (
+            not isinstance(
+                raw_item,
+                dict,
+            )
+            or set(raw_item)
+            != expected_record_keys
+        ):
+            raise ProcedureGovernanceError(
+                "Definición de governance inválida."
+            )
+
+        compatible_versions = raw_item[
+            "compatible_previous_versions"
+        ]
+
+        if type(compatible_versions) is not list:
+            raise ProcedureGovernanceError(
+                "compatible_previous_versions "
+                "debe ser array JSON."
+            )
+
+        item = ProcedureGovernanceMetadata(
+            procedure_id=raw_item[
+                "procedure_id"
+            ],
+            procedure_version=raw_item[
+                "procedure_version"
+            ],
+            owner=raw_item[
+                "owner"
+            ],
+            governance_approval_status=raw_item[
+                "governance_approval_status"
+            ],
+            governance_approval_reference=raw_item[
+                "governance_approval_reference"
+            ],
+            compatible_previous_versions=tuple(
+                compatible_versions
+            ),
+            rollback_version=raw_item[
+                "rollback_version"
+            ],
+        )
+
+        metadata.append(
+            item
+        )
+
+    return ProcedureGovernanceRegistry(
+        catalog=catalog,
+        metadata=tuple(
+            metadata
+        ),
+    )
