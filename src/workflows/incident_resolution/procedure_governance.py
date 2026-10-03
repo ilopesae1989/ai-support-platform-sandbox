@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
+from types import MappingProxyType
+
+from .procedure_catalog import ProcedureCatalog
 
 
 class ProcedureGovernanceError(ValueError):
@@ -173,3 +177,121 @@ class ProcedureGovernanceMetadata:
                 "declarada en "
                 "compatible_previous_versions."
             )
+
+class ProcedureGovernanceRegistry:
+    """
+    Binding determinista entre governance metadata
+    y una identidad exacta existente en
+    ProcedureCatalog.
+
+    Este registry no concede capability,
+    no concede HITL y no ejecuta operaciones.
+    """
+
+    def __init__(
+        self,
+        *,
+        catalog: ProcedureCatalog,
+        metadata: Iterable[
+            ProcedureGovernanceMetadata
+        ],
+    ) -> None:
+        if not isinstance(
+            catalog,
+            ProcedureCatalog,
+        ):
+            raise ProcedureGovernanceError(
+                "catalog debe ser ProcedureCatalog."
+            )
+
+        resolved: dict[
+            tuple[str, str],
+            ProcedureGovernanceMetadata,
+        ] = {}
+
+        for item in metadata:
+            if not isinstance(
+                item,
+                ProcedureGovernanceMetadata,
+            ):
+                raise ProcedureGovernanceError(
+                    "metadata debe contener "
+                    "ProcedureGovernanceMetadata."
+                )
+
+            key = (
+                item.procedure_id,
+                item.procedure_version,
+            )
+
+            if key in resolved:
+                raise ProcedureGovernanceError(
+                    "Governance metadata duplicada "
+                    "para la identidad exacta."
+                )
+
+            if not catalog.contains(
+                item.procedure_id,
+                item.procedure_version,
+            ):
+                raise ProcedureGovernanceError(
+                    "La identidad gobernada no existe "
+                    "en ProcedureCatalog."
+                )
+
+            for previous_version in (
+                item.compatible_previous_versions
+            ):
+                if not catalog.contains(
+                    item.procedure_id,
+                    previous_version,
+                ):
+                    raise ProcedureGovernanceError(
+                        "compatible_previous_versions "
+                        "debe referenciar versiones "
+                        "existentes del mismo "
+                        "procedure_id."
+                    )
+
+            resolved[key] = item
+
+        self._metadata = MappingProxyType(
+            resolved
+        )
+
+    def count(
+        self,
+    ) -> int:
+        return len(
+            self._metadata
+        )
+
+    def contains(
+        self,
+        procedure_id: str,
+        procedure_version: str,
+    ) -> bool:
+        return (
+            procedure_id,
+            procedure_version,
+        ) in self._metadata
+
+    def get(
+        self,
+        procedure_id: str,
+        procedure_version: str,
+    ) -> ProcedureGovernanceMetadata:
+        item = self._metadata.get(
+            (
+                procedure_id,
+                procedure_version,
+            )
+        )
+
+        if item is None:
+            raise ProcedureGovernanceError(
+                "No existe governance metadata "
+                "para la identidad exacta."
+            )
+
+        return item
