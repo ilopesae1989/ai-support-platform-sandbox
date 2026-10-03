@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "procedures": [
+    {
+      "procedure_id": "NTTSY-SBX-AZ-VM-001",
+      "procedure_version": "1.0",
+      "procedure_name": "Arranque de máquina virtual Azure en estado Stopped (Allocated)",
+      "lifecycle": "published",
+      "step_ids": [
+        "1"
+      ]
+    },
+    {
+      "procedure_id": "NTTSY-SBX-AZ-VM-002",
+      "procedure_version": "1.0",
+      "procedure_name": "Arranque de máquina virtual Azure en estado Deallocated",
+      "lifecycle": "published",
+      "step_ids": [
+        "1"
+      ]
+    },
+    {
+      "procedure_id": "NTTSY-SBX-AZ-VM-DEMO-001",
+      "procedure_version": "1.0",
+      "procedure_name": "Arranque de máquina virtual Azure (escenario demo synthetic_demo)",
+      "lifecycle": "published",
+      "step_ids": [
+        "1"
+      ]
+    }
+  ]
+}

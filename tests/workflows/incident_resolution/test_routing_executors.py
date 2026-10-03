@@ -23,6 +23,31 @@ from src.workflows.incident_resolution.models import (
 )
 
 
+from src.workflows.incident_resolution.procedure_admission import (
+    ProcedureAdmissionPolicy,
+)
+from src.workflows.incident_resolution.procedure_catalog import (
+    ProcedureCatalog,
+    ProcedureDefinition,
+)
+
+
+def build_test_procedure_admission_policy() -> ProcedureAdmissionPolicy:
+    return ProcedureAdmissionPolicy(
+        catalog=ProcedureCatalog(
+            definitions=(
+                ProcedureDefinition(
+                    procedure_id="PROC-001",
+                    procedure_version="v1",
+                    procedure_name="Test Procedure",
+                    lifecycle="published",
+                    step_ids=("1",),
+                ),
+            ),
+        ),
+        legacy_compatibility=(),
+    )
+
 class FakeWorkflowContext:
     def __init__(self) -> None:
         self.messages = []
@@ -211,7 +236,11 @@ def create_context(
 
 @pytest.mark.asyncio
 async def test_procedure_request_executor_builds_request():
-    executor = ProcedureRequestExecutor()
+    executor = ProcedureRequestExecutor(
+        admission_policy=(
+            build_test_procedure_admission_policy()
+        ),
+    )
     ctx = FakeWorkflowContext()
 
     context = create_context(
@@ -318,7 +347,11 @@ async def test_procedure_request_executor_builds_request():
 
 @pytest.mark.asyncio
 async def test_procedure_request_executor_rejects_non_eligible_context():
-    executor = ProcedureRequestExecutor()
+    executor = ProcedureRequestExecutor(
+        admission_policy=(
+            build_test_procedure_admission_policy()
+        ),
+    )
     ctx = FakeWorkflowContext()
 
     context = create_context(
@@ -635,7 +668,11 @@ async def test_knowledge_review_executor_supports_exact_but_non_eligible():
 
 @pytest.mark.asyncio
 async def test_initial_procedure_request_sets_requested_step_one():
-    executor = ProcedureRequestExecutor()
+    executor = ProcedureRequestExecutor(
+        admission_policy=(
+            build_test_procedure_admission_policy()
+        ),
+    )
     ctx = FakeWorkflowContext()
 
     context = create_context(
@@ -723,7 +760,11 @@ class FailingContinuationStateWorkflowContext(
 
 @pytest.mark.asyncio
 async def test_initial_procedure_request_stores_exact_continuation_context():
-    executor = ProcedureRequestExecutor()
+    executor = ProcedureRequestExecutor(
+        admission_policy=(
+            build_test_procedure_admission_policy()
+        ),
+    )
 
     ctx = ContinuationStateWorkflowContext()
 
@@ -794,7 +835,11 @@ async def test_initial_procedure_request_stores_exact_continuation_context():
 
 @pytest.mark.asyncio
 async def test_initial_continuation_context_contains_no_runtime_owned_authority():
-    executor = ProcedureRequestExecutor()
+    executor = ProcedureRequestExecutor(
+        admission_policy=(
+            build_test_procedure_admission_policy()
+        ),
+    )
 
     ctx = ContinuationStateWorkflowContext()
 
@@ -839,7 +884,11 @@ async def test_initial_continuation_context_contains_no_runtime_owned_authority(
 
 @pytest.mark.asyncio
 async def test_initial_procedure_request_fails_before_send_when_continuation_state_store_fails():
-    executor = ProcedureRequestExecutor()
+    executor = ProcedureRequestExecutor(
+        admission_policy=(
+            build_test_procedure_admission_policy()
+        ),
+    )
 
     ctx = (
         FailingContinuationStateWorkflowContext()
@@ -875,7 +924,11 @@ async def test_initial_procedure_request_fails_before_send_when_continuation_sta
 
 @pytest.mark.asyncio
 async def test_initial_continuation_context_persists_original_admission_snapshot():
-    executor = ProcedureRequestExecutor()
+    executor = ProcedureRequestExecutor(
+        admission_policy=(
+            build_test_procedure_admission_policy()
+        ),
+    )
 
     ctx = ContinuationStateWorkflowContext()
 

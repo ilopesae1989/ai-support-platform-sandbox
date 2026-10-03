@@ -100,6 +100,11 @@ from src.workflows.incident_resolution.procedure_capability_registry import (
     build_default_procedure_capability_registry,
 )
 
+from src.workflows.incident_resolution.procedure_admission import (
+    ProcedureAdmissionPolicy,
+    build_default_procedure_admission_policy,
+)
+
 from src.workflows.incident_resolution.routing import (
     route_to_knowledge_review,
     route_to_manual_analysis,
@@ -138,6 +143,10 @@ def build_incident_resolution_workflow(
 
     procedure_capability_registry: (
         ProcedureCapabilityRegistry | None
+    ) = None,
+
+    procedure_admission_policy: (
+        ProcedureAdmissionPolicy | None
     ) = None,
 ):
     """
@@ -263,6 +272,15 @@ def build_incident_resolution_workflow(
         )
     )
 
+    if procedure_admission_policy is None:
+        procedure_admission = (
+            build_default_procedure_admission_policy()
+        )
+    else:
+        procedure_admission = (
+            procedure_admission_policy
+        )
+
     #
     # --------------------------------------------------
     # Cognitive pipeline
@@ -294,7 +312,11 @@ def build_incident_resolution_workflow(
     #
 
     procedure_request = (
-        ProcedureRequestExecutor()
+        ProcedureRequestExecutor(
+            admission_policy=(
+                procedure_admission
+            ),
+        )
     )
 
     knowledge_review = (

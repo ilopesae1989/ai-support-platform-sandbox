@@ -28,6 +28,10 @@ from src.workflows.incident_resolution.continuation_context import (
     store_procedure_continuation_context,
 )
 
+from src.workflows.incident_resolution.procedure_admission import (
+    ProcedureAdmissionPolicy,
+)
+
 
 class ProcedureRequestExecutor(Executor):
     """
@@ -39,7 +43,24 @@ class ProcedureRequestExecutor(Executor):
     Se genera mediante Python antes de Procedure v6.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        admission_policy: ProcedureAdmissionPolicy,
+    ) -> None:
+        if not isinstance(
+            admission_policy,
+            ProcedureAdmissionPolicy,
+        ):
+            raise TypeError(
+                "admission_policy debe ser "
+                "ProcedureAdmissionPolicy."
+            )
+
+        self._admission_policy = (
+            admission_policy
+        )
+
         super().__init__(
             id="procedure_request"
         )
@@ -70,6 +91,20 @@ class ProcedureRequestExecutor(Executor):
             )
 
         procedure = triage.procedure
+
+        admission = (
+            self._admission_policy.admit(
+                procedure_id=(
+                    procedure.id
+                ),
+                procedure_version=(
+                    procedure.version
+                ),
+                procedure_name=(
+                    procedure.name
+                ),
+            )
+        )
 
         operational_context = (
             build_operational_context(
@@ -110,15 +145,15 @@ class ProcedureRequestExecutor(Executor):
             ),
 
             procedure_id=(
-                procedure.id
+                admission.procedure_id
             ),
 
             procedure_name=(
-                procedure.name
+                admission.procedure_name
             ),
 
             procedure_version=(
-                procedure.version
+                admission.procedure_version
             ),
 
             # El primer cursor del procedimiento

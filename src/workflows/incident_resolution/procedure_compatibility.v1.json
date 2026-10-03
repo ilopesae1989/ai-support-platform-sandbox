@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "procedures": [
+    {
+      "procedure_id": "NTTSY-PRO-016",
+      "procedure_version": "v1.1",
+      "accepted_names": [
+        "Alertas AlwaysOn_Rol_Change",
+        "SQL AlwaysOn_Rol Change Alerta"
+      ]
+    }
+  ]
+}
