@@ -4,10 +4,12 @@ from src.workflows.incident_resolution.procedure_admission import (
     ProcedureAdmission,
     ProcedureAdmissionError,
     ProcedureAdmissionPolicy,
+    build_default_procedure_admission_policy,
 )
 
 from src.workflows.incident_resolution.procedure_governance import (
     ProcedureGovernanceApprovalPolicy,
+    ProcedureGovernanceRegistry,
 )
 
 
@@ -115,3 +117,44 @@ class GovernedProcedureAdmissionPolicy:
             "ProcedureAdmission contiene "
             "source no soportado."
         )
+
+
+def build_default_governed_procedure_admission_policy(
+) -> GovernedProcedureAdmissionPolicy:
+    """
+    Composición default fail-closed.
+
+    Reutiliza Procedure Admission default y crea
+    governance deliberadamente vacía.
+
+    Consecuencia:
+    - legacy_compatibility conserva su bridge exacto;
+    - cualquier identidad de catálogo requiere
+      governance explícita y por tanto queda
+      bloqueada mientras metadata=().
+
+    No inventa owner, approval reference,
+    compatibility ni rollback metadata.
+    """
+
+    admission_policy = (
+        build_default_procedure_admission_policy()
+    )
+
+    governance_registry = (
+        ProcedureGovernanceRegistry(
+            catalog=admission_policy.catalog,
+            metadata=(),
+        )
+    )
+
+    governance_policy = (
+        ProcedureGovernanceApprovalPolicy(
+            registry=governance_registry,
+        )
+    )
+
+    return GovernedProcedureAdmissionPolicy(
+        admission_policy=admission_policy,
+        governance_policy=governance_policy,
+    )
