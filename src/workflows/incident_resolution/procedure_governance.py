@@ -302,6 +302,59 @@ class ProcedureGovernanceRegistry:
 
         return item
 
+class ProcedureGovernanceApprovalPolicy:
+    """
+    Gate determinista de governance approval.
+
+    Sólo comprueba la metadata exacta ya
+    registrada para procedure_id +
+    procedure_version.
+
+    No resuelve owner.
+    No concede HITL.
+    No concede capability.
+    No ejecuta rollback.
+    No hace fallback de versión.
+    """
+
+    def __init__(
+        self,
+        *,
+        registry: ProcedureGovernanceRegistry,
+    ) -> None:
+        if not isinstance(
+            registry,
+            ProcedureGovernanceRegistry,
+        ):
+            raise ProcedureGovernanceError(
+                "registry debe ser "
+                "ProcedureGovernanceRegistry."
+            )
+
+        self._registry = registry
+
+    def require_governance_approval(
+        self,
+        *,
+        procedure_id: str,
+        procedure_version: str,
+    ) -> ProcedureGovernanceMetadata:
+        metadata = self._registry.get(
+            procedure_id,
+            procedure_version,
+        )
+
+        if (
+            metadata.governance_approval_status
+            != "approved"
+        ):
+            raise ProcedureGovernanceError(
+                "El procedimiento exacto no tiene "
+                "governance approval approved."
+            )
+
+        return metadata
+
 def _unique_governance_json_object(
     pairs: list[tuple[str, object]],
 ) -> dict[str, object]:
