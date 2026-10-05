@@ -100,9 +100,9 @@ from src.workflows.incident_resolution.procedure_capability_registry import (
     build_default_procedure_capability_registry,
 )
 
-from src.workflows.incident_resolution.procedure_admission import (
-    ProcedureAdmissionPolicy,
-    build_default_procedure_admission_policy,
+from src.workflows.incident_resolution.governed_procedure_admission import (
+    GovernedProcedureAdmissionPolicy,
+    build_default_governed_procedure_admission_policy,
 )
 
 from src.workflows.incident_resolution.routing import (
@@ -145,8 +145,8 @@ def build_incident_resolution_workflow(
         ProcedureCapabilityRegistry | None
     ) = None,
 
-    procedure_admission_policy: (
-        ProcedureAdmissionPolicy | None
+    governed_procedure_admission_policy: (
+        GovernedProcedureAdmissionPolicy | None
     ) = None,
 ):
     """
@@ -272,13 +272,13 @@ def build_incident_resolution_workflow(
         )
     )
 
-    if procedure_admission_policy is None:
-        procedure_admission = (
-            build_default_procedure_admission_policy()
+    if governed_procedure_admission_policy is None:
+        governed_admission = (
+            build_default_governed_procedure_admission_policy()
         )
     else:
-        procedure_admission = (
-            procedure_admission_policy
+        governed_admission = (
+            governed_procedure_admission_policy
         )
 
     #
@@ -314,7 +314,7 @@ def build_incident_resolution_workflow(
     procedure_request = (
         ProcedureRequestExecutor(
             admission_policy=(
-                procedure_admission
+                governed_admission
             ),
         )
     )

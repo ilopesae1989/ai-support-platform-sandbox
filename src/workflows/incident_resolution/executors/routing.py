@@ -28,8 +28,8 @@ from src.workflows.incident_resolution.continuation_context import (
     store_procedure_continuation_context,
 )
 
-from src.workflows.incident_resolution.procedure_admission import (
-    ProcedureAdmissionPolicy,
+from src.workflows.incident_resolution.governed_procedure_admission import (
+    GovernedProcedureAdmissionPolicy,
 )
 
 
@@ -46,15 +46,15 @@ class ProcedureRequestExecutor(Executor):
     def __init__(
         self,
         *,
-        admission_policy: ProcedureAdmissionPolicy,
+        admission_policy: GovernedProcedureAdmissionPolicy,
     ) -> None:
         if not isinstance(
             admission_policy,
-            ProcedureAdmissionPolicy,
+            GovernedProcedureAdmissionPolicy,
         ):
             raise TypeError(
                 "admission_policy debe ser "
-                "ProcedureAdmissionPolicy."
+                "GovernedProcedureAdmissionPolicy."
             )
 
         self._admission_policy = (

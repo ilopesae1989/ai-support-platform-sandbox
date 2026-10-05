@@ -23,6 +23,9 @@ from src.workflows.incident_resolution.models import (
 )
 
 
+from src.workflows.incident_resolution.governed_procedure_admission import (
+    GovernedProcedureAdmissionPolicy,
+)
 from src.workflows.incident_resolution.procedure_admission import (
     ProcedureAdmissionPolicy,
 )
@@ -30,22 +33,55 @@ from src.workflows.incident_resolution.procedure_catalog import (
     ProcedureCatalog,
     ProcedureDefinition,
 )
+from src.workflows.incident_resolution.procedure_governance import (
+    ProcedureGovernanceApprovalPolicy,
+    ProcedureGovernanceMetadata,
+    ProcedureGovernanceRegistry,
+)
 
 
-def build_test_procedure_admission_policy() -> ProcedureAdmissionPolicy:
-    return ProcedureAdmissionPolicy(
-        catalog=ProcedureCatalog(
-            definitions=(
-                ProcedureDefinition(
-                    procedure_id="PROC-001",
-                    procedure_version="v1",
-                    procedure_name="Test Procedure",
-                    lifecycle="published",
-                    step_ids=("1",),
-                ),
+def build_test_procedure_admission_policy() -> GovernedProcedureAdmissionPolicy:
+    catalog = ProcedureCatalog(
+        definitions=(
+            ProcedureDefinition(
+                procedure_id="PROC-001",
+                procedure_version="v1",
+                procedure_name="Test Procedure",
+                lifecycle="published",
+                step_ids=("1",),
             ),
         ),
+    )
+
+    admission_policy = ProcedureAdmissionPolicy(
+        catalog=catalog,
         legacy_compatibility=(),
+    )
+
+    governance_registry = (
+        ProcedureGovernanceRegistry(
+            catalog=catalog,
+            metadata=(
+                ProcedureGovernanceMetadata(
+                    procedure_id="PROC-001",
+                    procedure_version="v1",
+                    owner="team-test",
+                    governance_approval_status="approved",
+                    governance_approval_reference="GOV-TEST-001",
+                    compatible_previous_versions=(),
+                    rollback_version=None,
+                ),
+            ),
+        )
+    )
+
+    return GovernedProcedureAdmissionPolicy(
+        admission_policy=admission_policy,
+        governance_policy=(
+            ProcedureGovernanceApprovalPolicy(
+                registry=governance_registry,
+            )
+        ),
     )
 
 class FakeWorkflowContext:
