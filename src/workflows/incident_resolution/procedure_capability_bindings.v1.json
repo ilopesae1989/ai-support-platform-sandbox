@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "bindings": [
+    {
+      "procedure_id": "NTTSY-SBX-AZ-VM-001",
+      "procedure_version": "1.0",
+      "step_id": "1",
+      "capability_id": "azure.vm.start",
+      "applicability": {
+        "allowed_environments": [
+          "sandbox"
+        ],
+        "allowed_incident_origins": [
+          "observed"
+        ]
+      }
+    },
+    {
+      "procedure_id": "NTTSY-SBX-AZ-VM-002",
+      "procedure_version": "1.0",
+      "step_id": "1",
+      "capability_id": "azure.vm.start",
+      "applicability": {
+        "allowed_environments": [
+          "sandbox"
+        ],
+        "allowed_incident_origins": [
+          "observed"
+        ]
+      }
+    },
+    {
+      "procedure_id": "NTTSY-SBX-AZ-VM-DEMO-001",
+      "procedure_version": "1.0",
+      "step_id": "1",
+      "capability_id": "azure.vm.start",
+      "applicability": {
+        "allowed_environments": [
+          "sandbox"
+        ],
+        "allowed_incident_origins": [
+          "synthetic_demo"
+        ]
+      }
+    }
+  ]
+}
