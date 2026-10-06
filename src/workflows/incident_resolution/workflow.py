@@ -327,15 +327,18 @@ def build_incident_resolution_workflow(
         )
     )
 
+    azure_composition = build_azure_domain_composition(
+        agents=foundry_agents,
+        operation_dispatch_ledger=dispatch_ledger,
+        wait_recheck_consumption_ledger=wait_recheck_ledger,
+        azure_vm_power_state_reader=azure_vm_power_state_reader,
+    )
+
     runtime = (
         ProcedureRuntimeExecutor(
-            resource_identity_registry=(
-                identity_registry
-            ),
-
-            procedure_capability_registry=(
-                procedure_registry
-            )
+            resource_identity_registry=(identity_registry),
+            procedure_capability_registry=(procedure_registry),
+            execution_binding=(azure_composition.execution_binding),
         )
     )
 
@@ -349,12 +352,6 @@ def build_incident_resolution_workflow(
     # --------------------------------------------------
     #
 
-    azure_composition = build_azure_domain_composition(
-        agents=foundry_agents,
-        operation_dispatch_ledger=dispatch_ledger,
-        wait_recheck_consumption_ledger=wait_recheck_ledger,
-        azure_vm_power_state_reader=azure_vm_power_state_reader,
-    )
 
     azure_pre_call = (
         azure_composition.pre_call

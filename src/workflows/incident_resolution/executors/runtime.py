@@ -25,6 +25,11 @@ from src.workflows.incident_resolution.operational_capability import (
     OperationalCapability,
 )
 
+from src.workflows.incident_resolution.domain_execution_binding import (
+    DomainExecutionBinding,
+    DomainExecutionBindingError,
+)
+
 from src.runtime.procedure.workflow_state import (
     PROCEDURE_RUNTIME_STATE_KEY,
     load_procedure_runtime_state,
@@ -76,15 +81,17 @@ class ProcedureRuntimeExecutor(Executor):
 
     def __init__(
         self,
-
-        resource_identity_registry: (
-            ResourceIdentityRegistry | None
-        ) = None,
-
-        procedure_capability_registry: (
-            ProcedureCapabilityRegistry | None
-        ) = None,
+        resource_identity_registry: ResourceIdentityRegistry | None = None,
+        procedure_capability_registry: ProcedureCapabilityRegistry | None = None,
+        *,
+        execution_binding: DomainExecutionBinding | None = None,
     ) -> None:
+        # None preserves standalone state construction, not composed execution.
+        # The workflow supplies the binding of its actual operational executor.
+        if execution_binding is not None and not isinstance(execution_binding, DomainExecutionBinding):
+            raise DomainExecutionBindingError("execution_binding debe ser DomainExecutionBinding.")
+        self._execution_binding = execution_binding
+
         super().__init__(
             id="procedure_runtime"
         )
@@ -732,6 +739,11 @@ class ProcedureRuntimeExecutor(Executor):
                 context
             )
         )
+
+        # Check the governed capability before constructing any runtime state.
+        # No default capability lookup, replacement binding, dispatch or fallback.
+        if capability is not None and self._execution_binding is not None:
+            self._execution_binding.resolve(capability=capability)
 
         if capability is None:
             authoritative_required_parameters = (
