@@ -460,116 +460,69 @@ def test_vm_observation_completes_wait_recheck_before_any_azure_read():
 
 
 def test_workflow_injects_same_wait_ledger_into_transition_and_observation():
-    path = Path(
-        "src/workflows/incident_resolution/"
-        "workflow.py"
+
+    # F26.3: follow the composition boundary; keep the security invariant.
+    base = Path(__file__).resolve().parents[3] / "src/workflows/incident_resolution"
+
+    def read_function(path, name):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        matches = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name]
+        assert len(matches) == 1, name
+        return matches[0]
+
+    def one_call(fn, name):
+        matches = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                   and isinstance(n.func, ast.Name) and n.func.id == name]
+        assert len(matches) == 1, name
+        call = matches[0]
+        assert not call.args
+        names = [k.arg for k in call.keywords]
+        assert None not in names and len(names) == len(set(names))
+        return call
+
+    def name_argument(call, keyword, name):
+        matches = [k.value for k in call.keywords if k.arg == keyword]
+        assert len(matches) == 1, keyword
+        value = matches[0]
+        assert isinstance(value, ast.Name) and isinstance(value.ctx, ast.Load)
+        assert value.id == name, keyword
+        return value
+
+    def assigned(fn, name):
+        matches = [n.value for n in fn.body if isinstance(n, ast.Assign)
+                   and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                   and n.targets[0].id == name]
+        writes = [n for n in ast.walk(fn) if isinstance(n, ast.Name)
+                  and n.id == name and isinstance(n.ctx, (ast.Store, ast.Del))]
+        assert len(matches) == len(writes) == 1, name
+        return matches[0]
+
+    wf = read_function(base / "workflow.py", "build_incident_resolution_workflow")
+    factory = read_function(base / "azure_domain_composition.py", "build_azure_domain_composition")
+    forwarded = one_call(wf, "build_azure_domain_composition")
+    observed = one_call(factory, "AzureVmPostOperationObservationExecutor")
+    assert assigned(wf, "azure_composition") is forwarded
+    assert assigned(factory, "observation") is observed
+    assert ast.unparse(assigned(wf, "azure_vm_post_operation_observation")) == (
+        "azure_composition.post_operation_observation"
     )
+    returned = one_call(factory, "AzureDomainComposition")
+    exits = [n for n in factory.body if isinstance(n, ast.Return)]
+    assert len(exits) == 1 and exits[0].value is returned
+    name_argument(returned, "post_operation_observation", "observation")
 
-    source = path.read_text(
-        encoding="utf-8"
-    )
-
-    tree = ast.parse(
-        source,
-        filename=str(path),
-    )
-
-    observed = {}
-
-    wanted = {
-        "ProcedureTransitionExecutor",
-        "AzureVmPostOperationObservationExecutor",
-    }
-
-    for node in ast.walk(
-        tree
-    ):
-        if not isinstance(
-            node,
-            ast.Call,
-        ):
-            continue
-
-        function = node.func
-
-        if not isinstance(
-            function,
-            ast.Name,
-        ):
-            continue
-
-        if function.id not in wanted:
-            continue
-
-        observed[
-            function.id
-        ] = {
-            keyword.arg:
-                keyword.value
-            for keyword
-            in node.keywords
-            if keyword.arg is not None
-        }
-
-    assert (
-        "ProcedureTransitionExecutor"
-        in observed
-    )
-
-    assert (
-        "AzureVmPostOperationObservationExecutor"
-        in observed
-    )
-
-    transition_keywords = (
-        observed[
-            "ProcedureTransitionExecutor"
-        ]
-    )
-
-    observation_keywords = (
-        observed[
-            "AzureVmPostOperationObservationExecutor"
-        ]
-    )
-
-    assert (
-        "wait_recheck_consumption_ledger"
-        in transition_keywords
-    )
-
-    assert (
-        "wait_recheck_consumption_ledger"
-        in observation_keywords
-    )
-
-    transition_value = (
-        transition_keywords[
-            "wait_recheck_consumption_ledger"
-        ]
-    )
-
-    observation_value = (
-        observation_keywords[
-            "wait_recheck_consumption_ledger"
-        ]
-    )
-
-    assert isinstance(
-        transition_value,
-        ast.Name,
-    )
-
-    assert isinstance(
-        observation_value,
-        ast.Name,
-    )
-
-    assert (
-        transition_value.id
-        == observation_value.id
-        == "wait_recheck_ledger"
-    )
+    transition = one_call(wf, "ProcedureTransitionExecutor")
+    name_argument(forwarded, "wait_recheck_consumption_ledger", "wait_recheck_ledger")
+    name_argument(transition, "wait_recheck_consumption_ledger", "wait_recheck_ledger")
+    name_argument(observed, "wait_recheck_consumption_ledger", "wait_recheck_consumption_ledger")
+    parameters = factory.args.posonlyargs + factory.args.args + factory.args.kwonlyargs
+    assert sum(a.arg == "wait_recheck_consumption_ledger" for a in parameters) == 1
+    assert not any(isinstance(n, ast.Name) and n.id == "wait_recheck_consumption_ledger"
+                   and isinstance(n.ctx, (ast.Store, ast.Del)) for n in ast.walk(factory))
+    # The shared reference must not be rebound between its two consumers.
+    writes = [n for n in ast.walk(wf) if isinstance(n, ast.Name)
+              and n.id == "wait_recheck_ledger" and isinstance(n.ctx, (ast.Store, ast.Del))]
+    assert writes and all(n.lineno < min(forwarded.lineno, transition.lineno) for n in writes)
 
 @pytest.mark.asyncio
 async def test_real_vm_observation_completes_before_reader_and_preserves_wait_identity():

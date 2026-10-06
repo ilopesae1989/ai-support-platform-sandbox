@@ -726,60 +726,65 @@ def test_azure_operations_emits_same_result_to_both_surfaces():
 
 
 def test_workflow_injects_reader_only_into_observation_executor():
-    tree = parse_file(
-        WORKFLOW_PATH
+
+    # F26.3: follow the composition boundary; keep the security invariant.
+    base = Path(__file__).resolve().parents[3] / "src/workflows/incident_resolution"
+
+    def read_function(path, name):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        matches = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name]
+        assert len(matches) == 1, name
+        return matches[0]
+
+    def one_call(fn, name):
+        matches = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+                   and isinstance(n.func, ast.Name) and n.func.id == name]
+        assert len(matches) == 1, name
+        call = matches[0]
+        assert not call.args
+        names = [k.arg for k in call.keywords]
+        assert None not in names and len(names) == len(set(names))
+        return call
+
+    def name_argument(call, keyword, name):
+        matches = [k.value for k in call.keywords if k.arg == keyword]
+        assert len(matches) == 1, keyword
+        value = matches[0]
+        assert isinstance(value, ast.Name) and isinstance(value.ctx, ast.Load)
+        assert value.id == name, keyword
+        return value
+
+    def assigned(fn, name):
+        matches = [n.value for n in fn.body if isinstance(n, ast.Assign)
+                   and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                   and n.targets[0].id == name]
+        writes = [n for n in ast.walk(fn) if isinstance(n, ast.Name)
+                  and n.id == name and isinstance(n.ctx, (ast.Store, ast.Del))]
+        assert len(matches) == len(writes) == 1, name
+        return matches[0]
+
+    wf = read_function(base / "workflow.py", "build_incident_resolution_workflow")
+    factory = read_function(base / "azure_domain_composition.py", "build_azure_domain_composition")
+    forwarded = one_call(wf, "build_azure_domain_composition")
+    observed = one_call(factory, "AzureVmPostOperationObservationExecutor")
+    assert assigned(wf, "azure_composition") is forwarded
+    assert assigned(factory, "observation") is observed
+    assert ast.unparse(assigned(wf, "azure_vm_post_operation_observation")) == (
+        "azure_composition.post_operation_observation"
     )
+    returned = one_call(factory, "AzureDomainComposition")
+    exits = [n for n in factory.body if isinstance(n, ast.Return)]
+    assert len(exits) == 1 and exits[0].value is returned
+    name_argument(returned, "post_operation_observation", "observation")
 
-    function = find_function(
-        tree,
-        "build_incident_resolution_workflow",
-    )
-
-    calls = [
-        node
-        for node in ast.walk(
-            function
-        )
-        if (
-            isinstance(
-                node,
-                ast.Call,
-            )
-            and isinstance(
-                node.func,
-                ast.Name,
-            )
-            and node.func.id
-            == "AzureVmPostOperationObservationExecutor"
-        )
-    ]
-
-    assert len(calls) == 1
-
-    call = calls[0]
-
-    reader_keywords = [
-        keyword
-        for keyword in call.keywords
-        if keyword.arg == "reader"
-    ]
-
-    assert len(
-        reader_keywords
-    ) == 1
-
-    value = (
-        reader_keywords[0]
-        .value
-    )
-
-    # reader=(azure_vm_power_state_reader)
-    assert isinstance(
-        value,
-        ast.Name,
-    )
-
-    assert (
-        value.id
-        == "azure_vm_power_state_reader"
-    )
+    for fn, call, keyword in (
+        (wf, forwarded, "azure_vm_power_state_reader"),
+        (factory, observed, "reader"),
+    ):
+        value = name_argument(call, keyword, "azure_vm_power_state_reader")
+        parameters = fn.args.posonlyargs + fn.args.args + fn.args.kwonlyargs
+        assert sum(a.arg == "azure_vm_power_state_reader" for a in parameters) == 1
+        uses = [n for n in ast.walk(fn) if isinstance(n, ast.Name)
+                and n.id == "azure_vm_power_state_reader"]
+        # No substitution, reassignment, extra recipient or unused forwarding.
+        assert len(uses) == 1 and uses[0] is value

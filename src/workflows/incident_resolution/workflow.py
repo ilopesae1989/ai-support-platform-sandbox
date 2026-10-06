@@ -16,20 +16,8 @@ from src.workflows.incident_resolution.azure_vm_instance_view import (
     AzureVmPowerStateReader,
 )
 
-from src.workflows.incident_resolution.executors.azure_operations import (
-    AzureOperationsExecutor,
-)
-
-from src.workflows.incident_resolution.executors.azure_vm_post_operation_observation import (
-    AzureVmPostOperationObservationExecutor,
-)
-
-from src.workflows.incident_resolution.executors.azure_pre_call import (
-    AzurePreCallSecurityExecutor,
-)
-
-from src.workflows.incident_resolution.executors.operation_lifecycle import (
-    OperationStartExecutor,
+from src.workflows.incident_resolution.azure_domain_composition import (
+    build_azure_domain_composition,
 )
 
 from src.workflows.incident_resolution.executors.operation_result_registration import (
@@ -361,12 +349,19 @@ def build_incident_resolution_workflow(
     # --------------------------------------------------
     #
 
+    azure_composition = build_azure_domain_composition(
+        agents=foundry_agents,
+        operation_dispatch_ledger=dispatch_ledger,
+        wait_recheck_consumption_ledger=wait_recheck_ledger,
+        azure_vm_power_state_reader=azure_vm_power_state_reader,
+    )
+
     azure_pre_call = (
-        AzurePreCallSecurityExecutor()
+        azure_composition.pre_call
     )
 
     operation_start = (
-        OperationStartExecutor()
+        azure_composition.operation_start
     )
 
     #
@@ -376,12 +371,7 @@ def build_incident_resolution_workflow(
     #
 
     azure_route = (
-        AzureOperationsExecutor(
-            agents=foundry_agents,
-            operation_dispatch_ledger=(
-                dispatch_ledger
-            ),
-        )
+        azure_composition.execution_binding.executor
     )
 
     operation_result_registration = (
@@ -389,14 +379,7 @@ def build_incident_resolution_workflow(
     )
 
     azure_vm_post_operation_observation = (
-        AzureVmPostOperationObservationExecutor(
-            reader=(
-                azure_vm_power_state_reader
-            ),
-            wait_recheck_consumption_ledger=(
-                wait_recheck_ledger
-            ),
-        )
+        azure_composition.post_operation_observation
     )
 
     procedure_validation = (
