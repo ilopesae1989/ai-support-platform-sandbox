@@ -142,8 +142,65 @@ def test_runtime_checks_the_resolved_capability_against_the_actual_composed_bind
 
 @pytest.mark.parametrize("executor_id", BAD_IDS)
 def test_incompatible_capability_executor_is_rejected_before_runtime_state(monkeypatch, executor_id):
+    # F26.6: observe the explicitly injected boundary, never infer it from failure.
+    # Unknown keys reject at the collection; a legacy single binding rejects itself.
+    from functools import wraps
+    from src.workflows.incident_resolution.domain_execution_bindings import DomainExecutionBindings
+
+    inputs, selections = [], []
+    runtime_init = runtime_module.ProcedureRuntimeExecutor.__init__
+    selector_resolve = DomainExecutionBindings.resolve
+    case = None
+
+    @wraps(runtime_init)
+    def record_input(self, *args, **kwargs):
+        result = runtime_init(self, *args, **kwargs)
+        inputs.append((self, args, dict(kwargs)))
+        return result
+
+    def record_selection(self, *, capability):
+        assert case is not None, "No eager capability selection during construction."
+        selections.append((self, capability))
+        case.events.append("selector")
+        return selector_resolve(self, capability=capability)
+
+    monkeypatch.setattr(runtime_module.ProcedureRuntimeExecutor, "__init__", record_input)
+    monkeypatch.setattr(DomainExecutionBindings, "resolve", record_selection)
     case = prepare(monkeypatch, executor_id=executor_id)
-    assert_rejected(case)
+    before = case.context.model_dump(mode="python")
+    assert len(inputs) == 1 and inputs[0][0] is case.runtime and inputs[0][1] == ()
+    configured = inputs[0][2]
+    selector = configured.get("execution_bindings")
+    single = configured.get("execution_binding")
+    assert selections == []
+    assert case.capability.executor_id == executor_id
+    assert (case.capability.operation_domain, case.capability.executor_id) != (
+        case.binding.operation_domain, case.binding.executor_id
+    )
+
+    if selector is None:
+        # Preserve the existing, explicit singular route until wiring is migrated.
+        assert single is case.binding
+        assert_rejected(case)
+        assert selections == []
+        assert len(case.attempts) == 1
+        assert case.attempts[0][0] is case.binding
+        assert case.attempts[0][1] is case.capability
+    else:
+        # A collection must contain the real composed member, not a substitute.
+        assert single is None
+        assert isinstance(selector, DomainExecutionBindings)
+        assert len(selector.bindings) == 1 and selector.bindings[0] is case.binding
+        with pytest.raises(DomainExecutionBindingError):
+            case.runtime._build_runtime_state(case.context)
+        assert len(selections) == 1
+        assert selections[0][0] is selector and selections[0][1] is case.capability
+        assert case.attempts == []
+        assert case.events == ["policy", "selector"]
+        assert_no_dependency_calls(case.dependencies)
+
+    assert len(case.resolved) == 1 and case.resolved[0] is case.capability
+    assert case.context.model_dump(mode="python") == before
 
 
 @pytest.mark.parametrize("changed_id", ("renamed_executor", "Azure_Operations"))

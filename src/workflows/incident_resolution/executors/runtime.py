@@ -30,6 +30,10 @@ from src.workflows.incident_resolution.domain_execution_binding import (
     DomainExecutionBindingError,
 )
 
+from src.workflows.incident_resolution.domain_execution_bindings import (
+    DomainExecutionBindings,
+)
+
 from src.runtime.procedure.workflow_state import (
     PROCEDURE_RUNTIME_STATE_KEY,
     load_procedure_runtime_state,
@@ -85,12 +89,21 @@ class ProcedureRuntimeExecutor(Executor):
         procedure_capability_registry: ProcedureCapabilityRegistry | None = None,
         *,
         execution_binding: DomainExecutionBinding | None = None,
+        execution_bindings: DomainExecutionBindings | None = None,
     ) -> None:
-        # None preserves standalone state construction, not composed execution.
-        # The workflow supplies the binding of its actual operational executor.
+        # None preserves standalone state compatibility, not composed execution.
+        # Explicit collections, including empty/falsey ones, are never absent.
+        # Keep singular consumers compatible; reject ambiguous dual inputs.
+        if execution_binding is not None and execution_bindings is not None:
+            raise DomainExecutionBindingError(
+                "execution_binding y execution_bindings son mutuamente excluyentes."
+            )
         if execution_binding is not None and not isinstance(execution_binding, DomainExecutionBinding):
             raise DomainExecutionBindingError("execution_binding debe ser DomainExecutionBinding.")
+        if execution_bindings is not None and not isinstance(execution_bindings, DomainExecutionBindings):
+            raise DomainExecutionBindingError("execution_bindings debe ser DomainExecutionBindings.")
         self._execution_binding = execution_binding
+        self._execution_bindings = execution_bindings
 
         super().__init__(
             id="procedure_runtime"
@@ -742,8 +755,11 @@ class ProcedureRuntimeExecutor(Executor):
 
         # Check the governed capability before constructing any runtime state.
         # No default capability lookup, replacement binding, dispatch or fallback.
-        if capability is not None and self._execution_binding is not None:
-            self._execution_binding.resolve(capability=capability)
+        if capability is not None:
+            if self._execution_bindings is not None:
+                self._execution_bindings.resolve(capability=capability)
+            elif self._execution_binding is not None:
+                self._execution_binding.resolve(capability=capability)
 
         if capability is None:
             authoritative_required_parameters = (

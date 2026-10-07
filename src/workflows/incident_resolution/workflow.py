@@ -20,6 +20,10 @@ from src.workflows.incident_resolution.azure_domain_composition import (
     build_azure_domain_composition,
 )
 
+from src.workflows.incident_resolution.domain_execution_bindings import (
+    DomainExecutionBindings,
+)
+
 from src.workflows.incident_resolution.executors.operation_result_registration import (
     OperationResultRegistrationExecutor,
 )
@@ -334,11 +338,15 @@ def build_incident_resolution_workflow(
         azure_vm_power_state_reader=azure_vm_power_state_reader,
     )
 
+    execution_bindings = DomainExecutionBindings(
+        bindings=(azure_composition.execution_binding,),
+    )
+
     runtime = (
         ProcedureRuntimeExecutor(
             resource_identity_registry=(identity_registry),
             procedure_capability_registry=(procedure_registry),
-            execution_binding=(azure_composition.execution_binding),
+            execution_bindings=(execution_bindings),
         )
     )
 
