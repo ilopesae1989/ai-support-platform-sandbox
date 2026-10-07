@@ -6,6 +6,7 @@ from src.agents.foundry_agents import FoundryAgents
 
 from .azure_vm_instance_view import AzureVmPowerStateReader
 from .domain_execution_binding import DomainExecutionBinding
+from .domain_execution_path import DomainExecutionPath
 from .executors.azure_operations import AzureOperationsExecutor
 from .executors.azure_pre_call import AzurePreCallSecurityExecutor
 from .executors.azure_vm_post_operation_observation import (
@@ -28,6 +29,26 @@ class AzureDomainComposition:
     operation_start: OperationStartExecutor
     execution_binding: DomainExecutionBinding
     post_operation_observation: AzureVmPostOperationObservationExecutor
+
+    def __post_init__(self) -> None:
+        execution_path = DomainExecutionPath(
+            execution_binding=self.execution_binding,
+            executors=(
+                self.pre_call,
+                self.operation_start,
+                self.execution_binding.executor,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "_execution_path",
+            execution_path,
+        )
+
+    @property
+    def execution_path(self) -> DomainExecutionPath:
+        """Devuelve la instancia declarada al construir la composicion."""
+        return self._execution_path
 
 
 def build_azure_domain_composition(

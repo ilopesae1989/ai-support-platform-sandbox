@@ -338,8 +338,16 @@ def build_incident_resolution_workflow(
         azure_vm_power_state_reader=azure_vm_power_state_reader,
     )
 
+    azure_execution_path = (
+        azure_composition.execution_path
+    )
+
+    azure_path_edges = (
+        azure_execution_path.edges
+    )
+
     execution_bindings = DomainExecutionBindings(
-        bindings=(azure_composition.execution_binding,),
+        bindings=(azure_execution_path.execution_binding,),
     )
 
     runtime = (
@@ -362,11 +370,11 @@ def build_incident_resolution_workflow(
 
 
     azure_pre_call = (
-        azure_composition.pre_call
+        azure_execution_path.entry
     )
 
     operation_start = (
-        azure_composition.operation_start
+        azure_path_edges[0][1]
     )
 
     #
@@ -376,7 +384,7 @@ def build_incident_resolution_workflow(
     #
 
     azure_route = (
-        azure_composition.execution_binding.executor
+        azure_path_edges[-1][1]
     )
 
     operation_result_registration = (
