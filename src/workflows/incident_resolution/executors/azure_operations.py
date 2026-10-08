@@ -30,6 +30,11 @@ from src.runtime.procedure.models import (
     OperationKind,
 )
 
+from ..azure_read_tool_authority import (
+    AzureReadToolAuthorityRegistry,
+    build_default_azure_read_tool_authority_registry,
+)
+
 from ..azure_operations_models import (
     AzureOperationResult,
     VerifiedAzureOperationRequest,
@@ -97,6 +102,10 @@ class AzureOperationsExecutor(Executor):
         operation_dispatch_ledger: (
             OperationDispatchLedger | None
         ) = None,
+        *,
+        azure_read_tool_authority_registry: (
+            AzureReadToolAuthorityRegistry | None
+        ) = None,
     ) -> None:
         super().__init__(
             id="azure_operations"
@@ -107,6 +116,14 @@ class AzureOperationsExecutor(Executor):
         self._operation_dispatch_ledger = (
             operation_dispatch_ledger
             or InMemoryOperationDispatchLedger()
+        )
+
+        self._azure_read_tool_authority_registry = (
+            azure_read_tool_authority_registry
+            if azure_read_tool_authority_registry
+            is not None
+            else
+            build_default_azure_read_tool_authority_registry()
         )
 
     @staticmethod
@@ -1761,6 +1778,22 @@ Restricciones obligatorias:
                 "verificación inválido."
             )
 
+        governed_read_authority = None
+
+        if (
+            request.operation_kind
+            == OperationKind.READ
+            and request.capability_id
+            is not None
+        ):
+            governed_read_authority = (
+                self
+                ._azure_read_tool_authority_registry
+                .get(
+                    request.capability_id
+                )
+            )
+
         #
         # --------------------------------------------------
         # Monotonic dispatch gate
@@ -1895,6 +1928,73 @@ Restricciones obligatorias:
                     raise ValueError(
                         "Azure Operations WRITE no "
                         "devolvió respuesta después "
+                        "del MCP approval."
+                    )
+
+            elif (
+                governed_read_authority
+                is not None
+            ):
+                invocation = (
+                    await self._agents
+                    .begin_azure_operations(
+                        prompt
+                    )
+                )
+
+                response = getattr(
+                    invocation,
+                    "response",
+                    None,
+                )
+
+                if response is None:
+                    raise ValueError(
+                        "Azure Operations READ gobernada "
+                        "no devolvió respuesta inicial."
+                    )
+
+                approval = (
+                    self
+                    ._extract_single_mcp_approval_request(
+                        response
+                    )
+                )
+
+                governed_read_authority.validate_pending_approval(
+                    request=request,
+                    approval=approval,
+                )
+
+                native_approval_request = (
+                    self
+                    ._extract_correlated_native_mcp_approval_request(
+                        response,
+                        approval,
+                    )
+                )
+
+                invocation = (
+                    await self._agents
+                    .continue_azure_operations(
+                        invocation=invocation,
+                        approval_request=(
+                            native_approval_request
+                        ),
+                        approved=True,
+                    )
+                )
+
+                response = getattr(
+                    invocation,
+                    "response",
+                    None,
+                )
+
+                if response is None:
+                    raise ValueError(
+                        "Azure Operations READ gobernada "
+                        "no devolvió respuesta después "
                         "del MCP approval."
                     )
 
