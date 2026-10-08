@@ -212,5 +212,36 @@ def build_default_capability_registry(
                     "azure_operations"
                 ),
             ),
+            OperationalCapability(
+                capability_id=(
+                    "azure.resource_group.list"
+                ),
+
+                operation_domain=(
+                    "azure"
+                ),
+
+                resource_type=(
+                    "subscription"
+                ),
+
+                operation_kind=(
+                    OperationKind.READ
+                ),
+
+                operation_action=(
+                    OperationAction.RESOURCE_GROUP_LIST
+                ),
+
+                required_parameters=(
+                    "subscription_id",
+                ),
+
+                hitl_required=False,
+
+                executor_id=(
+                    "azure_operations"
+                ),
+            ),
         ]
     )

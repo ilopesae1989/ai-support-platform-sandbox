@@ -52,6 +52,7 @@ def test_resolution_never_dispatches_clones_or_mutates_authority(monkeypatch):
     Binding, _ = contract()
     registry = build_default_capability_registry()
     cap = registry.get("azure.vm.start")
+    baseline_registry_count = registry.count()
     before = asdict(cap)
     executor = OfflineExecutor()
     probes = []
@@ -65,7 +66,7 @@ def test_resolution_never_dispatches_clones_or_mutates_authority(monkeypatch):
     assert binding.resolve(capability=cap) is executor
     assert binding.resolve(capability=cap) is executor
     assert asdict(cap) == before
-    assert registry.count() == 1
+    assert registry.count() == baseline_registry_count
     assert registry.get("azure.vm.start") is cap
     for probe in probes:
         probe.assert_not_called()

@@ -66,6 +66,9 @@ def authority_kwargs(**overrides):
         "capability_id": CAPABILITY_ID,
         "operation_domain": "azure",
         "resource_type": "subscription",
+        "operation_action": (
+            OperationAction.RESOURCE_GROUP_LIST
+        ),
         "target_resource": "subscription",
         "server_label": SERVER_LABEL,
         "tool_name": TOOL_NAME,
@@ -88,12 +91,18 @@ def verified_read_request(
     capability_id=CAPABILITY_ID,
     operation_domain="azure",
     operation_kind=OperationKind.READ,
+    operation_action=None,
     target_resource="subscription",
     required_parameters=None,
     resolved_parameters=None,
     security_verified=True,
     verification_source="pre_call_security_verifier",
 ):
+    if operation_action is None:
+        operation_action = (
+            OperationAction.RESOURCE_GROUP_LIST
+        )
+
     if required_parameters is None:
         required_parameters = [
             "subscription_id",
@@ -131,7 +140,7 @@ def verified_read_request(
         ),
         operation_domain=operation_domain,
         operation_kind=operation_kind,
-        operation_action=None,
+        operation_action=operation_action,
         capability_id=capability_id,
         hitl_required=False,
         next_action="execute_step",
@@ -414,6 +423,7 @@ def test_authority_is_small_frozen_value_not_executor_or_workflow():
         "capability_id",
         "operation_domain",
         "resource_type",
+        "operation_action",
         "target_resource",
         "server_label",
         "tool_name",
@@ -579,6 +589,10 @@ def test_default_registry_contains_only_resource_group_list_read_authority():
     assert (
         authority.resource_type
         == "subscription"
+    )
+    assert (
+        authority.operation_action
+        == OperationAction.RESOURCE_GROUP_LIST
     )
     assert (
         authority.target_resource
@@ -851,29 +865,56 @@ def test_pending_approval_validation_rejects_any_authority_mismatch(
         )
 
 
-def test_read_authority_registry_does_not_install_capability_or_action():
-    contract()
+def test_read_authority_registry_is_aligned_with_installed_capability_and_action():
+    (
+        _,
+        _,
+        _,
+        _,
+        build_authority_registry,
+    ) = contract()
 
     capability_registry = (
         build_default_capability_registry()
     )
 
-    assert capability_registry.count() == 1
-    assert (
+    assert capability_registry.count() == 2
+
+    vm_start = (
         capability_registry
         .get(
             "azure.vm.start"
         )
-        .capability_id
+    )
+
+    resource_group_list = (
+        capability_registry
+        .get(
+            CAPABILITY_ID
+        )
+    )
+
+    assert (
+        vm_start.capability_id
         == "azure.vm.start"
     )
 
-    with pytest.raises(
-        Exception
-    ):
-        capability_registry.get(
+    assert (
+        resource_group_list.operation_action
+        == OperationAction.RESOURCE_GROUP_LIST
+    )
+
+    authority = (
+        build_authority_registry()
+        .get(
             CAPABILITY_ID
         )
+    )
+
+    assert (
+        authority.operation_action
+        == resource_group_list.operation_action
+    )
 
     assert {
         action.value
@@ -881,6 +922,7 @@ def test_read_authority_registry_does_not_install_capability_or_action():
         in OperationAction
     } == {
         "vm_start",
+        "resource_group_list",
     }
 
 

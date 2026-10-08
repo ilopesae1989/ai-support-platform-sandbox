@@ -119,7 +119,7 @@ def test_default_registry_contains_only_installed_capabilities():
         build_default_capability_registry()
     )
 
-    assert registry.count() == 1
+    assert registry.count() == 2
 
 
 def test_unknown_capability_fails_closed():

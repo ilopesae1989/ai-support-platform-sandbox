@@ -159,6 +159,17 @@ class PreCallSecurityVerifier:
                 "un operation_kind no permitido."
             )
 
+        # Governed capability integrity. Legacy READ without capability_id stays compatible.
+        if step.capability_id is not None:
+            if step.operation_action is None:
+                raise PreCallSecurityError(
+                    "ApprovedProcedureStep capability_id gobernado requiere operation_action explicita."
+                )
+            if step.hitl_required is None:
+                raise PreCallSecurityError(
+                    "ApprovedProcedureStep capability_id gobernado requiere hitl_required explicito."
+                )
+
         #
         # Todo WRITE que alcanza PreCallSecurity debe
         # proceder ya de una capability gobernada.
@@ -251,6 +262,17 @@ class PreCallSecurityVerifier:
                 "AzureOperationRequest contiene "
                 "un operation_kind no permitido."
             )
+
+        # Governed candidate must preserve explicit action and HITL policy.
+        if candidate.capability_id is not None:
+            if candidate.operation_action is None:
+                raise PreCallSecurityError(
+                    "AzureOperationRequest capability_id gobernado requiere operation_action explicita."
+                )
+            if candidate.hitl_required is None:
+                raise PreCallSecurityError(
+                    "AzureOperationRequest capability_id gobernado requiere hitl_required explicito."
+                )
 
         if (
             candidate.operation_kind

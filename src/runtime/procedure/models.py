@@ -72,6 +72,7 @@ class OperationAction(str, Enum):
     """
 
     VM_START = "vm_start"
+    RESOURCE_GROUP_LIST = "resource_group_list"
 
 
 class NextAction(str, Enum):

@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from src.runtime.procedure.models import OperationKind
+from src.runtime.procedure.models import (
+    OperationAction,
+    OperationKind,
+)
 
 from .azure_operations_models import VerifiedAzureOperationRequest
 
@@ -40,6 +43,7 @@ class AzureReadToolAuthority:
     capability_id: str
     operation_domain: str
     resource_type: str
+    operation_action: OperationAction
     target_resource: str
     server_label: str
     tool_name: str
@@ -63,6 +67,11 @@ class AzureReadToolAuthority:
         if self.operation_domain != "azure":
             raise AzureReadToolAuthorityError(
                 "operation_domain debe ser exactamente 'azure'."
+            )
+
+        if not isinstance(self.operation_action, OperationAction):
+            raise AzureReadToolAuthorityError(
+                "operation_action debe ser OperationAction."
             )
 
         if not isinstance(self.required_parameters, tuple):
@@ -169,6 +178,11 @@ class AzureReadToolAuthority:
         if request.operation_kind != OperationKind.READ:
             raise AzureReadToolAuthorityError(
                 "La autoridad sólo permite READ."
+            )
+
+        if request.operation_action != self.operation_action:
+            raise AzureReadToolAuthorityError(
+                "operation_action no coincide con la autoridad READ."
             )
 
         if request.capability_id != self.capability_id:
@@ -300,6 +314,7 @@ def build_default_azure_read_tool_authority_registry(
                 capability_id="azure.resource_group.list",
                 operation_domain="azure",
                 resource_type="subscription",
+                operation_action=OperationAction.RESOURCE_GROUP_LIST,
                 target_resource="subscription",
                 server_label="azure-mcp-operations-sbx",
                 tool_name="group_list",
