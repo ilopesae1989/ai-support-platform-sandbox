@@ -1,3 +1,5 @@
+from collections.abc import Iterable
+
 from agent_framework import (
     Case,
     Default,
@@ -20,8 +22,9 @@ from src.workflows.incident_resolution.azure_domain_composition import (
     build_azure_domain_composition,
 )
 
-from src.workflows.incident_resolution.domain_execution_bindings import (
-    DomainExecutionBindings,
+from src.workflows.incident_resolution.domain_execution_registry import (
+    DomainExecutionRegistration,
+    DomainExecutionRegistry,
 )
 
 from src.workflows.incident_resolution.executors.operation_result_registration import (
@@ -104,6 +107,7 @@ from src.workflows.incident_resolution.routing import (
 )
 
 from src.workflows.incident_resolution.routing_post_hitl import (
+    build_registered_operation_route,
     route_to_azure_operation,
     route_to_database_operation,
     route_to_itsm_operation,
@@ -112,6 +116,20 @@ from src.workflows.incident_resolution.routing_post_hitl import (
     route_to_networking_operation,
     route_to_windows_operation,
 )
+
+
+def _add_registered_execution_paths(
+    builder: WorkflowBuilder,
+    registrations: tuple[DomainExecutionRegistration, ...],
+) -> WorkflowBuilder:
+    """Añade únicamente los edges declarados por registrations adicionales."""
+    for registration in registrations:
+        for source, target in registration.execution_path.edges:
+            builder.add_edge(
+                source,
+                target,
+            )
+    return builder
 
 
 def build_incident_resolution_workflow(
@@ -139,6 +157,10 @@ def build_incident_resolution_workflow(
 
     governed_procedure_admission_policy: (
         GovernedProcedureAdmissionPolicy | None
+    ) = None,
+
+    domain_execution_registrations: (
+        Iterable[DomainExecutionRegistration] | None
     ) = None,
 ):
     """
@@ -346,8 +368,35 @@ def build_incident_resolution_workflow(
         azure_execution_path.edges
     )
 
-    execution_bindings = DomainExecutionBindings(
-        bindings=(azure_execution_path.execution_binding,),
+    azure_registration = (
+        DomainExecutionRegistration(
+            operation_domain="azure",
+            execution_path=azure_execution_path,
+        )
+    )
+
+    if domain_execution_registrations is None:
+        additional_domain_registrations = ()
+    else:
+        additional_domain_registrations = tuple(
+            domain_execution_registrations
+        )
+
+    domain_execution_registry = DomainExecutionRegistry(
+        registrations=(
+            azure_registration,
+            *additional_domain_registrations,
+        ),
+    )
+
+    execution_bindings = (
+        domain_execution_registry.execution_bindings
+    )
+
+    registered_additional_domains = frozenset(
+        registration.operation_domain
+        for registration
+        in additional_domain_registrations
     )
 
     runtime = (
@@ -449,6 +498,47 @@ def build_incident_resolution_workflow(
         BlockedRouteExecutor()
     )
 
+    legacy_routes = (
+        ("database", route_to_database_operation, database_route),
+        ("itsm", route_to_itsm_operation, itsm_route),
+        ("windows", route_to_windows_operation, windows_route),
+        ("linux", route_to_linux_operation, linux_route),
+        ("networking", route_to_networking_operation, networking_route),
+        ("microsoft365", route_to_microsoft365_operation, microsoft365_route),
+    )
+
+    active_legacy_routes = tuple(
+        route
+        for route in legacy_routes
+        if route[0] not in registered_additional_domains
+    )
+
+    post_hitl_cases = [
+        Case(
+            condition=route_to_azure_operation,
+            target=azure_pre_call,
+        ),
+        *[
+            Case(condition=condition, target=target)
+            for _, condition, target in active_legacy_routes
+        ],
+        *[
+            Case(
+                condition=build_registered_operation_route(
+                    registration.operation_domain
+                ),
+                target=registration.execution_path.entry,
+            )
+            for registration in additional_domain_registrations
+        ],
+        Default(target=blocked_route),
+    ]
+
+    legacy_outputs = [
+        target
+        for _, _, target in active_legacy_routes
+    ]
+
     #
     # --------------------------------------------------
     # Build graph
@@ -456,7 +546,8 @@ def build_incident_resolution_workflow(
     #
 
     return (
-        WorkflowBuilder(
+        _add_registered_execution_paths(
+            WorkflowBuilder(
             max_iterations=100,
 
             start_executor=classification,
@@ -466,12 +557,7 @@ def build_incident_resolution_workflow(
                 knowledge_review,
                 manual_analysis,
                 procedure_transition,
-                database_route,
-                itsm_route,
-                windows_route,
-                linux_route,
-                networking_route,
-                microsoft365_route,
+                *legacy_outputs,
                 blocked_route,
             ],
 
@@ -545,100 +631,7 @@ def build_incident_resolution_workflow(
 
         .add_switch_case_edge_group(
             approval,
-            [
-                #
-                # Azure
-                #
-                Case(
-                    condition=(
-                        route_to_azure_operation
-                    ),
-                    target=(
-                        azure_pre_call
-                    ),
-                ),
-
-                #
-                # Database
-                #
-                Case(
-                    condition=(
-                        route_to_database_operation
-                    ),
-                    target=(
-                        database_route
-                    ),
-                ),
-
-                #
-                # ITSM
-                #
-                Case(
-                    condition=(
-                        route_to_itsm_operation
-                    ),
-                    target=(
-                        itsm_route
-                    ),
-                ),
-
-                #
-                # Windows
-                #
-                Case(
-                    condition=(
-                        route_to_windows_operation
-                    ),
-                    target=(
-                        windows_route
-                    ),
-                ),
-
-                #
-                # Linux
-                #
-                Case(
-                    condition=(
-                        route_to_linux_operation
-                    ),
-                    target=(
-                        linux_route
-                    ),
-                ),
-
-                #
-                # Networking
-                #
-                Case(
-                    condition=(
-                        route_to_networking_operation
-                    ),
-                    target=(
-                        networking_route
-                    ),
-                ),
-
-                #
-                # Microsoft 365
-                #
-                Case(
-                    condition=(
-                        route_to_microsoft365_operation
-                    ),
-                    target=(
-                        microsoft365_route
-                    ),
-                ),
-
-                #
-                # Fail-closed
-                #
-                Default(
-                    target=(
-                        blocked_route
-                    ),
-                ),
-            ],
+            post_hitl_cases,
         )
 
         #
@@ -659,6 +652,8 @@ def build_incident_resolution_workflow(
         .add_edge(
             operation_start,
             azure_route,
+        ),
+            additional_domain_registrations,
         )
 
         #

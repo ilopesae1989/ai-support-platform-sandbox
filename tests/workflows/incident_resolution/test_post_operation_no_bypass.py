@@ -261,17 +261,201 @@ def workflow_output_from():
         ast.List,
     )
 
-    outputs = []
+    def single_assignment(
+        name: str,
+    ) -> ast.AST:
+        matches = [
+            node.value
+            for node in function.body
+            if (
+                isinstance(
+                    node,
+                    ast.Assign,
+                )
+                and len(
+                    node.targets
+                ) == 1
+                and isinstance(
+                    node.targets[0],
+                    ast.Name,
+                )
+                and node.targets[0].id
+                == name
+            )
+        ]
 
-    for element in output_value.elts:
+        assert len(
+            matches
+        ) == 1
+
+        return matches[0]
+
+    legacy_outputs_value = (
+        single_assignment(
+            "legacy_outputs"
+        )
+    )
+
+    assert isinstance(
+        legacy_outputs_value,
+        ast.ListComp,
+    )
+
+    assert isinstance(
+        legacy_outputs_value.elt,
+        ast.Name,
+    )
+
+    assert (
+        legacy_outputs_value.elt.id
+        == "target"
+    )
+
+    assert len(
+        legacy_outputs_value.generators
+    ) == 1
+
+    legacy_outputs_generator = (
+        legacy_outputs_value.generators[0]
+    )
+
+    assert isinstance(
+        legacy_outputs_generator.iter,
+        ast.Name,
+    )
+
+    assert (
+        legacy_outputs_generator.iter.id
+        == "active_legacy_routes"
+    )
+
+    active_legacy_value = (
+        single_assignment(
+            "active_legacy_routes"
+        )
+    )
+
+    assert isinstance(
+        active_legacy_value,
+        ast.Call,
+    )
+
+    assert isinstance(
+        active_legacy_value.func,
+        ast.Name,
+    )
+
+    assert (
+        active_legacy_value.func.id
+        == "tuple"
+    )
+
+    assert len(
+        active_legacy_value.args
+    ) == 1
+
+    active_generator = (
+        active_legacy_value.args[0]
+    )
+
+    assert isinstance(
+        active_generator,
+        ast.GeneratorExp,
+    )
+
+    assert len(
+        active_generator.generators
+    ) == 1
+
+    active_source = (
+        active_generator.generators[0]
+        .iter
+    )
+
+    assert isinstance(
+        active_source,
+        ast.Name,
+    )
+
+    assert (
+        active_source.id
+        == "legacy_routes"
+    )
+
+    legacy_routes_value = (
+        single_assignment(
+            "legacy_routes"
+        )
+    )
+
+    assert isinstance(
+        legacy_routes_value,
+        ast.Tuple,
+    )
+
+    legacy_targets = []
+
+    for route in (
+        legacy_routes_value.elts
+    ):
         assert isinstance(
-            element,
+            route,
+            ast.Tuple,
+        )
+
+        assert len(
+            route.elts
+        ) == 3
+
+        target = (
+            route.elts[2]
+        )
+
+        assert isinstance(
+            target,
             ast.Name,
         )
 
-        outputs.append(
-            element.id
+        legacy_targets.append(
+            target.id
         )
+
+    outputs = []
+
+    spread_count = 0
+
+    for element in output_value.elts:
+        if isinstance(
+            element,
+            ast.Name,
+        ):
+            outputs.append(
+                element.id
+            )
+            continue
+
+        assert isinstance(
+            element,
+            ast.Starred,
+        )
+
+        assert isinstance(
+            element.value,
+            ast.Name,
+        )
+
+        assert (
+            element.value.id
+            == "legacy_outputs"
+        )
+
+        spread_count += 1
+
+        outputs.extend(
+            legacy_targets
+        )
+
+    assert spread_count == 1
 
     return outputs
 

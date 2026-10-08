@@ -27,23 +27,9 @@ ROUTABLE_OPERATION_KINDS = frozenset(
 )
 
 
-def is_post_hitl_routable(
+def _is_post_hitl_execution_eligible(
     step: ApprovedProcedureStep,
 ) -> bool:
-    """
-    Gate común de seguridad post-HITL.
-
-    Ningún LLM participa aquí.
-
-    Solo permite routing cuando:
-
-    - existe aprobación explícita;
-    - next_action es EXECUTE_STEP;
-    - el dominio es conocido;
-    - el tipo de operación está autorizado
-      para entrar en routing operativo.
-    """
-
     if step.approved is not True:
         return False
 
@@ -54,18 +40,59 @@ def is_post_hitl_routable(
         return False
 
     if (
-        step.operation_domain
-        not in SUPPORTED_OPERATION_DOMAINS
-    ):
-        return False
-
-    if (
         step.operation_kind
         not in ROUTABLE_OPERATION_KINDS
     ):
         return False
 
     return True
+
+
+def is_post_hitl_routable(
+    step: ApprovedProcedureStep,
+) -> bool:
+    """
+    Gate común de seguridad post-HITL para rutas legacy conocidas.
+
+    Ningún LLM participa aquí.
+    """
+
+    return (
+        _is_post_hitl_execution_eligible(step)
+        and step.operation_domain
+        in SUPPORTED_OPERATION_DOMAINS
+    )
+
+
+def build_registered_operation_route(
+    operation_domain: str,
+):
+    """
+    Crea un predicado exacto para un dominio ya registrado.
+
+    Registrar el dominio no concede capability, aprobación ni autoridad.
+    El predicado sólo conserva las gates deterministas post-HITL comunes.
+    """
+
+    if (
+        not isinstance(operation_domain, str)
+        or not operation_domain
+        or operation_domain != operation_domain.strip()
+    ):
+        raise ValueError(
+            "operation_domain debe ser string exacto no vacío."
+        )
+
+    def route(
+        step: ApprovedProcedureStep,
+    ) -> bool:
+        return (
+            _is_post_hitl_execution_eligible(step)
+            and step.operation_domain
+            == operation_domain
+        )
+
+    return route
 
 
 def route_to_azure_operation(
