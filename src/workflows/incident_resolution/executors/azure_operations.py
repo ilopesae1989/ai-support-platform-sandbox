@@ -35,6 +35,10 @@ from ..azure_read_tool_authority import (
     build_default_azure_read_tool_authority_registry,
 )
 
+from ..capability_foundry_agent_binding import (
+    CapabilityFoundryAgentBindingRegistry,
+)
+
 from ..azure_operations_models import (
     AzureOperationResult,
     VerifiedAzureOperationRequest,
@@ -106,6 +110,9 @@ class AzureOperationsExecutor(Executor):
         azure_read_tool_authority_registry: (
             AzureReadToolAuthorityRegistry | None
         ) = None,
+        capability_foundry_agent_binding_registry: (
+            CapabilityFoundryAgentBindingRegistry | None
+        ) = None,
     ) -> None:
         super().__init__(
             id="azure_operations"
@@ -124,6 +131,20 @@ class AzureOperationsExecutor(Executor):
             is not None
             else
             build_default_azure_read_tool_authority_registry()
+        )
+
+        # F27.3-R8: inyeccion declarativa solamente. La activacion
+        # de routing por capability requiere otro contrato y autorizacion.
+        if (
+            capability_foundry_agent_binding_registry is not None
+            and not isinstance(
+                capability_foundry_agent_binding_registry,
+                CapabilityFoundryAgentBindingRegistry,
+            )
+        ):
+            raise TypeError("capability_foundry_agent_binding_registry invalido.")
+        self._capability_foundry_agent_binding_registry = (
+            capability_foundry_agent_binding_registry
         )
 
     @staticmethod

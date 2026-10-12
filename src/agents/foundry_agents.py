@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 
 from dataclasses import (
     dataclass,
@@ -737,6 +738,8 @@ class FoundryAgents:
     async def begin_azure_operations(
         self,
         message: str,
+        *,
+        agent_definition: FoundryAgentDefinition | None = None,
     ) -> AzureOperationsInvocation:
         """
         Inicia una única ejecución Azure Operations
@@ -754,9 +757,21 @@ class FoundryAgents:
         - NO ejecuta PreCallSecurity.
         """
 
-        definition = self.get_definition(
-            AgentKey.AZURE_OPERATIONS
-        )
+        if agent_definition is None:
+            definition = self.get_definition(
+                AgentKey.AZURE_OPERATIONS
+            )
+        else:
+            if not isinstance(agent_definition, FoundryAgentDefinition):
+                raise ValueError("agent_definition debe ser un descriptor Foundry.")
+            if agent_definition.key != AgentKey.AZURE_OPERATIONS:
+                raise ValueError("agent_definition no pertenece a Azure Operations.")
+            if not re.fullmatch(r"agent-[a-z0-9]+(?:-[a-z0-9]+)*",
+                                agent_definition.name):
+                raise ValueError("agent_definition.name no es exacto.")
+            if not re.fullmatch(r"[1-9][0-9]*", agent_definition.version):
+                raise ValueError("agent_definition.version debe estar pinned.")
+            definition = agent_definition
 
         self._register_invocation(
             definition
