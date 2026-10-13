@@ -22,6 +22,10 @@ from src.workflows.incident_resolution.azure_domain_composition import (
     build_azure_domain_composition,
 )
 
+from src.workflows.incident_resolution.capability_foundry_agent_binding import (
+    CapabilityFoundryAgentBindingRegistry,
+)
+
 from src.workflows.incident_resolution.domain_execution_registry import (
     DomainExecutionRegistration,
     DomainExecutionRegistry,
@@ -161,6 +165,10 @@ def build_incident_resolution_workflow(
 
     domain_execution_registrations: (
         Iterable[DomainExecutionRegistration] | None
+    ) = None,
+
+    capability_foundry_agent_binding_registry: (
+        CapabilityFoundryAgentBindingRegistry | None
     ) = None,
 ):
     """
@@ -353,11 +361,24 @@ def build_incident_resolution_workflow(
         )
     )
 
+    # Preserve the F26/F27.1 default factory kwargs exactly when disabled.
+    selector_options = {}
+    if capability_foundry_agent_binding_registry is not None:
+        if not isinstance(
+            capability_foundry_agent_binding_registry,
+            CapabilityFoundryAgentBindingRegistry,
+        ):
+            raise TypeError("Invalid capability Foundry agent binding registry.")
+        selector_options["capability_foundry_agent_binding_registry"] = (
+            capability_foundry_agent_binding_registry
+        )
+
     azure_composition = build_azure_domain_composition(
         agents=foundry_agents,
         operation_dispatch_ledger=dispatch_ledger,
         wait_recheck_consumption_ledger=wait_recheck_ledger,
         azure_vm_power_state_reader=azure_vm_power_state_reader,
+        **selector_options,
     )
 
     azure_execution_path = (

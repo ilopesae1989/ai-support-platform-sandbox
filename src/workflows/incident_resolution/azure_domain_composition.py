@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from src.agents.foundry_agents import FoundryAgents
 
 from .azure_vm_instance_view import AzureVmPowerStateReader
+from .capability_foundry_agent_binding import CapabilityFoundryAgentBindingRegistry
 from .domain_execution_binding import DomainExecutionBinding
 from .domain_execution_path import DomainExecutionPath
 from .executors.azure_operations import AzureOperationsExecutor
@@ -57,6 +58,7 @@ def build_azure_domain_composition(
     operation_dispatch_ledger: OperationDispatchLedger,
     wait_recheck_consumption_ledger: WaitRecheckConsumptionLedger,
     azure_vm_power_state_reader: AzureVmPowerStateReader | None = None,
+    capability_foundry_agent_binding_registry: CapabilityFoundryAgentBindingRegistry | None = None,
 ) -> AzureDomainComposition:
     """Construye nodos nuevos con dependencias suministradas por el caller.
 
@@ -73,11 +75,26 @@ def build_azure_domain_composition(
     if wait_recheck_consumption_ledger is None:
         raise ValueError("wait_recheck_consumption_ledger no puede ser None.")
 
+    if (
+        capability_foundry_agent_binding_registry is not None
+        and not isinstance(
+            capability_foundry_agent_binding_registry,
+            CapabilityFoundryAgentBindingRegistry,
+        )
+    ):
+        raise TypeError("Invalid capability Foundry agent binding registry.")
+
     pre_call = AzurePreCallSecurityExecutor()
     operation_start = OperationStartExecutor()
+    selector_options = {}
+    if capability_foundry_agent_binding_registry is not None:
+        selector_options["capability_foundry_agent_binding_registry"] = (
+            capability_foundry_agent_binding_registry
+        )
     operations = AzureOperationsExecutor(
         agents=agents,
         operation_dispatch_ledger=operation_dispatch_ledger,
+        **selector_options,
     )
     execution_binding = DomainExecutionBinding(
         operation_domain="azure",

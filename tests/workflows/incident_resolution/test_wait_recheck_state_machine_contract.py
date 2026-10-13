@@ -470,14 +470,115 @@ def test_workflow_injects_same_wait_ledger_into_transition_and_observation():
         assert len(matches) == 1, name
         return matches[0]
 
+    def assert_exact_selector_spread(fn, call, expanded):
+        # F27.3-R14F: permit only the typed single-key opt-in registry.
+        # The pre-existing reader and WAIT checks below remain unchanged.
+        registry = "capability_foundry_agent_binding_registry"
+        assert isinstance(expanded.value, ast.Name)
+        assert isinstance(expanded.value.ctx, ast.Load)
+        assert expanded.value.id == "selector_options"
+
+        initializers = [s for s in fn.body if isinstance(s, ast.Assign)
+                        and len(s.targets) == 1 and isinstance(s.targets[0], ast.Name)
+                        and s.targets[0].id == "selector_options"]
+        assert len(initializers) == 1
+        initializer = initializers[0]
+        assert isinstance(initializer.value, ast.Dict)
+        assert initializer.value.keys == initializer.value.values == []
+        assert initializer.lineno < call.lineno
+
+        def enabled(node):
+            return (isinstance(node, ast.Compare)
+                    and isinstance(node.left, ast.Name)
+                    and node.left.id == registry
+                    and len(node.ops) == len(node.comparators) == 1
+                    and isinstance(node.ops[0], ast.IsNot)
+                    and isinstance(node.comparators[0], ast.Constant)
+                    and node.comparators[0].value is None)
+
+        def bad_type(node):
+            if not isinstance(node, ast.UnaryOp) or not isinstance(node.op, ast.Not):
+                return False
+            c = node.operand
+            return (isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                    and c.func.id == "isinstance" and not c.keywords
+                    and len(c.args) == 2
+                    and isinstance(c.args[0], ast.Name) and c.args[0].id == registry
+                    and isinstance(c.args[1], ast.Name)
+                    and c.args[1].id == "CapabilityFoundryAgentBindingRegistry")
+
+        def type_error(stmt):
+            return (isinstance(stmt, ast.Raise)
+                    and isinstance(stmt.exc, ast.Call)
+                    and isinstance(stmt.exc.func, ast.Name)
+                    and stmt.exc.func.id == "TypeError")
+
+        gates = [s for s in fn.body if isinstance(s, ast.If) and enabled(s.test)]
+        assert len(gates) == 1
+        gate = gates[0]
+        assert not gate.orelse
+        assert initializer.lineno < gate.lineno < call.lineno
+        assert len(gate.body) in (1, 2)
+
+        mutation = gate.body[-1]
+        assert isinstance(mutation, ast.Assign) and len(mutation.targets) == 1
+        key = mutation.targets[0]
+        assert isinstance(key, ast.Subscript) and isinstance(key.ctx, ast.Store)
+        assert isinstance(key.value, ast.Name) and key.value.id == "selector_options"
+        assert isinstance(key.slice, ast.Constant) and key.slice.value == registry
+        assert isinstance(mutation.value, ast.Name) and mutation.value.id == registry
+        assert mutation.lineno < call.lineno
+
+        if len(gate.body) == 2:
+            check = gate.body[0]
+            assert isinstance(check, ast.If) and bad_type(check.test)
+            assert not check.orelse and len(check.body) == 1
+            assert type_error(check.body[0])
+            assert check.lineno < mutation.lineno
+        else:
+            checks = [s for s in fn.body if isinstance(s, ast.If)
+                      and isinstance(s.test, ast.BoolOp)
+                      and isinstance(s.test.op, ast.And)
+                      and len(s.test.values) == 2
+                      and enabled(s.test.values[0])
+                      and bad_type(s.test.values[1])]
+            assert len(checks) == 1
+            check = checks[0]
+            assert not check.orelse and len(check.body) == 1
+            assert type_error(check.body[0])
+            assert check.lineno < initializer.lineno
+
+        # No alias, reassignment, update(), extra consumer or silent fallback.
+        references = [n for n in ast.walk(fn)
+                      if isinstance(n, ast.Name) and n.id == "selector_options"]
+        assert len(references) == 3
+        assert {id(n) for n in references} == {
+            id(initializer.targets[0]), id(key.value), id(expanded.value)
+        }
+
     def one_call(fn, name):
         matches = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
                    and isinstance(n.func, ast.Name) and n.func.id == name]
         assert len(matches) == 1, name
         call = matches[0]
         assert not call.args
-        names = [k.arg for k in call.keywords]
-        assert None not in names and len(names) == len(set(names))
+        named = [k.arg for k in call.keywords if k.arg is not None]
+        assert len(named) == len(set(named))
+        expansions = [k for k in call.keywords if k.arg is None]
+        if name == "build_azure_domain_composition":
+            assert named == ["agents", "operation_dispatch_ledger",
+                             "wait_recheck_consumption_ledger",
+                             "azure_vm_power_state_reader"]
+            assert len(expansions) == 1 and call.keywords[-1] is expansions[0]
+            assert "capability_foundry_agent_binding_registry" not in named
+            assert_exact_selector_spread(fn, call, expansions[0])
+        elif name == "AzureOperationsExecutor":
+            assert named == ["agents", "operation_dispatch_ledger"]
+            assert len(expansions) == 1 and call.keywords[-1] is expansions[0]
+            assert "capability_foundry_agent_binding_registry" not in named
+            assert_exact_selector_spread(fn, call, expansions[0])
+        else:
+            assert not expansions
         return call
 
     def name_argument(call, keyword, name):
@@ -500,6 +601,8 @@ def test_workflow_injects_same_wait_ledger_into_transition_and_observation():
     wf = read_function(base / "workflow.py", "build_incident_resolution_workflow")
     factory = read_function(base / "azure_domain_composition.py", "build_azure_domain_composition")
     forwarded = one_call(wf, "build_azure_domain_composition")
+    governed_executor = one_call(factory, "AzureOperationsExecutor")
+    name_argument(governed_executor, "agents", "agents")
     observed = one_call(factory, "AzureVmPostOperationObservationExecutor")
     assert assigned(wf, "azure_composition") is forwarded
     assert assigned(factory, "observation") is observed

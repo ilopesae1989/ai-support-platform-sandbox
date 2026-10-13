@@ -1815,6 +1815,39 @@ Restricciones obligatorias:
                 )
             )
 
+        # An explicit agent selector is a separate, opt-in READ authority.
+        # Validate the already verified request against Python-owned binding
+        # metadata before consuming the monotonic dispatch claim.
+        governed_read_agent_definition = None
+        if (
+            governed_read_authority is not None
+            and self._capability_foundry_agent_binding_registry is not None
+        ):
+            binding = self._capability_foundry_agent_binding_registry.get(
+                request.capability_id
+            )
+            capability = binding.capability
+            verified_names = tuple(
+                parameter.name for parameter in request.resolved_parameters
+            )
+            if (
+                request.capability_id != capability.capability_id
+                or request.operation_domain != capability.operation_domain
+                or request.operation_kind != capability.operation_kind
+                or request.operation_action != capability.operation_action
+                or request.hitl_required != capability.hitl_required
+                or request.target_resource != governed_read_authority.target_resource
+                or tuple(request.required_parameters) != capability.required_parameters
+                or verified_names != capability.required_parameters
+            ):
+                raise ValueError(
+                    "Governed Azure READ request does not match canonical capability."
+                )
+            governed_read_agent_definition = binding.resolve(
+                capability=capability,
+                read_tool_authority=governed_read_authority,
+            )
+
         #
         # --------------------------------------------------
         # Monotonic dispatch gate
@@ -1956,12 +1989,23 @@ Restricciones obligatorias:
                 governed_read_authority
                 is not None
             ):
-                invocation = (
-                    await self._agents
-                    .begin_azure_operations(
-                        prompt
+                if governed_read_agent_definition is None:
+                    # No selector: preserve the pre-existing F27.1 call exactly.
+                    invocation = (
+                        await self._agents
+                        .begin_azure_operations(
+                            prompt
+                        )
                     )
-                )
+                else:
+                    # Explicitly pinned Python authority; never select latest.
+                    invocation = (
+                        await self._agents
+                        .begin_azure_operations(
+                            prompt,
+                            agent_definition=governed_read_agent_definition,
+                        )
+                    )
 
                 response = getattr(
                     invocation,
