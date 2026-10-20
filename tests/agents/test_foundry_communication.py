@@ -173,7 +173,8 @@ async def test_run_communication_returns_validated_result(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     result = await agents.run_communication(
@@ -210,7 +211,8 @@ async def test_run_communication_is_single_stateless_foundry_call(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     await agents.run_communication(

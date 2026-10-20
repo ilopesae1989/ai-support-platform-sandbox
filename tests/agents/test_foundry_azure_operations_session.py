@@ -130,7 +130,8 @@ async def test_begin_azure_operations_creates_one_session(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     invocation = (
@@ -217,7 +218,8 @@ async def test_continue_azure_operations_reuses_exact_agent_and_session(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     invocation = (
@@ -316,7 +318,8 @@ async def test_continue_azure_operations_rejects_invalid_invocation(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     approval_request = (

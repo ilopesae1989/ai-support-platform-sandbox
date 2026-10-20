@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import dataclasses
 import importlib
 import inspect
@@ -384,8 +385,6 @@ def test_production_propagation_contains_no_session_execution_or_new_authority()
         "session_store.set",
         "create_session",
         "agent.run",
-        "foundryagent",
-        "foundryagents",
         "agentkey",
         "service_session_id",
         "os.environ",
@@ -405,3 +404,111 @@ def test_production_propagation_contains_no_session_execution_or_new_authority()
 
     for fragment in forbidden:
         assert fragment not in lowered
+
+    # Check complete references, not substrings inside a declarative type name.
+    # The snippets below are parsed only; never imported, evaluated or executed.
+    def provider_references(source_text):
+        forbidden_symbols = {"foundryagent", "foundryagents"}
+        forbidden_modules = {
+            "agent_framework.foundry",
+            "agent_framework_foundry",
+            "src.agents.foundry_agents",
+        }
+        observed = set()
+
+        def record_symbol(value):
+            if value.casefold() in forbidden_symbols:
+                observed.add(value.casefold())
+
+        def record_module(value):
+            lowered_module = value.casefold()
+            for module_name in forbidden_modules:
+                if (
+                    lowered_module == module_name
+                    or lowered_module.startswith(module_name + ".")
+                ):
+                    observed.add(module_name)
+
+        for node in ast.walk(ast.parse(source_text)):
+            if isinstance(node, ast.Name):
+                record_symbol(node.id)
+            elif isinstance(node, ast.Attribute):
+                record_symbol(node.attr)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                module_name = (
+                    node.module or ""
+                    if isinstance(node, ast.ImportFrom)
+                    else ""
+                )
+                record_module(module_name)
+                for alias in node.names:
+                    for component in alias.name.split("."):
+                        record_symbol(component)
+                    if alias.asname is not None:
+                        record_symbol(alias.asname)
+                    imported_name = (
+                        module_name + "." + alias.name
+                        if module_name else alias.name
+                    )
+                    record_module(imported_name)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                # Retain direct string references such as getattr(..., "FoundryAgent").
+                record_symbol(node.value)
+                record_module(node.value)
+
+        return observed
+
+    allowed_sources = (
+        "",
+        "value: CapabilityFoundryAgentBindingRegistry | None = None",
+        (
+            "from src.workflows.incident_resolution."
+            "capability_foundry_agent_binding import "
+            "CapabilityFoundryAgentBindingRegistry as Registry\n"
+            "def accepts(value: Registry):\n"
+            "    return isinstance(value, Registry)\n"
+        ),
+    )
+    for allowed_source in allowed_sources:
+        assert provider_references(allowed_source) == set()
+
+    forbidden_sources = (
+        ("FoundryAgent()", "foundryagent"),
+        ("FoundryAgents()", "foundryagents"),
+        ("sdk.FoundryAgent()", "foundryagent"),
+        ("sdk.FoundryAgents()", "foundryagents"),
+        (
+            "from agent_framework.foundry import FoundryAgent as Alias",
+            "foundryagent",
+        ),
+        (
+            "from src.agents.foundry_agents import FoundryAgents as Alias",
+            "foundryagents",
+        ),
+        (
+            "import src.agents.foundry_agents as provider",
+            "src.agents.foundry_agents",
+        ),
+        (
+            "from src.agents import foundry_agents as provider",
+            "src.agents.foundry_agents",
+        ),
+        ("import agent_framework.foundry as provider", "agent_framework.foundry"),
+        ("from agent_framework import foundry as provider", "agent_framework.foundry"),
+        ("import agent_framework_foundry as provider", "agent_framework_foundry"),
+        (
+            "from agent_framework_foundry._agent import FoundryAgent as Alias",
+            "agent_framework_foundry",
+        ),
+        ('getattr(provider, "FoundryAgent")()', "foundryagent"),
+        ('getattr(provider, "FoundryAgents")()', "foundryagents"),
+        (
+            'importlib.import_module("agent_framework_foundry")',
+            "agent_framework_foundry",
+        ),
+    )
+    for forbidden_source, expected_reference in forbidden_sources:
+        assert expected_reference in provider_references(forbidden_source)
+
+    # The module under review is checked by the same detector as the negative controls.
+    assert provider_references(source) == set()

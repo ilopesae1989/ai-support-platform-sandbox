@@ -40,7 +40,8 @@ async def test_run_azure_operations_uses_catalog_definition(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     definition = agents.get_definition(
@@ -126,7 +127,8 @@ def test_create_azure_operations_agent_limits_backend_to_one_tool_call(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     definition = agents.get_definition(
@@ -179,7 +181,8 @@ def test_create_cognitive_agent_does_not_apply_azure_tool_call_policy(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     definition = agents.get_definition(
@@ -220,7 +223,8 @@ async def test_run_azure_operations_does_not_parse_response(
         project_endpoint=(
             "https://example.invalid/"
             "api/projects/test"
-        )
+        ),
+        credential=object(),
     )
 
     native_response = object()

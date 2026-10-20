@@ -531,6 +531,11 @@ def build_local_teams_hitl_persistence(
         ),
     )
 
+from src.workflows.incident_resolution.capability_foundry_agent_binding import (
+    CapabilityFoundryAgentBindingRegistry,
+)
+
+
 def build_teams_hitl_app(
     settings: (
         TeamsHitlSettings
@@ -549,6 +554,9 @@ def build_teams_hitl_app(
     communication_runner: object | None = None,
     review_runner: object | None = None,
     incident_agents: object | None = None,
+    capability_foundry_agent_binding_registry: (
+        CapabilityFoundryAgentBindingRegistry | None
+    ) = None,
 ) -> TeamsHitlBootstrap:
     """
     Construye la aplicación Teams y registra
@@ -566,6 +574,21 @@ def build_teams_hitl_app(
 
     NO concede capacidades operacionales.
     """
+
+    # Only explicit selection crosses this layer; direct legacy calls stay unchanged.
+    selector_options = {}
+    if capability_foundry_agent_binding_registry is not None:
+        if not isinstance(
+            capability_foundry_agent_binding_registry,
+            CapabilityFoundryAgentBindingRegistry,
+        ):
+            raise TypeError(
+                "capability_foundry_agent_binding_registry debe ser "
+                "CapabilityFoundryAgentBindingRegistry."
+            )
+        selector_options["capability_foundry_agent_binding_registry"] = (
+            capability_foundry_agent_binding_registry
+        )
 
     if not isinstance(
         settings,
@@ -708,6 +731,7 @@ def build_teams_hitl_app(
                     if incident_agents is not None
                     else {}
                 ),
+                **selector_options,
             )
         )
 

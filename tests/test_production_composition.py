@@ -60,7 +60,14 @@ def test_application_production_root_has_exact_sync_surface():
         signature.parameters
     ) == (
         "environment",
+        "capability_foundry_agent_binding_registry",
     )
+
+    selector_parameter = signature.parameters[
+        "capability_foundry_agent_binding_registry"
+    ]
+    assert selector_parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert selector_parameter.default is None
 
 
 def test_application_production_root_rejects_unstructured_environment_before_dependencies(
@@ -161,7 +168,13 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
         communication_runner,
         review_runner,
         incident_agents,
+        capability_foundry_agent_binding_registry,
     ):
+        assert isinstance(
+            capability_foundry_agent_binding_registry,
+            module.CapabilityFoundryAgentBindingRegistry,
+        )
+        assert capability_foundry_agent_binding_registry.count() == 0
         calls.append(
             (
                 "teams_host",
@@ -476,7 +489,13 @@ def test_phase23_production_incident_managed_identity_application_root_shared_ag
         communication_runner,
         review_runner,
         incident_agents,
+        capability_foundry_agent_binding_registry,
     ):
+        assert isinstance(
+            capability_foundry_agent_binding_registry,
+            module.CapabilityFoundryAgentBindingRegistry,
+        )
+        assert capability_foundry_agent_binding_registry.count() == 0
         calls.append(
             (
                 "teams",

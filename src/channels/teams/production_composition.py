@@ -207,12 +207,20 @@ from src.channels.teams.production_bootstrap import (
 )
 
 
+from src.workflows.incident_resolution.capability_foundry_agent_binding import (
+    CapabilityFoundryAgentBindingRegistry,
+)
+
+
 def build_production_teams_host_with_communication_and_incident_agents(
     environment,
     *,
     communication_runner: object,
     incident_agents: object,
     review_runner: object | None = None,
+    capability_foundry_agent_binding_registry: (
+        CapabilityFoundryAgentBindingRegistry | None
+    ) = None,
 ):
     """
     Propaga dependencias ya compuestas.
@@ -220,6 +228,21 @@ def build_production_teams_host_with_communication_and_incident_agents(
     Esta capa permanece agnóstica respecto a
     credenciales y proveedores cognitivos.
     """
+
+    # Only explicit selection crosses this layer; direct legacy calls stay unchanged.
+    selector_options = {}
+    if capability_foundry_agent_binding_registry is not None:
+        if not isinstance(
+            capability_foundry_agent_binding_registry,
+            CapabilityFoundryAgentBindingRegistry,
+        ):
+            raise TypeError(
+                "capability_foundry_agent_binding_registry debe ser "
+                "CapabilityFoundryAgentBindingRegistry."
+            )
+        selector_options["capability_foundry_agent_binding_registry"] = (
+            capability_foundry_agent_binding_registry
+        )
 
     if not isinstance(
         environment,
@@ -318,6 +341,7 @@ def build_production_teams_host_with_communication_and_incident_agents(
                 operator_identity_resolver=(
                     operator_identity_resolver
                 ),
+                **selector_options,
             )
         )
 
@@ -340,5 +364,6 @@ def build_production_teams_host_with_communication_and_incident_agents(
             incident_agents=(
                 incident_agents
             ),
+            **selector_options,
         )
     )

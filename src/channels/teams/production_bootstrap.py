@@ -308,6 +308,11 @@ def build_production_teams_hitl_app_with_communication(
         persistence=persistence,
     )
 
+from src.workflows.incident_resolution.capability_foundry_agent_binding import (
+    CapabilityFoundryAgentBindingRegistry,
+)
+
+
 def build_production_teams_hitl_app_with_communication_and_incident_agents(
     app_settings: (
         TeamsHitlAppSettings
@@ -321,6 +326,9 @@ def build_production_teams_hitl_app_with_communication_and_incident_agents(
     incident_agents: object,
     review_runner: object | None = None,
     operator_identity_resolver: object | None = None,
+    capability_foundry_agent_binding_registry: (
+        CapabilityFoundryAgentBindingRegistry | None
+    ) = None,
 ) -> ProductionTeamsHitlBootstrap:
     """
     Port productivo aditivo que propaga un bundle
@@ -328,6 +336,21 @@ def build_production_teams_hitl_app_with_communication_and_incident_agents(
 
     No construye credenciales ni conoce Foundry.
     """
+
+    # Only explicit selection crosses this layer; direct legacy calls stay unchanged.
+    selector_options = {}
+    if capability_foundry_agent_binding_registry is not None:
+        if not isinstance(
+            capability_foundry_agent_binding_registry,
+            CapabilityFoundryAgentBindingRegistry,
+        ):
+            raise TypeError(
+                "capability_foundry_agent_binding_registry debe ser "
+                "CapabilityFoundryAgentBindingRegistry."
+            )
+        selector_options["capability_foundry_agent_binding_registry"] = (
+            capability_foundry_agent_binding_registry
+        )
 
     if not isinstance(
         app_settings,
@@ -416,6 +439,7 @@ def build_production_teams_hitl_app_with_communication_and_incident_agents(
             incident_agents=(
                 incident_agents
             ),
+            **selector_options,
         )
 
     else:
@@ -442,6 +466,7 @@ def build_production_teams_hitl_app_with_communication_and_incident_agents(
             incident_agents=(
                 incident_agents
             ),
+            **selector_options,
         )
 
     if not isinstance(

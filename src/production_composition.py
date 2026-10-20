@@ -17,8 +17,17 @@ from src.channels.teams.production_composition import (
 )
 
 
+from src.workflows.incident_resolution.capability_foundry_agent_binding import (
+    CapabilityFoundryAgentBindingRegistry,
+)
+
+
 def build_production_application(
     environment,
+    *,
+    capability_foundry_agent_binding_registry: (
+        CapabilityFoundryAgentBindingRegistry | None
+    ) = None,
 ):
     if not isinstance(
         environment,
@@ -26,6 +35,21 @@ def build_production_application(
     ):
         raise TypeError(
             "environment debe implementar Mapping."
+        )
+
+    # Selection is explicit at the application root, including an empty registry.
+    # Each composition owns its default; a supplied registry keeps its identity.
+    if capability_foundry_agent_binding_registry is None:
+        capability_foundry_agent_binding_registry = (
+            CapabilityFoundryAgentBindingRegistry(bindings=())
+        )
+    elif not isinstance(
+        capability_foundry_agent_binding_registry,
+        CapabilityFoundryAgentBindingRegistry,
+    ):
+        raise TypeError(
+            "capability_foundry_agent_binding_registry debe ser "
+            "CapabilityFoundryAgentBindingRegistry."
         )
 
     foundry_settings = (
@@ -79,6 +103,9 @@ def build_production_application(
             ),
             incident_agents=(
                 incident_agents
+            ),
+            capability_foundry_agent_binding_registry=(
+                capability_foundry_agent_binding_registry
             ),
         )
     )
