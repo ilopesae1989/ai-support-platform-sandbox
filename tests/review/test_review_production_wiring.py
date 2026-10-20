@@ -251,7 +251,19 @@ def test_application_root_uses_single_agents_bundle_for_both_runners(monkeypatch
         lambda actual: calls.append(("agents", actual)) or agents,
     )
 
-    def fake_teams(env, *, communication_runner, review_runner, incident_agents):
+    def fake_teams(
+        env,
+        *,
+        communication_runner,
+        review_runner,
+        incident_agents,
+        capability_foundry_agent_binding_registry,
+    ):
+        assert isinstance(
+            capability_foundry_agent_binding_registry,
+            root.CapabilityFoundryAgentBindingRegistry,
+        )
+        assert capability_foundry_agent_binding_registry.count() == 0
         calls.append(("teams", env, communication_runner, review_runner, incident_agents))
         return bootstrap
 

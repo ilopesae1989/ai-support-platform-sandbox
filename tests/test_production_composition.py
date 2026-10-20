@@ -233,8 +233,10 @@ def test_application_root_composes_exact_foundry_and_teams_chain(
     ]
 
 
-def test_application_root_fails_closed_if_runner_factory_returns_non_callable(
+@pytest.mark.parametrize("runner_name", ("run_communication", "run_review"))
+def test_application_root_rejects_non_callable_required_runner_before_teams(
     monkeypatch,
+    runner_name,
 ):
     module = _module()
 
@@ -243,25 +245,42 @@ def test_application_root_fails_closed_if_runner_factory_returns_non_callable(
     }
 
     foundry_settings = object()
+    factory_calls = []
     teams_calls = []
+
+    def forbidden_runner(*args, **kwargs):
+        raise AssertionError("La composicion no debe invocar runners.")
+
+    class FakeProductionAgents:
+        run_communication = staticmethod(forbidden_runner)
+        run_review = staticmethod(forbidden_runner)
+
+    incident_agents = FakeProductionAgents()
+    setattr(incident_agents, runner_name, object())
+
+    def fake_settings(actual_environment):
+        factory_calls.append(("settings", actual_environment))
+        return foundry_settings
+
+    def fake_agents(actual_settings):
+        factory_calls.append(("agents", actual_settings))
+        return incident_agents
 
     monkeypatch.setattr(
         module,
         "build_foundry_production_settings",
-        lambda actual_environment: (
-            foundry_settings
-        ),
+        fake_settings,
     )
 
     monkeypatch.setattr(
         module,
-        "build_foundry_production_communication_runner",
-        lambda actual_settings: object(),
+        "build_foundry_production_agents",
+        fake_agents,
     )
 
     monkeypatch.setattr(
         module,
-        "build_production_teams_host_with_communication",
+        "build_production_teams_host_with_communication_and_incident_agents",
         lambda *args, **kwargs: (
             teams_calls.append(
                 (
@@ -273,12 +292,17 @@ def test_application_root_fails_closed_if_runner_factory_returns_non_callable(
     )
 
     with pytest.raises(
-        TypeError
+        TypeError,
+        match=rf"\b{runner_name}\b.*\bcallable\b",
     ):
         module.build_production_application(
             environment
         )
 
+    assert factory_calls == [
+        ("settings", environment),
+        ("agents", foundry_settings),
+    ]
     assert teams_calls == []
 
 
