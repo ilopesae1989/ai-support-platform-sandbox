@@ -16,6 +16,10 @@ from src.channels.teams.production_composition import (
     build_production_teams_host_with_communication_and_incident_agents,
 )
 
+from src.config.foundry_capability_bindings import (
+    build_capability_foundry_agent_binding_registry,
+)
+
 
 from src.workflows.incident_resolution.capability_foundry_agent_binding import (
     CapabilityFoundryAgentBindingRegistry,
@@ -37,11 +41,11 @@ def build_production_application(
             "environment debe implementar Mapping."
         )
 
-    # Selection is explicit at the application root, including an empty registry.
-    # Each composition owns its default; a supplied registry keeps its identity.
+    # Resolve explicit configuration before constructing provider dependencies.
+    # Absence keeps the selector empty; an injected registry retains its identity.
     if capability_foundry_agent_binding_registry is None:
         capability_foundry_agent_binding_registry = (
-            CapabilityFoundryAgentBindingRegistry(bindings=())
+            build_capability_foundry_agent_binding_registry(environment)
         )
     elif not isinstance(
         capability_foundry_agent_binding_registry,

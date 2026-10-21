@@ -242,7 +242,9 @@ class FoundryAgents:
             ),
 
             allow_preview=(
-                self._allow_preview
+                False
+                if definition.key == AgentKey.AZURE_OPERATIONS
+                else self._allow_preview
             ),
 
             default_options=(
