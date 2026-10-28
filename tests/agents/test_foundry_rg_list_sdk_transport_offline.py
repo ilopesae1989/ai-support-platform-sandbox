@@ -78,8 +78,13 @@ def test_configured_read_binding_serializes_version_limits_and_native_continuati
 
         return fail
 
-    # El runner focal aporta su política asyncio sin sockets. Este test la
-    # conserva y deniega conexiones, resolución, procesos y HTTP reales.
+    # Windows ProactorEventLoop uses an internal loopback socketpair at startup.
+    # Prepare only that loop before enabling the outbound network prohibitions.
+    # The SDK still runs under the strict guards and exclusive HTTPX MockTransport.
+    offline_loop = asyncio.new_event_loop()
+    request.addfinalizer(
+        lambda: None if offline_loop.is_closed() else offline_loop.close()
+    )
     monkeypatch.setattr(socket.socket, "connect", denied("socket.connect"))
     monkeypatch.setattr(socket.socket, "connect_ex", denied("socket.connect_ex"))
     monkeypatch.setattr(socket.socket, "sendto", denied("socket.sendto"))
@@ -407,7 +412,14 @@ def test_configured_read_binding_serializes_version_limits_and_native_continuati
     async def bounded_exercise():
         await asyncio.wait_for(exercise(), timeout=20.0)
 
-    asyncio.run(bounded_exercise())
+    def offline_loop_factory():
+        asyncio.set_event_loop(offline_loop)
+        return offline_loop
+
+    try:
+        asyncio.run(bounded_exercise(), loop_factory=offline_loop_factory)
+    finally:
+        asyncio.set_event_loop(None)
     assert len(captures) == 2
     assert len(synthetic_attempts) == 2
     assert len(created_http_clients) == 1

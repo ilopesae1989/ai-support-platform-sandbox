@@ -23,6 +23,7 @@ CERTIFIED_RUNTIME_REQUIREMENTS = {
     "microsoft-teams-apps==2.0.14",
     "azure-mgmt-compute==38.3.0",
     "mssql-python==1.14.0",
+    "cryptography==50.0.2",
 }
 
 
@@ -67,9 +68,7 @@ def test_runtime_requirements_manifest_exists():
 def test_runtime_requirements_are_exact_certified_direct_set():
     lines = _runtime_lines()
 
-    assert len(
-        lines
-    ) == 9
+    assert len(lines) == len(CERTIFIED_RUNTIME_REQUIREMENTS)
 
     assert set(
         lines
