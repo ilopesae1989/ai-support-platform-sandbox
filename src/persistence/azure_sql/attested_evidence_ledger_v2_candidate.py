@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from enum import StrEnum
-import re
 from typing import Any
 
 from src.workflows.incident_resolution.mcp_attested_evidence_store_offline import (
@@ -22,9 +21,6 @@ from src.workflows.incident_resolution.mcp_attested_evidence_store_offline impor
 from src.workflows.incident_resolution.mcp_authenticated_backend_bridge import PinnedOperationLink
 from src.workflows.incident_resolution.mcp_receipt_trust import IndependentReceiptVerifier
 
-
-_EXPECTED_UNIQUE = "UQ_attested_evidence_logical_v2"
-_DUPLICATE_NUMBER = re.compile(r"(?<![0-9])(?:2627|2601)(?![0-9])", re.ASCII)
 
 # Exact table name and parameter set, never interpolated from untrusted input.
 _INSERT = """
@@ -51,7 +47,8 @@ WHERE scope_id = %(scope_id)s AND issuer = %(issuer)s
 
 class CandidateSqlOutcome(StrEnum):
     NEW_OFFLINE_NO_AUTHORITY = "NEW_OFFLINE_NO_AUTHORITY"
-    DUPLICATE_OFFLINE_NO_AUTHORITY = "DUPLICATE_OFFLINE_NO_AUTHORITY"
+    DUPLICATE_OFFLINE_NO_AUTHORITY = "DUPLICATE_OFFLINE_NO_AUTHORITY"  # legacy candidate outcome, not emitted by INSERT-error classification
+    PRESENT_AFTER_INSERT_ERROR_UNCERTAIN_NO_AUTHORITY = "PRESENT_AFTER_INSERT_ERROR_UNCERTAIN_NO_AUTHORITY"
     PRESENT_OFFLINE_NO_AUTHORITY = "PRESENT_OFFLINE_NO_AUTHORITY"
     CONFLICT_FAIL_CLOSED = "CONFLICT_FAIL_CLOSED"
     COMMIT_OUTCOME_UNKNOWN = "COMMIT_OUTCOME_UNKNOWN"
@@ -96,23 +93,6 @@ def _expected_row(p: Mapping[str, object]) -> tuple[object, ...]:
     ))
 
 
-def _specific_unique_violation(error: Exception) -> bool:
-    """Defensive heuristic only; real driver/localization needs qualification.
-
-    The native duplicate error must name this exact unique index/constraint.
-    An arbitrary IntegrityError, CHECK error or deadlock is NEVER a duplicate.
-    """
-    parts = tuple(str(a) for a in getattr(error, "args", ()))
-    if not parts:
-        return False
-    msg = " ".join(parts)
-    return (
-        bool(_DUPLICATE_NUMBER.search(msg))
-        and _EXPECTED_UNIQUE in msg
-        and ("23000" in msg or "2627" in msg or "2601" in msg)
-    )
-
-
 def _close_silently(cursor: object, connection: object) -> None:
     for item in (cursor, connection):
         if item is None:
@@ -129,6 +109,8 @@ class AzureSqlAttestedEvidenceV2OfflineCandidate:
     The key properties are: independent re-verification before connection,
     exactly one INSERT attempt, conservative failed-commit classification and
     a fresh-connection read that never authorizes dispatch or retries INSERT.
+    Any INSERT failure returns an uncertain outcome even when a matching row
+    exists: the mssql-python engine error number is not a stable API.
     """
 
     def __init__(self, *, connection_factory: Callable[[], Any]) -> None:
@@ -150,12 +132,16 @@ class AzureSqlAttestedEvidenceV2OfflineCandidate:
             backend_verifier=backend_verifier,
         ))
 
-    def _lookup(self, params: Mapping[str, object]) -> CandidateSqlOutcome:
+    def _lookup(
+        self, params: Mapping[str, object], *, previous_connection: object | None = None
+    ) -> CandidateSqlOutcome:
         """Separate connection + read only; absence is ALWAYS uncertain."""
         connection = None
         cursor = None
         try:
             connection = self._factory()
+            if connection is previous_connection:
+                return CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
             cursor = connection.cursor()
             cursor.execute(_SELECT, _read_params(params))
             first = cursor.fetchone()
@@ -190,19 +176,25 @@ class AzureSqlAttestedEvidenceV2OfflineCandidate:
         cursor = None
         try:
             connection = self._factory()
+            # The candidate must never accept an auto-committing INSERT: an
+            # execute() error could otherwise follow a permanent side effect.
+            if getattr(connection, "autocommit", None) is not False:
+                return CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
             cursor = connection.cursor()
             try:
                 cursor.execute(_INSERT, params)
-            except Exception as error:
+            except Exception:
+                # mssql-python 1.14 does not reliably expose engine 2601/2627.
+                # Roll back, then perform ONE SELECT on a DIFFERENT connection.
+                # Even a perfect row match does NOT prove the INSERT error was
+                # caused by the expected unique constraint. Never emit DUPLICATE.
                 try:
                     connection.rollback()
                 except Exception:
                     return CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
-                if not _specific_unique_violation(error):
-                    return CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
-                found = self._lookup(params)
+                found = self._lookup(params, previous_connection=connection)
                 if found == CandidateSqlOutcome.PRESENT_OFFLINE_NO_AUTHORITY:
-                    return CandidateSqlOutcome.DUPLICATE_OFFLINE_NO_AUTHORITY
+                    return CandidateSqlOutcome.PRESENT_AFTER_INSERT_ERROR_UNCERTAIN_NO_AUTHORITY
                 return found
             # Once COMMIT begins, even a rollback result cannot prove it failed.
             try:

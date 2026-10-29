@@ -40,6 +40,7 @@ class StubConnection:
         self.pending = None
         self.closed = False
         self.rolled_back = False
+        self.autocommit = False
 
     def cursor(self):
         return StubCursor(self)
@@ -135,7 +136,7 @@ def test_insert_once_and_binary_digest(setup):
 def test_duplicate_only_after_verified_re_read(setup):
     db, ledger, args, _ = setup
     assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.NEW_OFFLINE_NO_AUTHORITY
-    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.DUPLICATE_OFFLINE_NO_AUTHORITY
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.PRESENT_AFTER_INSERT_ERROR_UNCERTAIN_NO_AUTHORITY
     assert db.commit_attempts == 1
     assert db.opened == 3
 
@@ -187,15 +188,15 @@ def test_reconcile_commit_unknown_absent_never_auto_retries(setup):
 def test_error_of_other_constraint_is_not_duplicate(setup):
     db, ledger, args, _ = setup
     db.fail_insert = UniqueViolation("23000 CHECK constraint violated (547)")
-    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
-    assert db.opened == 1
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.ABSENT_UNCERTAIN_NO_RETRY
+    assert db.opened == 2
 
 
 def test_duplicate_number_without_expected_named_constraint_is_not_duplicate(setup):
     db, ledger, args, _ = setup
     db.fail_insert = UniqueViolation("23000 Violation of other constraint (2627)")
-    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
-    assert db.opened == 1
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.ABSENT_UNCERTAIN_NO_RETRY
+    assert db.opened == 2
 
 
 def test_replay_reconciliation_read_failure_fail_closed(setup):
@@ -232,7 +233,7 @@ def test_claim_must_be_reprepared_and_forged_input_not_accepted(setup, claim):
 def test_only_first_insert_has_side_effects(setup):
     db, ledger, args, _ = setup
     assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.NEW_OFFLINE_NO_AUTHORITY
-    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.DUPLICATE_OFFLINE_NO_AUTHORITY
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.PRESENT_AFTER_INSERT_ERROR_UNCERTAIN_NO_AUTHORITY
     assert all("operation_dispatch_claims" not in query for query, _ in db.executions)
     assert all("mcp" not in query.lower() or "attested" in query.lower() for query, _ in db.executions)
 
@@ -240,3 +241,162 @@ def test_only_first_insert_has_side_effects(setup):
 def test_bad_factory_fails_at_construction():
     with pytest.raises(TypeError):
         candidate.AzureSqlAttestedEvidenceV2OfflineCandidate(connection_factory=None)
+
+
+class Driver114IntegrityError(Exception):
+    """Synthetic shape copied from the observed 1.14.0 surface; not a LIVE call."""
+    driver_error = "Integrity constraint violation"
+    ddbc_error = (
+        "[Microsoft][SQL Server]Violation of UNIQUE KEY constraint "
+        "'UQ_attested_evidence_logical_v2'"
+    )
+    def __init__(self):
+        super().__init__("Driver Error: Integrity constraint violation")
+
+
+def test_driver_114_duplicate_without_engine_number_is_uncertain_presence(setup):
+    db, ledger, args, _ = setup
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.NEW_OFFLINE_NO_AUTHORITY
+    db.fail_insert = Driver114IntegrityError()
+    result = ledger.observe_signed(**args)
+    assert result == candidate.CandidateSqlOutcome.PRESENT_AFTER_INSERT_ERROR_UNCERTAIN_NO_AUTHORITY
+    assert db.commit_attempts == 1
+    assert db.opened == 3  # one insert, another insert failure, one SELECT
+    assert sum('INSERT INTO' in sql for sql, _ in db.executions) == 2
+    assert sum('SELECT subject_sha256' in sql for sql, _ in db.executions) == 1
+
+
+def test_driver_114_duplicate_number_unavailable_absent_is_no_retry(setup):
+    db, ledger, args, _ = setup
+    db.fail_insert = Driver114IntegrityError()
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.ABSENT_UNCERTAIN_NO_RETRY
+    assert db.commit_attempts == 0
+    assert sum('INSERT INTO' in sql for sql, _ in db.executions) == 1
+    assert sum('SELECT subject_sha256' in sql for sql, _ in db.executions) == 1
+
+
+def test_driver_114_existing_row_modified_attestor_kid_is_conflict(setup, claim):
+    db, ledger, args, _ = setup
+    p = candidate._params(claim)
+    db.rows[tuple(candidate._read_params(p).values())] = (
+        *candidate._expected_row(p)[:8], b"\xee" * 32, candidate._expected_row(p)[9]
+    )
+    db.fail_insert = Driver114IntegrityError()
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.CONFLICT_FAIL_CLOSED
+    assert db.commit_attempts == 0
+
+
+def test_driver_114_reconciliation_read_failed_fail_closed(setup):
+    db, ledger, args, _ = setup
+    db.fail_insert = Driver114IntegrityError()
+    db.fail_read = True
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
+    assert db.commit_attempts == 0
+
+
+def test_driver_114_row_present_but_check_violation_is_never_duplicate(setup, claim):
+    db, ledger, args, _ = setup
+    p = candidate._params(claim)
+    db.rows[tuple(candidate._read_params(p).values())] = candidate._expected_row(p)
+    db.fail_insert = UniqueViolation("CHECK violation, no unique number")
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.PRESENT_AFTER_INSERT_ERROR_UNCERTAIN_NO_AUTHORITY
+
+
+def test_autocommit_true_prevents_insert(setup):
+    db, ledger, args, _ = setup
+    original_connect = db.connect
+    def wrong_connect():
+        conn = original_connect()
+        conn.autocommit = True
+        return conn
+    ledger._factory = wrong_connect
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
+    assert db.executions == []
+    assert db.commit_attempts == 0
+
+
+def test_missing_autocommit_property_prevents_insert(setup):
+    db, ledger, args, _ = setup
+    original_connect = db.connect
+    def wrong_connect():
+        conn = original_connect()
+        del conn.autocommit
+        return conn
+    ledger._factory = wrong_connect
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
+    assert db.executions == []
+
+
+def test_rollback_failed_does_not_attempt_lookup_or_commit(setup):
+    db, ledger, args, _ = setup
+    db.fail_insert = Driver114IntegrityError()
+    original_connect = db.connect
+    def wrong_connect():
+        conn = original_connect()
+        def fail_rollback():
+            raise ConnectionError("synthetic rollback loss")
+        conn.rollback = fail_rollback
+        return conn
+    ledger._factory = wrong_connect
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
+    assert len(db.executions) == 1
+    assert db.opened == 1
+    assert db.commit_attempts == 0
+
+
+def test_reconciliation_factory_must_yield_separate_object(setup, claim):
+    db, ledger, args, _ = setup
+    db.fail_insert = Driver114IntegrityError()
+    reused = db.connect()
+    ledger._factory = lambda: reused
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
+    assert len(db.executions) == 1
+    assert db.commit_attempts == 0
+
+
+def test_no_positive_duplicate_even_with_synthetic_2627_message(setup, claim):
+    db, ledger, args, _ = setup
+    p = candidate._params(claim)
+    db.rows[tuple(candidate._read_params(p).values())] = candidate._expected_row(p)
+    db.fail_insert = UniqueViolation("23000 UQ_attested_evidence_logical_v2 (2627)")
+    result = ledger.observe_signed(**args)
+    assert result == candidate.CandidateSqlOutcome.PRESENT_AFTER_INSERT_ERROR_UNCERTAIN_NO_AUTHORITY
+    assert result != candidate.CandidateSqlOutcome.DUPLICATE_OFFLINE_NO_AUTHORITY
+
+
+@pytest.mark.parametrize("column_position", range(10))
+def test_any_mismatched_evidence_field_is_conflict(setup, claim, column_position):
+    db, ledger, args, _ = setup
+    values = candidate._params(claim)
+    row = list(candidate._expected_row(values))
+    row[column_position] = (
+        b"\x13" * 32 if isinstance(row[column_position], bytes)
+        else "different-" + row[column_position]
+    )
+    db.rows[tuple(candidate._read_params(values).values())] = tuple(row)
+    db.fail_insert = Driver114IntegrityError()
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.CONFLICT_FAIL_CLOSED
+    assert db.commit_attempts == 0
+    assert sum("INSERT INTO" in s for s, _ in db.executions) == 1
+    assert sum("SELECT subject_sha256" in s for s, _ in db.executions) == 1
+
+
+class _FalselyEqualToFalse:
+    def __eq__(self, other):
+        return other is False
+
+
+@pytest.mark.parametrize("non_boolean_autocommit", [
+    0, 0.0, _FalselyEqualToFalse(), "false",
+])
+def test_autocommit_must_be_literal_false_not_merely_equal(setup, non_boolean_autocommit):
+    db, ledger, args, _ = setup
+    original_connect = db.connect
+    def invalid_factory():
+        conn = original_connect()
+        conn.autocommit = non_boolean_autocommit
+        return conn
+    ledger._factory = invalid_factory
+    assert ledger.observe_signed(**args) == candidate.CandidateSqlOutcome.STORAGE_FAILURE_NO_AUTHORITY
+    assert db.executions == []
+    assert db.commit_attempts == 0
