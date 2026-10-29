@@ -190,7 +190,8 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 """
 _SELECT = """
 SELECT subject_sha256, operation_id, workflow_id, backend_event_id,
-       backend_request_id, bridge_id, approval_state, schema_version
+       backend_request_id, bridge_id, approval_state,
+       backend_kid, attestor_kid, schema_version
 FROM offline_attested_evidence_claims
 WHERE scope=? AND issuer=? AND domain=? AND logical_sha256=?
 """
@@ -227,7 +228,8 @@ class SqliteOfflineEvidenceLedger:
     def _details(claim: OfflinePreparedEvidenceV2) -> tuple[str, ...]:
         return (claim.subject_sha256, claim.operation_id, claim.workflow_id,
                 claim.backend_event_id, claim.backend_request_id,
-                claim.bridge_id, claim.approval_state, claim.schema_version)
+                claim.bridge_id, claim.approval_state, claim.backend_kid,
+                claim.attestor_kid, claim.schema_version)
 
     @staticmethod
     def _require_claim(claim: OfflinePreparedEvidenceV2) -> None:
@@ -254,8 +256,7 @@ class SqliteOfflineEvidenceLedger:
         try:
             conn.execute("BEGIN IMMEDIATE")
             try:
-                conn.execute(_INSERT, (*self._key(claim), *self._details(claim)[:-1],
-                                      claim.backend_kid, claim.attestor_kid, claim.schema_version))
+                conn.execute(_INSERT, (*self._key(claim), *self._details(claim)))
             except sqlite3.IntegrityError as exc:
                 # Never equate any generic CHECK violation with a duplicate.
                 if getattr(exc, "sqlite_errorcode", None) not in (

@@ -314,3 +314,26 @@ def test_no_live_execution_imports_or_data_plane_calls():
                       "mssql_python.connect", "CREATE ROLE", "CREATE USER",
                       "UPDATE operation_dispatch_claims", "from azure"):
         assert forbidden not in content
+
+@pytest.mark.parametrize("changed_key", ("backend_kid", "attestor_kid"))
+def test_same_logical_evidence_different_signer_is_conflict(tmp_path, changed_key):
+    """A new signer fingerprint is a conflict, not a byte-identical replay.
+
+    This exercises only SQLite comparison with synthetic values. It cannot
+    prove that a new signature is authorized or that two LIVE keys are valid.
+    """
+    store = _store(tmp_path)
+    original = OfflinePreparedEvidenceV2(
+        scope="scope-long-enough", issuer="mcp_backend",
+        domain="event:MCP_TOOL_DISPATCH_STARTED", operation_id="op-1",
+        workflow_id="workflow-1", backend_event_id="event-1",
+        backend_request_id="backend-request-1", bridge_id="bridge-1",
+        approval_state="PENDING", logical_sha256="a" * 64,
+        subject_sha256="b" * 64, backend_kid="c" * 64,
+        attestor_kid="d" * 64,
+    )
+    changed = replace(original, **{changed_key: "e" * 64})
+    assert store.observe(original) is OfflineEvidenceResult.NEW_OFFLINE_NO_AUTHORITY
+    assert store.observe(changed) is OfflineEvidenceResult.CONFLICT_REJECTED
+    assert store.reconcile_unknown(changed) is OfflineEvidenceResult.CONFLICT_REJECTED
+    assert store.reconcile_unknown(original) is OfflineEvidenceResult.CONFIRMED_PRESENT_NO_AUTHORITY
