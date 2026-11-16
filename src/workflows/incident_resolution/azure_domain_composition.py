@@ -8,6 +8,7 @@ from src.agents.foundry_agents import FoundryAgents
 
 from .azure_vm_instance_view import AzureVmPowerStateReader
 from .capability_foundry_agent_binding import CapabilityFoundryAgentBindingRegistry
+from .azure_read_tool_authority import AzureReadToolAuthorityRegistry
 from .domain_execution_binding import DomainExecutionBinding
 from .domain_execution_path import DomainExecutionPath
 from .executors.azure_operations import AzureOperationsExecutor
@@ -63,6 +64,7 @@ def build_azure_domain_composition(
     capability_foundry_agent_binding_registry: CapabilityFoundryAgentBindingRegistry | None = None,
     vm_start_route: GovernedVmStartRoute | None = None,
     attestation_publisher=None,
+    azure_read_tool_authority_registry: AzureReadToolAuthorityRegistry | None = None,
 ) -> AzureDomainComposition:
     """Construye nodos nuevos con dependencias suministradas por el caller.
 
@@ -91,6 +93,10 @@ def build_azure_domain_composition(
     pre_call = AzurePreCallSecurityExecutor()
     operation_start = OperationStartExecutor()
     selector_options = {}
+    if azure_read_tool_authority_registry is not None:
+        if not isinstance(azure_read_tool_authority_registry, AzureReadToolAuthorityRegistry):
+            raise TypeError("Invalid READ authority registry.")
+        selector_options["azure_read_tool_authority_registry"] = azure_read_tool_authority_registry
     if attestation_publisher is not None:
         from src.attestation.governor_outbox import GovernorAttestationPublisher
         if type(attestation_publisher) is not GovernorAttestationPublisher:

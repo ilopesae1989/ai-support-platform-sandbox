@@ -459,209 +459,35 @@ def test_vm_observation_completes_wait_recheck_before_any_azure_read():
     )
 
 
-def test_workflow_injects_same_wait_ledger_into_transition_and_observation():
-
-    # F26.3: follow the composition boundary; keep the security invariant.
-    base = Path(__file__).resolve().parents[3] / "src/workflows/incident_resolution"
-
-    def read_function(path, name):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        matches = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name]
-        assert len(matches) == 1, name
-        return matches[0]
-
-    def assert_exact_selector_spread(fn, call, expanded):
-        # F27.3-R14F: permit only the typed single-key opt-in registry.
-        # The pre-existing reader and WAIT checks below remain unchanged.
-        registry = "capability_foundry_agent_binding_registry"
-        assert isinstance(expanded.value, ast.Name)
-        assert isinstance(expanded.value.ctx, ast.Load)
-        assert expanded.value.id == "selector_options"
-
-        initializers = [s for s in fn.body if isinstance(s, ast.Assign)
-                        and len(s.targets) == 1 and isinstance(s.targets[0], ast.Name)
-                        and s.targets[0].id == "selector_options"]
-        assert len(initializers) == 1
-        initializer = initializers[0]
-        assert isinstance(initializer.value, ast.Dict)
-        assert initializer.value.keys == initializer.value.values == []
-        assert initializer.lineno < call.lineno
-
-        def enabled(node):
-            return (isinstance(node, ast.Compare)
-                    and isinstance(node.left, ast.Name)
-                    and node.left.id == registry
-                    and len(node.ops) == len(node.comparators) == 1
-                    and isinstance(node.ops[0], ast.IsNot)
-                    and isinstance(node.comparators[0], ast.Constant)
-                    and node.comparators[0].value is None)
-
-        def bad_type(node):
-            if not isinstance(node, ast.UnaryOp) or not isinstance(node.op, ast.Not):
-                return False
-            c = node.operand
-            return (isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
-                    and c.func.id == "isinstance" and not c.keywords
-                    and len(c.args) == 2
-                    and isinstance(c.args[0], ast.Name) and c.args[0].id == registry
-                    and isinstance(c.args[1], ast.Name)
-                    and c.args[1].id == "CapabilityFoundryAgentBindingRegistry")
-
-        def type_error(stmt):
-            return (isinstance(stmt, ast.Raise)
-                    and isinstance(stmt.exc, ast.Call)
-                    and isinstance(stmt.exc.func, ast.Name)
-                    and stmt.exc.func.id == "TypeError")
-
-        gates = [s for s in fn.body if isinstance(s, ast.If) and enabled(s.test)]
-        assert len(gates) == 1
-        gate = gates[0]
-        assert not gate.orelse
-        assert initializer.lineno < gate.lineno < call.lineno
-        assert len(gate.body) in (1, 2)
-
-        mutation = gate.body[-1]
-        assert isinstance(mutation, ast.Assign) and len(mutation.targets) == 1
-        key = mutation.targets[0]
-        assert isinstance(key, ast.Subscript) and isinstance(key.ctx, ast.Store)
-        assert isinstance(key.value, ast.Name) and key.value.id == "selector_options"
-        assert isinstance(key.slice, ast.Constant) and key.slice.value == registry
-        assert isinstance(mutation.value, ast.Name) and mutation.value.id == registry
-        assert mutation.lineno < call.lineno
-
-        if len(gate.body) == 2:
-            check = gate.body[0]
-            assert isinstance(check, ast.If) and bad_type(check.test)
-            assert not check.orelse and len(check.body) == 1
-            assert type_error(check.body[0])
-            assert check.lineno < mutation.lineno
-        else:
-            checks = [s for s in fn.body if isinstance(s, ast.If)
-                      and isinstance(s.test, ast.BoolOp)
-                      and isinstance(s.test.op, ast.And)
-                      and len(s.test.values) == 2
-                      and enabled(s.test.values[0])
-                      and bad_type(s.test.values[1])]
-            assert len(checks) == 1
-            check = checks[0]
-            assert not check.orelse and len(check.body) == 1
-            assert type_error(check.body[0])
-            assert check.lineno < initializer.lineno
-
-        # The only additional key is the explicitly typed WRITE route. Its
-        # validation and forwarding do not grant operational authority.
-        write_contract = ast.parse(
-            "if vm_start_route is not None:\n"
-            "    if not isinstance(vm_start_route, GovernedVmStartRoute):\n"
-            "        raise TypeError('vm_start_route must be GovernedVmStartRoute.')\n"
-            "    selector_options['vm_start_route'] = vm_start_route\n"
-        ).body[0]
-        write_gates = [n for n in fn.body if isinstance(n, ast.If)
-                       and isinstance(n.test, ast.Compare)
-                       and isinstance(n.test.left, ast.Name)
-                       and n.test.left.id == "vm_start_route" and n.lineno < call.lineno]
-        assert len(write_gates) == 1
-        write_gate = write_gates[0]
-        assert ast.dump(write_gate) == ast.dump(write_contract)
-        assert initializer.lineno < write_gate.lineno < call.lineno
-        write_key = write_gate.body[-1].targets[0].value
-
-        # The attestation handoff is typed and forwarded only to operations.
-        publisher_contract = ast.parse(
-            "if attestation_publisher is not None:\n"
-            "    from src.attestation.governor_outbox import GovernorAttestationPublisher\n"
-            "    if type(attestation_publisher) is not GovernorAttestationPublisher:\n"
-            "        raise TypeError('Explicit governor attestation publisher required')\n"
-            "    selector_options['attestation_publisher'] = attestation_publisher\n"
-        ).body[0]
-        publisher_gates = [n for n in fn.body if isinstance(n, ast.If)
-                           and isinstance(n.test, ast.Compare)
-                           and isinstance(n.test.left, ast.Name)
-                           and n.test.left.id == "attestation_publisher"]
-        assert len(publisher_gates) == 1
-        publisher_gate = publisher_gates[0]
-        assert ast.dump(publisher_gate) == ast.dump(publisher_contract)
-        assert initializer.lineno < publisher_gate.lineno < call.lineno
-        publisher_key = publisher_gate.body[-1].targets[0].value
-
-        # No alias, reassignment, update(), extra key or extra consumer.
-        references = [n for n in ast.walk(fn)
-                      if isinstance(n, ast.Name) and n.id == "selector_options"]
-        assert len(references) == 5
-        assert {id(n) for n in references} == {
-            id(initializer.targets[0]), id(key.value), id(write_key), id(publisher_key), id(expanded.value)
-        }
-
-    def one_call(fn, name):
-        matches = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
-                   and isinstance(n.func, ast.Name) and n.func.id == name]
-        assert len(matches) == 1, name
-        call = matches[0]
-        assert not call.args
-        named = [k.arg for k in call.keywords if k.arg is not None]
-        assert len(named) == len(set(named))
-        expansions = [k for k in call.keywords if k.arg is None]
-        if name == "build_azure_domain_composition":
-            assert named == ["agents", "operation_dispatch_ledger",
-                             "wait_recheck_consumption_ledger",
-                             "azure_vm_power_state_reader"]
-            assert len(expansions) == 1 and call.keywords[-1] is expansions[0]
-            assert "capability_foundry_agent_binding_registry" not in named
-            assert_exact_selector_spread(fn, call, expansions[0])
-        elif name == "AzureOperationsExecutor":
-            assert named == ["agents", "operation_dispatch_ledger"]
-            assert len(expansions) == 1 and call.keywords[-1] is expansions[0]
-            assert "capability_foundry_agent_binding_registry" not in named
-            assert_exact_selector_spread(fn, call, expansions[0])
-        else:
-            assert not expansions
-        return call
-
-    def name_argument(call, keyword, name):
-        matches = [k.value for k in call.keywords if k.arg == keyword]
-        assert len(matches) == 1, keyword
-        value = matches[0]
-        assert isinstance(value, ast.Name) and isinstance(value.ctx, ast.Load)
-        assert value.id == name, keyword
-        return value
-
-    def assigned(fn, name):
-        matches = [n.value for n in fn.body if isinstance(n, ast.Assign)
-                   and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
-                   and n.targets[0].id == name]
-        writes = [n for n in ast.walk(fn) if isinstance(n, ast.Name)
-                  and n.id == name and isinstance(n.ctx, (ast.Store, ast.Del))]
-        assert len(matches) == len(writes) == 1, name
-        return matches[0]
-
-    wf = read_function(base / "workflow.py", "build_incident_resolution_workflow")
-    factory = read_function(base / "azure_domain_composition.py", "build_azure_domain_composition")
-    forwarded = one_call(wf, "build_azure_domain_composition")
-    governed_executor = one_call(factory, "AzureOperationsExecutor")
-    name_argument(governed_executor, "agents", "agents")
-    observed = one_call(factory, "AzureVmPostOperationObservationExecutor")
-    assert assigned(wf, "azure_composition") is forwarded
-    assert assigned(factory, "observation") is observed
-    assert ast.unparse(assigned(wf, "azure_vm_post_operation_observation")) == (
-        "azure_composition.post_operation_observation"
+def test_workflow_injects_same_wait_ledger_into_transition_and_observation(monkeypatch):
+    # F46: exercise actual graph composition rather than count AST statements.
+    # All providers are inert; the native SDK constructs the graph.
+    from tests.workflows.incident_resolution.test_workflow_azure_composition_wiring import (
+        install_probe, members, assert_graph,
     )
-    returned = one_call(factory, "AzureDomainComposition")
-    exits = [n for n in factory.body if isinstance(n, ast.Return)]
-    assert len(exits) == 1 and exits[0].value is returned
-    name_argument(returned, "post_operation_observation", "observation")
+    from tests.workflows.incident_resolution.test_azure_domain_composition import dependencies
+    from tests.test_production_capability_foundry_agent_wiring import _registry
+    from src.workflows.incident_resolution import workflow as module
+    probe = install_probe(monkeypatch)
+    deps = dependencies()
+    for configured in (False, True):
+        options = dict(deps)
+        if configured:
+            options["capability_foundry_agent_binding_registry"] = _registry(populated=True)
+        module.build_incident_resolution_workflow(**options)
+        composition = probe.compositions[-1]
+        builder = probe.builders[-1]
+        actual_nodes = members(builder)
+        assert_graph(builder)
+        ledger = deps["wait_recheck_consumption_ledger"]
+        transition = actual_nodes["ProcedureTransitionExecutor"]
+        assert probe.calls[-1]["wait_recheck_consumption_ledger"] is ledger
+        assert composition.post_operation_observation._wait_recheck_consumption_ledger is ledger
+        assert transition._wait_recheck_consumption_ledger is ledger
+        assert composition.execution_binding.executor._operation_dispatch_ledger is deps["operation_dispatch_ledger"]
+        if configured:
+            assert transition._azure_read_tool_authority_registry is composition.execution_binding.executor._azure_read_tool_authority_registry
 
-    transition = one_call(wf, "ProcedureTransitionExecutor")
-    name_argument(forwarded, "wait_recheck_consumption_ledger", "wait_recheck_ledger")
-    name_argument(transition, "wait_recheck_consumption_ledger", "wait_recheck_ledger")
-    name_argument(observed, "wait_recheck_consumption_ledger", "wait_recheck_consumption_ledger")
-    parameters = factory.args.posonlyargs + factory.args.args + factory.args.kwonlyargs
-    assert sum(a.arg == "wait_recheck_consumption_ledger" for a in parameters) == 1
-    assert not any(isinstance(n, ast.Name) and n.id == "wait_recheck_consumption_ledger"
-                   and isinstance(n.ctx, (ast.Store, ast.Del)) for n in ast.walk(factory))
-    # The shared reference must not be rebound between its two consumers.
-    writes = [n for n in ast.walk(wf) if isinstance(n, ast.Name)
-              and n.id == "wait_recheck_ledger" and isinstance(n.ctx, (ast.Store, ast.Del))]
-    assert writes and all(n.lineno < min(forwarded.lineno, transition.lineno) for n in writes)
 
 @pytest.mark.asyncio
 async def test_real_vm_observation_completes_before_reader_and_preserves_wait_identity():

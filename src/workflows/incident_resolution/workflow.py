@@ -315,9 +315,21 @@ def build_incident_resolution_workflow(
     # --------------------------------------------------
     #
 
+    # The SDK graph signature contains executor IDs. Bind the start node to
+    # trusted deployment configuration so restore rejects changed publications
+    # before any handler runs. Legacy graph IDs remain unchanged. This is a
+    # compatibility barrier, not a migration or remote-session recovery mechanism.
+    classification_options = {}
+    deployment_fingerprint = getattr(foundry_agents, "deployment_fingerprint", None)
+    if isinstance(deployment_fingerprint, str):
+        import re
+        if not re.fullmatch(r"[0-9a-f]{64}", deployment_fingerprint):
+            raise ValueError("Invalid deployment fingerprint.")
+        classification_options["id"] = "classification-" + deployment_fingerprint
     classification = (
         ClassificationExecutor(
             agents=foundry_agents,
+            **classification_options,
         )
     )
 
@@ -369,6 +381,7 @@ def build_incident_resolution_workflow(
 
     # Preserve the F26/F27.1 default factory kwargs exactly when disabled.
     selector_options = {}
+    transition_options = {}
     if attestation_publisher is not None:
         from src.attestation.governor_outbox import GovernorAttestationPublisher
         if type(attestation_publisher) is not GovernorAttestationPublisher:
@@ -387,6 +400,11 @@ def build_incident_resolution_workflow(
         selector_options["capability_foundry_agent_binding_registry"] = (
             capability_foundry_agent_binding_registry
         )
+        # Resolve once from trusted composition. Even an explicitly empty
+        # registry stays empty; result acceptance cannot fall back to legacy.
+        read_authorities = capability_foundry_agent_binding_registry.read_authority_registry()
+        selector_options["azure_read_tool_authority_registry"] = read_authorities
+        transition_options["azure_read_tool_authority_registry"] = read_authorities
 
     azure_composition = build_azure_domain_composition(
         agents=foundry_agents,
@@ -493,7 +511,8 @@ def build_incident_resolution_workflow(
         ProcedureTransitionExecutor(
             wait_recheck_consumption_ledger=(
                 wait_recheck_ledger
-            )
+            ),
+            **transition_options,
         )
     )
 

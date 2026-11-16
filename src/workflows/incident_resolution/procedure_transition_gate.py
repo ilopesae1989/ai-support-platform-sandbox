@@ -33,6 +33,9 @@ from src.workflows.incident_resolution.procedure_validation_models import (
 )
 
 from src.workflows.incident_resolution.rg_list_acceptance import rg_list_content_accepted
+from src.workflows.incident_resolution.azure_read_tool_authority import (
+    AzureReadToolAuthorityRegistry, AzureReadToolAuthorityRegistryError,
+)
 
 
 class ProcedureTransitionOutcome(BaseModel):
@@ -530,6 +533,7 @@ def _build_verification_evidence(
 def _rg_list_technical_failure(
     state: ProcedureRuntimeState,
     result: OperationResult,
+    azure_read_tool_authority_registry: AzureReadToolAuthorityRegistry | None = None,
 ) -> bool:
     """Apply RG List's deterministic acceptance contract, preserving legacy routes.
 
@@ -556,13 +560,19 @@ def _rg_list_technical_failure(
     if state.step.hitl_required != result.hitl_required:
         raise ValueError("RG List HITL policy differs from the authoritative step.")
 
+    authority = None
+    if azure_read_tool_authority_registry is not None:
+        try:
+            authority = azure_read_tool_authority_registry.get(capability)
+        except AzureReadToolAuthorityRegistryError:
+            return True
     return (
         result.success is not True
         or result.technical_success is not True
         or result.error is not None
         or result.evidence is None
         or result.evidence.derive_technical_success() is not True
-        or not rg_list_content_accepted(result)
+        or not rg_list_content_accepted(result, authority=authority)
     )
 
 
@@ -570,6 +580,7 @@ def apply_procedure_validation_transition_with_outcome(
     *,
     state: ProcedureRuntimeState,
     context: ProcedureValidationContext,
+    azure_read_tool_authority_registry: AzureReadToolAuthorityRegistry | None = None,
 ) -> ProcedureTransitionOutcome:
     """
     Única puerta determinista entre:
@@ -588,6 +599,10 @@ def apply_procedure_validation_transition_with_outcome(
     Procedure Validation propone.
     Python autoriza y aplica la transición.
     """
+
+    if (azure_read_tool_authority_registry is not None
+            and not isinstance(azure_read_tool_authority_registry, AzureReadToolAuthorityRegistry)):
+        raise TypeError("Invalid READ authority registry.")
 
     trusted_state = (
         _revalidate_state(
@@ -641,7 +656,7 @@ def apply_procedure_validation_transition_with_outcome(
 
     runtime = ProcedureRuntime()
 
-    if _rg_list_technical_failure(trusted_state, request_result):
+    if _rg_list_technical_failure(trusted_state, request_result, azure_read_tool_authority_registry):
         # BLOCKED is a terminal non-operational transition. Keep the original
         # operation evidence and cognitive proposal for review; never turn an
         # uncertain result into a retry, advance, or resolved workflow.
@@ -692,6 +707,7 @@ def apply_procedure_validation_transition(
     *,
     state: ProcedureRuntimeState,
     context: ProcedureValidationContext,
+    azure_read_tool_authority_registry: AzureReadToolAuthorityRegistry | None = None,
 ) -> ProcedureRuntimeState:
     """
     Wrapper historico de compatibilidad.
@@ -709,6 +725,8 @@ def apply_procedure_validation_transition(
         apply_procedure_validation_transition_with_outcome(
             state=state,
             context=context,
+            **({"azure_read_tool_authority_registry": azure_read_tool_authority_registry}
+               if azure_read_tool_authority_registry is not None else {}),
         )
         .state
     )

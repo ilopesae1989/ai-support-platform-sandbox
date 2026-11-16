@@ -125,7 +125,13 @@ class FoundryAgents:
         *,
         credential: object | None = None,
         allow_preview: bool = False,
+        deployment_fingerprint: str | None = None,
     ) -> None:
+        if (deployment_fingerprint is not None
+                and (type(deployment_fingerprint) is not str
+                     or not re.fullmatch(r"[0-9a-f]{64}", deployment_fingerprint))):
+            raise ValueError("Invalid deployment fingerprint.")
+        self._deployment_fingerprint = deployment_fingerprint
         self._project_endpoint = (
             project_endpoint
             or os.environ.get(
@@ -176,6 +182,11 @@ class FoundryAgents:
             if catalog is not None
             else build_agent_catalog()
         )
+
+    @property
+    def deployment_fingerprint(self) -> str | None:
+        """Host configuration compatibility, not permission or backend evidence."""
+        return self._deployment_fingerprint
 
     @property
     def project_endpoint(self) -> str:

@@ -21,6 +21,8 @@ class IsolatedVmStartFoundryAgents(FoundryAgents):
     def __init__(
         self, *, project_endpoint: str, credential: object,
         vm_start_binding: VmStartFoundryBinding,
+        catalog=None,
+        deployment_fingerprint=None,
     ) -> None:
         if not isinstance(vm_start_binding, VmStartFoundryBinding):
             raise TypeError("An explicit VM_START binding is required.")
@@ -34,6 +36,8 @@ class IsolatedVmStartFoundryAgents(FoundryAgents):
             # Preserve the existing cognitive-agent configuration. The new
             # WRITE adapter explicitly sets allow_preview=False/API v1.
             allow_preview=True,
+            **({"catalog": catalog} if catalog is not None else {}),
+            **({"deployment_fingerprint": deployment_fingerprint} if deployment_fingerprint is not None else {}),
         )
 
     def _create_agent(self, definition: FoundryAgentDefinition):
@@ -50,6 +54,8 @@ class IsolatedVmStartFoundryAgents(FoundryAgents):
 
 def build_vm_start_production_agents(
     settings: FoundryProductionSettings, *, vm_start_binding: VmStartFoundryBinding,
+    catalog=None,
+    deployment_fingerprint=None,
 ) -> IsolatedVmStartFoundryAgents:
     if not isinstance(settings, FoundryProductionSettings):
         raise TypeError("settings must be FoundryProductionSettings.")
@@ -58,4 +64,6 @@ def build_vm_start_production_agents(
     return IsolatedVmStartFoundryAgents(
         project_endpoint=settings.project_endpoint, credential=credential,
         vm_start_binding=vm_start_binding,
+        **({"catalog": catalog} if catalog is not None else {}),
+        **({"deployment_fingerprint": deployment_fingerprint} if deployment_fingerprint is not None else {}),
     )

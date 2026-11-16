@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from src.config.procedure_configuration import build_procedure_configuration
+from src.config.foundry_deployment import build_foundry_deployment_configuration
 
 from src.agents.production_communication_runner import (
     build_foundry_production_communication_runner,
@@ -50,6 +51,12 @@ def build_production_application(
             "environment debe implementar Mapping."
         )
 
+    deployment = build_foundry_deployment_configuration(environment)
+    if deployment is not None:
+        if capability_foundry_agent_binding_registry is not None:
+            raise ValueError("Deployment JSON owns the READ selector; injection cannot override it.")
+        capability_foundry_agent_binding_registry = deployment.read_bindings
+
     # Resolve explicit configuration before constructing provider dependencies.
     # Absence keeps the selector empty; an injected registry retains its identity.
     if capability_foundry_agent_binding_registry is None:
@@ -67,7 +74,10 @@ def build_production_application(
 
     # Resolve the explicit WRITE publication before creating providers.
     # Missing opt-in preserves the historical call shape; malformed input stops.
-    vm_start_binding = build_vm_start_foundry_binding(environment)
+    vm_start_binding = (
+        deployment.write_binding if deployment is not None
+        else build_vm_start_foundry_binding(environment)
+    )
     procedure_configuration = build_procedure_configuration(environment)
     vm_start_options = {}
     from src.config.f27_attestation import build_governor_attestation_publisher
@@ -85,11 +95,15 @@ def build_production_application(
         )
     )
 
+    agent_options = (
+        {"catalog": deployment.catalog, "deployment_fingerprint": deployment.fingerprint}
+        if deployment is not None else {}
+    )
     if vm_start_binding is None:
-        incident_agents = build_foundry_production_agents(foundry_settings)
+        incident_agents = build_foundry_production_agents(foundry_settings, **agent_options)
     else:
         incident_agents = build_vm_start_production_agents(
-            foundry_settings, vm_start_binding=vm_start_binding,
+            foundry_settings, vm_start_binding=vm_start_binding, **agent_options,
         )
 
     communication_runner = getattr(

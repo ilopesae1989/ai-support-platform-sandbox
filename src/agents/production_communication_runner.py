@@ -15,6 +15,9 @@ from src.agents.production_settings import (
 
 def build_foundry_production_agents(
     settings,
+    *,
+    catalog=None,
+    deployment_fingerprint=None,
 ):
     if not isinstance(
         settings,
@@ -37,6 +40,8 @@ def build_foundry_production_agents(
         ),
         credential=credential,
         allow_preview=True,
+        **({"catalog": catalog} if catalog is not None else {}),
+        **({"deployment_fingerprint": deployment_fingerprint} if deployment_fingerprint is not None else {}),
     )
 
 

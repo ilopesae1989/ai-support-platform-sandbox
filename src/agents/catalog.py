@@ -129,7 +129,10 @@ def build_agent_catalog() -> Mapping[
     FoundryAgentDefinition,
 ]:
     """
-    Construye el catálogo efectivo.
+    Construye el catálogo histórico de sandbox.
+
+    Los despliegues configurados inyectan su catálogo completo mediante
+    src.config.foundry_deployment; no utilizan estos defaults como fallback.
 
     Las versiones definidas mediante variables de entorno
     sustituyen únicamente la versión por defecto.

@@ -22,6 +22,7 @@ from ..continuation_context import (
 from ..procedure_transition_gate import (
     apply_procedure_validation_transition_with_outcome,
 )
+from ..azure_read_tool_authority import AzureReadToolAuthorityRegistry
 
 from ..continuation_request_builder import (
     build_procedure_continuation_input,
@@ -78,10 +79,16 @@ class ProcedureTransitionExecutor(
         wait_recheck_consumption_ledger: (
             WaitRecheckConsumptionLedger | None
         ) = None,
+        azure_read_tool_authority_registry: AzureReadToolAuthorityRegistry | None = None,
     ) -> None:
         super().__init__(
             id="procedure_transition"
         )
+
+        if (azure_read_tool_authority_registry is not None
+                and not isinstance(azure_read_tool_authority_registry, AzureReadToolAuthorityRegistry)):
+            raise TypeError("Invalid READ authority registry.")
+        self._azure_read_tool_authority_registry = azure_read_tool_authority_registry
 
         if (
             wait_recheck_consumption_ledger
@@ -123,6 +130,8 @@ class ProcedureTransitionExecutor(
             apply_procedure_validation_transition_with_outcome(
                 state=state,
                 context=context,
+                **({"azure_read_tool_authority_registry": self._azure_read_tool_authority_registry}
+                   if self._azure_read_tool_authority_registry is not None else {}),
             )
         )
 

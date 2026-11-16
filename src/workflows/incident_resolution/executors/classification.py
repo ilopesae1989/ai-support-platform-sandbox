@@ -42,9 +42,11 @@ class ClassificationExecutor(Executor):
     def __init__(
         self,
         agents: FoundryAgents,
+        *,
+        id: str = "classification",
     ) -> None:
         super().__init__(
-            id="classification"
+            id=id,
         )
 
         self._agents = agents

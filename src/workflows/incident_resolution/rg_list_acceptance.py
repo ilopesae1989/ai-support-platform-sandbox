@@ -10,7 +10,9 @@ from collections.abc import Mapping
 import json
 import re
 
-from .azure_read_tool_authority import build_default_azure_read_tool_authority_registry
+from .azure_read_tool_authority import (
+    AzureReadToolAuthority, build_default_azure_read_tool_authority_registry,
+)
 from .operation_models import OperationResult
 
 
@@ -53,14 +55,21 @@ def _text(value):
             and all(ord(c) >= 32 and ord(c) != 127 for c in value))
 
 
-def rg_list_content_accepted(result: OperationResult) -> bool:
+def rg_list_content_accepted(
+    result: OperationResult, *, authority: AzureReadToolAuthority | None = None,
+) -> bool:
     """True only for one exact group_list call with a complete supported body.
 
     An empty groups array is a valid empty inventory. A missing array, partial
     page, bare success status, unsupported encoding or cross-subscription item
     cannot satisfy the procedure. No result creates operational authority.
     """
-    authority = build_default_azure_read_tool_authority_registry().get("azure.resource_group.list")
+    # Direct historical callers retain their explicit legacy contract. Product
+    # composition injects the selected authority; never derive it from output.
+    if authority is None:
+        authority = build_default_azure_read_tool_authority_registry().get("azure.resource_group.list")
+    if not isinstance(authority, AzureReadToolAuthority):
+        raise TypeError("authority must be AzureReadToolAuthority.")
     if (result.capability_id != authority.capability_id
             or result.operation_domain != authority.operation_domain
             or result.operation_kind != "read"
