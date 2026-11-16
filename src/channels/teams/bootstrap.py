@@ -50,8 +50,9 @@ from src.workflows.incident_resolution.wait_recheck_consumption_ledger import (
     WaitRecheckConsumptionLedger,
 )
 
-from src.workflows.incident_resolution.workflow import (
-    build_incident_resolution_workflow,
+from src.workflows.incident_resolution.composition import (
+    IncidentWorkflowOptions,
+    build_incident_workflow_factory,
 )
 
 from .approval_authorization import (
@@ -583,38 +584,14 @@ def build_teams_hitl_app(
     NO concede capacidades operacionales.
     """
 
-    # Only explicit selection crosses this layer; direct legacy calls stay unchanged.
-    if vm_start_binding is not None:
-        if not isinstance(vm_start_binding, VmStartFoundryBinding):
-            raise TypeError("vm_start_binding must be VmStartFoundryBinding.")
-        if vm_start_route is not None:
-            raise ValueError("Specify vm_start_binding or vm_start_route, never both.")
-    selector_options = {}
-    if attestation_publisher is not None:
-        from src.attestation.governor_outbox import GovernorAttestationPublisher
-        if type(attestation_publisher) is not GovernorAttestationPublisher:
-            raise TypeError("Explicit governor attestation publisher required")
-        selector_options["attestation_publisher"] = attestation_publisher
-    if procedure_configuration is not None:
-        if not isinstance(procedure_configuration, ProcedureConfiguration):
-            raise TypeError("procedure_configuration must be ProcedureConfiguration.")
-        selector_options.update(procedure_configuration.workflow_options())
-    if vm_start_route is not None:
-        if not isinstance(vm_start_route, GovernedVmStartRoute):
-            raise TypeError("vm_start_route must be GovernedVmStartRoute.")
-        selector_options["vm_start_route"] = vm_start_route
-    if capability_foundry_agent_binding_registry is not None:
-        if not isinstance(
-            capability_foundry_agent_binding_registry,
-            CapabilityFoundryAgentBindingRegistry,
-        ):
-            raise TypeError(
-                "capability_foundry_agent_binding_registry debe ser "
-                "CapabilityFoundryAgentBindingRegistry."
-            )
-        selector_options["capability_foundry_agent_binding_registry"] = (
-            capability_foundry_agent_binding_registry
-        )
+    workflow_options = IncidentWorkflowOptions(
+        agents=incident_agents,
+        capability_foundry_agent_binding_registry=capability_foundry_agent_binding_registry,
+        vm_start_binding=vm_start_binding,
+        vm_start_route=vm_start_route,
+        procedure_configuration=procedure_configuration,
+        attestation_publisher=attestation_publisher,
+    )
 
     if not isinstance(
         settings,
@@ -694,18 +671,6 @@ def build_teams_hitl_app(
     checkpoint_storage = (
         persistence.checkpoint_storage
     )
-    if vm_start_binding is not None:
-        from src.workflows.incident_resolution.vm_start_approval_binding import (
-            CheckpointApprovedVmStartBindingReader,
-        )
-        selector_options["vm_start_route"] = GovernedVmStartRoute(
-            binding=vm_start_binding,
-            approval_binding_reader=CheckpointApprovedVmStartBindingReader(
-                store=store,
-                checkpoint_storage=checkpoint_storage,
-            ),
-        )
-
     operation_dispatch_ledger = (
         persistence.operation_dispatch_ledger
     )
@@ -749,28 +714,14 @@ def build_teams_hitl_app(
     )
 
 
-    def workflow_factory():
-        return (
-            build_incident_resolution_workflow(
-                operation_dispatch_ledger=(
-                    operation_dispatch_ledger
-                ),
-                wait_recheck_consumption_ledger=(
-                    wait_recheck_consumption_ledger
-                ),
-                azure_vm_power_state_reader=(
-                    azure_vm_power_state_reader
-                ),
-                **(
-                    {
-                        "agents": incident_agents
-                    }
-                    if incident_agents is not None
-                    else {}
-                ),
-                **selector_options,
-            )
-        )
+    workflow_factory = build_incident_workflow_factory(
+        approval_store=store,
+        checkpoint_storage=checkpoint_storage,
+        operation_dispatch_ledger=operation_dispatch_ledger,
+        wait_recheck_consumption_ledger=wait_recheck_consumption_ledger,
+        azure_vm_power_state_reader=azure_vm_power_state_reader,
+        options=workflow_options,
+    )
 
     async def incident_processor(
         *,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.test_production_capability_foundry_agent_wiring import rig
+
 import ast
 import inspect
 import textwrap
@@ -222,71 +224,14 @@ def test_azure_sql_persistence_builds_dedicated_wait_recheck_ledger(
     assert opened == []
 
 
-def test_teams_workflow_factory_propagates_wait_recheck_ledger_exactly():
-    source = textwrap.dedent(
-        inspect.getsource(
-            teams_bootstrap
-            .build_teams_hitl_app
-        )
-    )
-
-    tree = ast.parse(
-        source
-    )
-
-    workflow_calls = []
-
-    for node in ast.walk(
-        tree
-    ):
-        if not isinstance(
-            node,
-            ast.Call,
-        ):
-            continue
-
-        if (
-            isinstance(
-                node.func,
-                ast.Name,
-            )
-            and node.func.id
-            == "build_incident_resolution_workflow"
-        ):
-            workflow_calls.append(
-                node
-            )
-
-    assert len(
-        workflow_calls
-    ) == 1
-
-    keywords = {
-        keyword.arg:
-            keyword.value
-        for keyword
-        in workflow_calls[0].keywords
-        if keyword.arg is not None
-    }
-
-    assert (
-        "wait_recheck_consumption_ledger"
-        in keywords
-    )
-
-    value = keywords[
-        "wait_recheck_consumption_ledger"
-    ]
-
-    assert isinstance(
-        value,
-        ast.Name,
-    )
-
-    assert (
-        value.id
-        == "wait_recheck_consumption_ledger"
-    )
+def test_teams_workflow_factory_propagates_wait_recheck_ledger_exactly(rig):
+    bootstrap = rig.invoke("application")
+    assert bootstrap.dependencies.workflow_factory is bootstrap.continuation_worker.dependencies.workflow_factory
+    bootstrap.dependencies.workflow_factory()
+    bootstrap.continuation_worker.dependencies.workflow_factory()
+    assert len(rig.workflow_calls) == 2
+    assert all(call["wait"] is rig.persistence.wait_recheck_consumption_ledger
+               for call in rig.workflow_calls)
 
 
 def test_azure_sql_composition_constructs_wait_ledger_from_same_factory():

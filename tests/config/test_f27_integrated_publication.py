@@ -1,3 +1,5 @@
+
+from src.workflows.incident_resolution import composition as incident_composition
 import hashlib
 import json
 from pathlib import Path
@@ -67,7 +69,7 @@ def test_modified_bundle_is_rejected_before_provider_construction(tmp_path,rig):
 def test_procedure_bundle_reaches_human_and_recovery_workflow_factory(tmp_path,rig,monkeypatch):
     rig.environment.update(bundle(tmp_path));captures=[]
     def leaf(**kwargs):captures.append(kwargs);return object()
-    monkeypatch.setattr(rig.base,'build_incident_resolution_workflow',leaf)
+    monkeypatch.setattr(incident_composition,'build_incident_resolution_workflow',leaf)
     boot=rig.invoke('application')
     boot.dependencies.workflow_factory()
     boot.continuation_worker.dependencies.workflow_factory()

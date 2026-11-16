@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from src.workflows.incident_resolution import composition as incident_composition
+
 from types import MappingProxyType, SimpleNamespace
 
 import pytest
@@ -267,7 +269,7 @@ def test_real_profile_crosses_all_roots_into_both_real_azure_compositions(
         capture_configured_registry,
     )
     monkeypatch.setattr(
-        rig.base, "build_incident_resolution_workflow",
+        incident_composition, "build_incident_resolution_workflow",
         workflow_module.build_incident_resolution_workflow,
     )
     monkeypatch.setattr(

@@ -1,3 +1,5 @@
+
+from src.workflows.incident_resolution import composition as incident_composition
 from pathlib import Path
 
 import pytest
@@ -139,7 +141,7 @@ def install_future_component_fakes(*, monkeypatch):
     )
 
     monkeypatch.setattr(
-        teams_bootstrap,
+        incident_composition,
         "build_incident_resolution_workflow",
         fake_incident_workflow_builder,
         raising=False,
@@ -354,7 +356,7 @@ def test_phase23_production_incident_managed_identity_base_bootstrap_injection(
         ]
 
     monkeypatch.setattr(
-        teams_bootstrap,
+        incident_composition,
         "build_incident_resolution_workflow",
         fake_incident_workflow_builder,
         raising=False,

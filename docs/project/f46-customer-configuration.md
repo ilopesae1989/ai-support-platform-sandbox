@@ -4,6 +4,19 @@ Fecha: 16/11/2026. Entrega 2 del plan de refactorización hasta F48.
 Baseline: `a88c79c5f1d2be924c8aed99b8b6d4f1e12163f7`, rama `phase16-wip`.
 El operador confirmó esa rama/HEAD y árbol de trabajo limpio en Windows.
 
+Actualización posterior: R2 fue validada en Windows con **3.400 passed,
+24 deselected, 3 warnings**, exit code 0, y publicada en
+`6d141382a84e22c97e4c461eb869c96d8433ac2e`, rama
+`codex/f46-configuracion-clientes`. Se comprobaron los 19 blobs remotos.
+JUnit: `F46_R2_WINDOWS_20261116_155350.xml`, SHA256
+`b8a8fc2f541480b485906f07d0dbf108fb52a6f81026eae4f84faf04e38695c5`.
+R2 sólo asignó un ID corto al caso de entrada de 100.001 caracteres: Windows
+rechazaba su ID automático al guardarlo en PYTEST_CURRENT_TEST. La entrada y
+su validación se conservaron. Las menciones a Windows pendiente de abajo
+describen la preparación inicial; quedan superadas por esta evidencia.
+Entrega 2 cerrada en su alcance de código/NON-LIVE; F46 global sigue abierta.
+Continúa [Entrega 3 — núcleo y recuperación](e3-core-recovery.md).
+
 ## Problema y resultado
 
 El catálogo histórico fija nombres de sandbox. Además, el ejecutor puede

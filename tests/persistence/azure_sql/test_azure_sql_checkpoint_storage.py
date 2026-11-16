@@ -1194,7 +1194,10 @@ async def test_invalid_inputs_fail_before_connection_creation():
 def test_source_uses_framework_encoder_decoder_and_restricted_allowlist():
     _load_adapter_class()
 
-    source = MODULE_PATH.read_text(
+    adapter_source = MODULE_PATH.read_text(encoding="utf-8")
+    assert "_checkpoint_encoding" not in adapter_source
+    assert "WorkflowCheckpointCodec(allowed_types=self._allowed_types)" in adapter_source
+    source = (REPO_ROOT / "src/persistence/checkpoint_codec.py").read_text(
         encoding="utf-8"
     )
 
@@ -1211,7 +1214,7 @@ def test_source_uses_framework_encoder_decoder_and_restricted_allowlist():
     )
 
     assert (
-        "allowed_types=self._allowed_types"
+        "allowed_types=self.allowed_types"
         in source
     )
 

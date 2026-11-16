@@ -126,7 +126,8 @@ class AzureOperationsExecutor(Executor):
 
         self._operation_dispatch_ledger = (
             operation_dispatch_ledger
-            or InMemoryOperationDispatchLedger()
+            if operation_dispatch_ledger is not None
+            else InMemoryOperationDispatchLedger()
         )
 
         self._azure_read_tool_authority_registry = (

@@ -267,13 +267,13 @@ def build_incident_resolution_workflow(
     """
 
     foundry_agents = (
-        agents
-        or FoundryAgents()
+        agents if agents is not None else FoundryAgents()
     )
 
     dispatch_ledger = (
         operation_dispatch_ledger
-        or InMemoryOperationDispatchLedger()
+        if operation_dispatch_ledger is not None
+        else InMemoryOperationDispatchLedger()
     )
 
     if (

@@ -1,3 +1,5 @@
+
+from src.workflows.incident_resolution import composition as incident_composition
 """F46: two explicit synthetic deployments through real configuration/composition."""
 import copy
 import json
@@ -155,7 +157,7 @@ def test_real_application_reaches_human_worker_and_transition(customer, rig, mon
         store=SimpleNamespace(get_by_approval_id=_never, get_by_request_id=_never, get_consumption_record=_never),
         checkpoint_storage=SimpleNamespace(load=_never))
     monkeypatch.setattr(rig.prod, "build_azure_sql_teams_hitl_persistence", lambda settings: persistence)
-    monkeypatch.setattr(rig.base, "build_incident_resolution_workflow", graph.build_incident_resolution_workflow)
+    monkeypatch.setattr(incident_composition, "build_incident_resolution_workflow", graph.build_incident_resolution_workflow)
     compositions, transitions = [], []
     real_factory = graph.build_azure_domain_composition
     real_init = graph.ProcedureTransitionExecutor.__init__

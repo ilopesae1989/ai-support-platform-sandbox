@@ -7,6 +7,8 @@ error converted into a RED. This file must also remain useful after the GREEN.
 """
 from __future__ import annotations
 
+from src.workflows.incident_resolution import composition as incident_composition
+
 import importlib
 import inspect
 import json
@@ -132,7 +134,7 @@ def rig(monkeypatch):
         workflow_calls.append(row)
         return object()
 
-    monkeypatch.setattr(base, "build_incident_resolution_workflow", workflow_leaf)
+    monkeypatch.setattr(incident_composition, "build_incident_resolution_workflow", workflow_leaf)
     factories = {
         "application": app.build_production_application,
         "teams_host": host.build_production_teams_host_with_communication_and_incident_agents,

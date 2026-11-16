@@ -11,8 +11,11 @@ El LLM interpreta y propone; Python gobierna identidad, procedimientos, parámet
 ## Estado que debe retomarse
 
 **Actualización 16/11/2026:** el plan de refactorización adelanta la configuración
-por cliente de F46, con apoyo de F40 y contratos F27-B03/B04/B06. El paquete activo
-y su evidencia se documentan en [F46 — configuración por cliente](f46-customer-configuration.md).
+por cliente de F46, con apoyo de F40 y contratos F27-B03/B04/B06. La entrega 2
+está validada en Windows (3.400 PASS) y publicada en `6d141382`; su evidencia
+se documenta en [F46 — configuración por cliente](f46-customer-configuration.md).
+El paquete activo pasa a [Entrega 3 — núcleo y recuperación](e3-core-recovery.md),
+con F30-T01/T02/T03/T04 y revisión F31-T01; no cierra F30/F31 completas.
 F27 LIVE permanece pausada. Los estados OP54 siguientes se conservan como histórico;
 no ordenan repetir acciones ya acreditadas ni prevalecen sobre la continuidad de noviembre.
 Se mantienen los IDs y los criterios F27–F48; esta entrega no cierra F46 ni F27.

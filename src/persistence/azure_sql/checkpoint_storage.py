@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 
 from collections.abc import (
     Callable,
@@ -16,10 +15,7 @@ from agent_framework import (
     WorkflowCheckpointException,
 )
 
-from agent_framework._workflows._checkpoint_encoding import (
-    decode_checkpoint_value,
-    encode_checkpoint_value,
-)
+from src.persistence.checkpoint_codec import WorkflowCheckpointCodec
 
 
 def _require_exact_nonempty_string(
@@ -109,37 +105,13 @@ class AzureSqlCheckpointStorage:
             validated_allowed_types
         )
 
-    @staticmethod
-    def _encode_checkpoint(
-        checkpoint: WorkflowCheckpoint,
-    ) -> str:
-        encoded = encode_checkpoint_value(
-            checkpoint.to_dict()
-        )
+        self._codec = WorkflowCheckpointCodec(allowed_types=self._allowed_types)
 
-        return json.dumps(
-            encoded,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(
-                ",",
-                ":",
-            ),
-        )
+    def _encode_checkpoint(self, checkpoint: WorkflowCheckpoint) -> str:
+        return self._codec.encode(checkpoint)
 
-    def _decode_checkpoint(
-        self,
-        payload_json: str,
-    ) -> WorkflowCheckpoint:
-        encoded = json.loads(
-            payload_json
-        )
-
-        decoded = decode_checkpoint_value(encoded, allowed_types=self._allowed_types)
-
-        return WorkflowCheckpoint.from_dict(
-            decoded
-        )
+    def _decode_checkpoint(self, payload_json: str) -> WorkflowCheckpoint:
+        return self._codec.decode(payload_json)
 
     @staticmethod
     def _close_quietly(
