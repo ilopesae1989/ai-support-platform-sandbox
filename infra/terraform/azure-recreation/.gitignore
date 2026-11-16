@@ -1,0 +1,32 @@
+# Private runtime state and values stay outside Git.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.plan
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+!*.example
+crash.log
+crash.*.log
+*.log
+.env
+.env.*
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+LOCAL_ONLY_NO_COMPARTIR/
+*.bacpac
+*.bak
+*.backup
+*.zip
+*.tar
+*.tar.gz
+*.pfx
+*.p12
+*.pem
+*.key
+# Keep .terraform.lock.hcl: it contains dependency checksums, not state.

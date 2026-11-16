@@ -1,0 +1,149 @@
+{
+  "ModuleCount": 17,
+  "ResourceDeclarations": 199,
+  "FoundryResources": 20,
+  "ModuleResourceCounts": {
+    "identities": 13,
+    "key_vault": 1,
+    "sql": 10,
+    "integration": 3,
+    "container_apps": 7,
+    "access": 58,
+    "network": 12,
+    "bots": 1,
+    "messaging": 13,
+    "foundation": 7,
+    "foundry": 20,
+    "search": 1,
+    "app_services": 4,
+    "observability": 6,
+    "storage": 39,
+    "registry": 1,
+    "compute": 3
+  },
+  "FoundrySchemaExceptions": [
+    "module.foundry.azapi_resource.res-5",
+    "module.foundry.azapi_resource.res-6",
+    "module.foundry.azapi_resource.res-7",
+    "module.foundry.azapi_resource.res-16",
+    "module.foundry.azapi_resource.res-17",
+    "module.foundry.azapi_resource.res-18"
+  ],
+  "AdditionalParameterizedInputs": [
+    {
+      "module": "compute",
+      "input": "vm_ssh_public_key",
+      "sensitive": false,
+      "purpose": "SSH public key for the recreated demo VM; provide your own public key."
+    },
+    {
+      "module": "sql",
+      "input": "sql_entra_admin_login",
+      "sensitive": true,
+      "purpose": "Display/login name of the reviewed SQL Entra administrator."
+    },
+    {
+      "module": "observability",
+      "input": "alerts_email_address",
+      "sensitive": true,
+      "purpose": "Email recipient for the action group."
+    },
+    {
+      "module": "integration",
+      "input": "office365_connection_display_name",
+      "sensitive": true,
+      "purpose": "Display name of the Office 365 connection; authorization must be restored separately."
+    },
+    {
+      "module": "container_apps",
+      "input": "teams_channel_tenant_id",
+      "sensitive": false,
+      "purpose": "Reviewed runtime value for TEAMS_CHANNEL_TENANT_ID on ca-app-runtime-icenter-sbx."
+    },
+    {
+      "module": "container_apps",
+      "input": "teams_authorization_identity_mappings_json",
+      "sensitive": true,
+      "purpose": "Reviewed runtime value for TEAMS_AUTHORIZATION_IDENTITY_MAPPINGS_JSON on ca-app-runtime-icenter-sbx."
+    },
+    {
+      "module": "container_apps",
+      "input": "teams_authorized_technicians_group_object_id",
+      "sensitive": false,
+      "purpose": "Reviewed runtime value for TEAMS_AUTHORIZED_TECHNICIANS_GROUP_OBJECT_ID on ca-app-runtime-icenter-sbx."
+    },
+    {
+      "module": "container_apps",
+      "input": "mcp_legacy_application_client_id",
+      "sensitive": false,
+      "purpose": "Reviewed runtime value for AzureAd__ClientId on azure-mcp-operations-server."
+    },
+    {
+      "module": "container_apps",
+      "input": "mcp_read_application_client_id",
+      "sensitive": false,
+      "purpose": "Reviewed runtime value for AzureAd__ClientId on azure-mcp-rglist-read-sbx."
+    }
+  ],
+  "TerraformVersion": "1.9.6",
+  "AzAPI": "2.9.0",
+  "Source": "Local modular assembly 09 preserved on 2026-11-15",
+  "PlanExecuted": false,
+  "ApplyExecuted": false,
+  "RestorationTested": false,
+  "AgentVersionsIncluded": false,
+  "PrivateDataIncluded": false,
+  "RootInputCount": 33,
+  "HclFilesParsed": 72,
+  "ResourceValueChanges": [
+    {
+      "Path": "modules/sql/main.tf.resource[0].azapi_resource.res-1.body.properties.administrators.login",
+      "Input": "sql_entra_admin_login"
+    },
+    {
+      "Path": "modules/sql/main.tf.resource[1].azapi_resource.res-2.body.properties.login",
+      "Input": "sql_entra_admin_login"
+    },
+    {
+      "Path": "modules/integration/main.tf.resource[0].azapi_resource.res-1.body.properties.displayName",
+      "Input": "office365_connection_display_name"
+    },
+    {
+      "Path": "modules/container_apps/main.tf.resource[0].azapi_resource.res-1.body.properties.template.containers[0].env[3].value",
+      "Input": "teams_channel_tenant_id"
+    },
+    {
+      "Path": "modules/container_apps/main.tf.resource[0].azapi_resource.res-1.body.properties.template.containers[0].env[5].value",
+      "Input": "teams_authorization_identity_mappings_json"
+    },
+    {
+      "Path": "modules/container_apps/main.tf.resource[0].azapi_resource.res-1.body.properties.template.containers[0].env[6].value",
+      "Input": "teams_authorized_technicians_group_object_id"
+    },
+    {
+      "Path": "modules/container_apps/main.tf.resource[2].azapi_resource.res-3.body.properties.template.containers[0].env[7].value",
+      "Input": "mcp_legacy_application_client_id"
+    },
+    {
+      "Path": "modules/container_apps/main.tf.resource[3].azapi_resource.res-4.body.properties.template.containers[0].env[5].value",
+      "Input": "mcp_read_application_client_id"
+    },
+    {
+      "Path": "modules/observability/main.tf.resource[2].azapi_resource.res-3.body.properties.emailReceivers[0].emailAddress",
+      "Input": "alerts_email_address"
+    },
+    {
+      "Path": "modules/compute/main.tf.resource[2].azapi_resource.res-3.body.properties.osProfile.linuxConfiguration.ssh.publicKeys[0].keyData",
+      "Input": "vm_ssh_public_key"
+    }
+  ],
+  "AllOtherHclSemanticsPreserved": true,
+  "PatternFindings": [],
+  "PatternScanIsCompleteSecretAudit": false,
+  "TerraformFmtCheckPassed": true,
+  "NativeValidationThisCopy": "BLOCKED_BY_PREPARATION_ENVIRONMENT_PROVIDER_UNIX_SOCKET_PERMISSION",
+  "HistoricalWindowsAssembly09Validation": "PASSED_PER_OPERATOR_RECEIPT_WITH_6_FOUNDRY_SCHEMA_EXCEPTIONS",
+  "InitBackendFalseWithCachedProvider": "PASSED_EXISTING_MULTIPLATFORM_LOCK_REUSED",
+  "AzureCommands": 0,
+  "Published": false
+}
