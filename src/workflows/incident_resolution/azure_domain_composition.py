@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .vm_start_foundry_binding import GovernedVmStartRoute
+
 from dataclasses import dataclass
 
 from src.agents.foundry_agents import FoundryAgents
@@ -59,6 +61,8 @@ def build_azure_domain_composition(
     wait_recheck_consumption_ledger: WaitRecheckConsumptionLedger,
     azure_vm_power_state_reader: AzureVmPowerStateReader | None = None,
     capability_foundry_agent_binding_registry: CapabilityFoundryAgentBindingRegistry | None = None,
+    vm_start_route: GovernedVmStartRoute | None = None,
+    attestation_publisher=None,
 ) -> AzureDomainComposition:
     """Construye nodos nuevos con dependencias suministradas por el caller.
 
@@ -87,6 +91,15 @@ def build_azure_domain_composition(
     pre_call = AzurePreCallSecurityExecutor()
     operation_start = OperationStartExecutor()
     selector_options = {}
+    if attestation_publisher is not None:
+        from src.attestation.governor_outbox import GovernorAttestationPublisher
+        if type(attestation_publisher) is not GovernorAttestationPublisher:
+            raise TypeError("Explicit governor attestation publisher required")
+        selector_options["attestation_publisher"] = attestation_publisher
+    if vm_start_route is not None:
+        if not isinstance(vm_start_route, GovernedVmStartRoute):
+            raise TypeError("vm_start_route must be GovernedVmStartRoute.")
+        selector_options["vm_start_route"] = vm_start_route
     if capability_foundry_agent_binding_registry is not None:
         selector_options["capability_foundry_agent_binding_registry"] = (
             capability_foundry_agent_binding_registry

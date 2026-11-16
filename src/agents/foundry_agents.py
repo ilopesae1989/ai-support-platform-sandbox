@@ -177,6 +177,11 @@ class FoundryAgents:
             else build_agent_catalog()
         )
 
+    @property
+    def project_endpoint(self) -> str:
+        """Observed local configuration; no remote identity verification."""
+        return self._project_endpoint
+
     def get_definition(
         self,
         key: AgentKey,

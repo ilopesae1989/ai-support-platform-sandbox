@@ -14,7 +14,7 @@ from typing import Iterable, Mapping
 
 from src.agents.catalog import AgentKey, FoundryAgentDefinition
 from src.runtime.procedure.models import OperationKind
-from .azure_read_tool_authority import AzureReadToolAuthority
+from .azure_read_tool_authority import AzureReadToolAuthority, AzureReadToolAuthorityRegistry
 from .operational_capability import OperationalCapability
 
 
@@ -166,3 +166,9 @@ class CapabilityFoundryAgentBindingRegistry:
 
     def count(self) -> int:
         return len(self._bindings)
+
+    def read_authority_registry(self) -> AzureReadToolAuthorityRegistry:
+        """Use the same trusted publication for agent selection and approval checks."""
+        return AzureReadToolAuthorityRegistry(
+            authorities=tuple(binding.read_tool_authority for binding in self._bindings.values())
+        )

@@ -1,3 +1,5 @@
+import re
+
 from dataclasses import (
     dataclass,
     field,
@@ -22,6 +24,7 @@ from .models import (
     ApprovedProcedureStep,
     NextAction,
     OperationAction,
+    OperationKind,
     ProcedureRuntimeState,
     ResolvedParameter,
     StepStatus,
@@ -76,6 +79,9 @@ class ApprovalRequest:
     ] = field(
         default_factory=list
     )
+
+
+    vm_start_binding_fingerprint: str | None = None
 
 
 @dataclass
@@ -226,16 +232,22 @@ def build_approved_procedure_step(
             in state.resolved_parameters
         ],
 
+        vm_start_binding_fingerprint=state.vm_start_binding_fingerprint,
         approved=True,
     )
 
 
 class ProcedureApprovalExecutor(Executor):
-    def __init__(self) -> None:
+    def __init__(self, *, vm_start_binding_fingerprint: str | None = None) -> None:
         super().__init__(
             id="procedure_approval"
         )
 
+        if (vm_start_binding_fingerprint is not None and (
+                type(vm_start_binding_fingerprint) is not str
+                or not re.fullmatch(r"[0-9a-f]{64}", vm_start_binding_fingerprint))):
+            raise ValueError("VM_START composition fingerprint must be an exact SHA256.")
+        self._vm_start_binding_fingerprint = vm_start_binding_fingerprint
         self._runtime = (
             ProcedureRuntime()
         )
@@ -243,6 +255,24 @@ class ProcedureApprovalExecutor(Executor):
         self._pending_state: (
             ProcedureRuntimeState | None
         ) = None
+
+    def _bind_or_verify_vm_start(self, state: ProcedureRuntimeState, *, fresh: bool) -> None:
+        """Stamp only a fresh, Python-owned request; restore never upgrades it."""
+        step = state.step
+        is_vm_start = (
+            step.operation_domain == "azure"
+            and step.operation_kind == OperationKind.WRITE
+            and step.operation_action == OperationAction.VM_START
+            and step.capability_id == "azure.vm.start"
+            and step.hitl_required is True
+        )
+        expected = self._vm_start_binding_fingerprint if is_vm_start else None
+        if fresh:
+            if state.vm_start_binding_fingerprint is not None:
+                raise ValueError("A fresh HITL request must not supply a binding fingerprint.")
+            state.vm_start_binding_fingerprint = expected
+        elif state.vm_start_binding_fingerprint != expected:
+            raise ValueError("The restored HITL binding differs or has no approved snapshot.")
 
     @staticmethod
     def _build_approval_request(
@@ -268,6 +298,7 @@ class ProcedureApprovalExecutor(Executor):
             )
 
         return ApprovalRequest(
+            vm_start_binding_fingerprint=state.vm_start_binding_fingerprint,
             workflow_id=(
                 state.workflow_id
             ),
@@ -364,6 +395,8 @@ class ProcedureApprovalExecutor(Executor):
                 "sin estado pendiente."
             )
 
+        self._bind_or_verify_vm_start(self._pending_state, fresh=False)
+
         expected_request = (
             self._build_approval_request(
                 self._pending_state
@@ -421,6 +454,8 @@ class ProcedureApprovalExecutor(Executor):
             state.step_status
             == StepStatus.WAITING_APPROVAL
         ):
+            self._bind_or_verify_vm_start(state, fresh=state.approval_id is None)
+
             #
             # Se genera una sola vez.
             #
@@ -563,11 +598,9 @@ class ProcedureApprovalExecutor(Executor):
             self._pending_state = None
             return
 
-        self._pending_state = (
-            ProcedureRuntimeState.model_validate(
-                pending_state
-            )
-        )
+        restored = ProcedureRuntimeState.model_validate(pending_state)
+        self._bind_or_verify_vm_start(restored, fresh=False)
+        self._pending_state = restored
 
 
 class ApprovedStepOutputExecutor(Executor):

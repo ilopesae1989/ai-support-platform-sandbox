@@ -1,3 +1,19 @@
+# Estado F27 — 10/11/2026, posterior a R4
+
+Objetivo invariable: **F48 — PRODUCTIVE MVP CLOSED**. F27 continúa abierta; no se activa F28.
+
+La aplicación local R4 del operador terminó una vez: 25 archivos verificados, HEAD/rama/índice conservados sobre `21b48d465efd7937febc576c73b1adcb38c5bc4b`. El Python seleccionado fue 3.14.2 de `.venv`. No hubo instalación, despliegue, permisos ni invocación cloud. Esa aplicación no se repite.
+
+Este árbol incorpora además la validación de contenido RG List: un HTTP/MCP 200 sin `results.groups` válido no permite cerrar el procedimiento. [Contrato técnico y límites](docs/project/f27-rg-list-technical-acceptance.md). El candidato ampliado superó **3047 pruebas NON-LIVE, 24 excluidas y 2 avisos** en Python 3.13.5/Linux, con cero llamadas registradas por la guarda de red. No es la FULL final H13 ni evidencia del entorno instalado.
+
+El código mantiene el proyecto Foundry actual, core común, perfil READ explícito y WRITE separado por agente, identidad, audiencia, conexión, receptor y RBAC. El endpoint WRITE es individual y fija versión. Su existencia en código no demuestra que esté desplegado o activado. PIN1/100 %, legacy, R1J, ACA mixta, SystemAssigned READ y versiones existentes se conservan hasta el corte seguro acreditado. G3 sigue NO-GO.
+
+Los contratos locales B06-T01/T02/T04/T05/T06 están documentados y probados; B06-T03 necesita su asociación auténtica instalada. Continúan pendientes aislamiento efectivo H06, JWT H07, instalación/composición H08–H09, sensor/custodia H10–H11, aceptación global H12, FULL final H13, PENDING/ventana/continuación/E2E H14–H17 y aceptación/publicación H18. La selección cognitiva preview y el pin enviado realmente al proveedor siguen siendo evidencias distintas; no se infiere pin efectivo del constructor.
+
+Consulta [el mismo roadmap F27–F48](docs/project/roadmap-f27-f48.md). Los apartados anteriores conservados debajo son historia fechada; prevalece este estado para las observaciones del 10/11.
+
+---
+
 # AI Support Platform
 
 Plataforma de soporte IT en desarrollo dentro del proyecto **«Creación de agentes»**. El contrato técnico incluye **AI, AI-103 y agentes**.

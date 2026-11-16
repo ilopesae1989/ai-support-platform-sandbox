@@ -1,0 +1,18 @@
+{
+  "id": "1",
+  "description": "Listar los grupos de recursos de la única suscripción identificada y autorizada para esta operación.",
+  "step_type": "technical_operation",
+  "operation_domain": "azure",
+  "operation_kind": "read",
+  "target_resource": "subscription",
+  "required_parameters": ["subscription_id"],
+  "preconditions": [
+    "Identidad, versión y nombre exactos del procedimiento publicados y admitidos por la configuración de gobierno explícita.",
+    "Contexto operacional autoritativo sandbox, incident_origin observed y resource_type subscription.",
+    "subscription_id procede de normalized_alert.subscription_id y coincide con el destino concreto revisado del expediente de ejecución.",
+    "Binding exacta del paso a azure.resource_group.list; parámetros y acción resueltos por Python.",
+    "Aprobación humana de esta operación mediante la política Sandbox, PreCall y claim válidos; aprobación MCP nativa independiente antes del dispatch."
+  ],
+  "expected_result": "Resultado estructurado completo de group_list con la colección groups, que puede estar vacía, vinculado a la operación, suscripción, perfil y llamada MCP autorizados.",
+  "verification": "Python debe comprobar success=True, technical_success=True derivado de evidencia íntegra, correlación con la operación autorizada, servidor/herramienta/argumentos exactos, resultado MCP completo sin error y colección groups válida según el contrato de la versión MCP fijada. Ante fallo, indeterminación, incompletitud o contradicción se declara next_action=blocked, aunque el agente proponga satisfied; no se autoriza repetir ni continuar automáticamente. Un texto satisfied, un estado HTTP satisfactorio, un payload ausente, truncado o contradictorio, o technical_success=False/None no satisfacen el objetivo. B06 implementa y prueba esta condición antes del cierre técnico."
+}

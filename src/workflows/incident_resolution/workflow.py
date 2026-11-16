@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from src.workflows.incident_resolution.vm_start_foundry_binding import GovernedVmStartRoute
+
 from collections.abc import Iterable
 
 from agent_framework import (
@@ -170,6 +174,8 @@ def build_incident_resolution_workflow(
     capability_foundry_agent_binding_registry: (
         CapabilityFoundryAgentBindingRegistry | None
     ) = None,
+    vm_start_route: GovernedVmStartRoute | None = None,
+    attestation_publisher=None,
 ):
     """
     IncidentResolutionWorkflow.
@@ -363,6 +369,15 @@ def build_incident_resolution_workflow(
 
     # Preserve the F26/F27.1 default factory kwargs exactly when disabled.
     selector_options = {}
+    if attestation_publisher is not None:
+        from src.attestation.governor_outbox import GovernorAttestationPublisher
+        if type(attestation_publisher) is not GovernorAttestationPublisher:
+            raise TypeError("Explicit governor attestation publisher required")
+        selector_options["attestation_publisher"] = attestation_publisher
+    if vm_start_route is not None:
+        if not isinstance(vm_start_route, GovernedVmStartRoute):
+            raise TypeError("vm_start_route must be GovernedVmStartRoute.")
+        selector_options["vm_start_route"] = vm_start_route
     if capability_foundry_agent_binding_registry is not None:
         if not isinstance(
             capability_foundry_agent_binding_registry,
@@ -428,8 +443,11 @@ def build_incident_resolution_workflow(
         )
     )
 
+    approval_options = {}
+    if vm_start_route is not None:
+        approval_options["vm_start_binding_fingerprint"] = vm_start_route.binding.fingerprint
     approval = (
-        ProcedureApprovalExecutor()
+        ProcedureApprovalExecutor(**approval_options)
     )
 
     #

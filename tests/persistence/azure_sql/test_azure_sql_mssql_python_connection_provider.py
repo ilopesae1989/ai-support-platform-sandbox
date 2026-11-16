@@ -117,10 +117,7 @@ def _load_provider(
         fake_driver,
     )
 
-    sys.modules.pop(
-        MODULE_NAME,
-        None,
-    )
+    monkeypatch.delitem(sys.modules, MODULE_NAME, raising=False)
 
     module = importlib.import_module(
         MODULE_NAME

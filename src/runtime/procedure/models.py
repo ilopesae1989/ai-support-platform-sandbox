@@ -165,6 +165,11 @@ class ProcedureRuntimeState(BaseModel):
     #
     approval_id: str | None = None
 
+    # Trusted composition stamps this before HITL; it is never channel input.
+    vm_start_binding_fingerprint: str | None = Field(
+        default=None, strict=True, pattern=r"^[0-9a-f]{64}$",
+    )
+
     conversation_id: str | None = None
 
     procedure: ProcedureReference
@@ -273,6 +278,11 @@ class ApprovedProcedureStep(BaseModel):
         ResolvedParameter
     ] = Field(
         default_factory=list
+    )
+
+    # Trusted composition stamps this before HITL; it is never channel input.
+    vm_start_binding_fingerprint: str | None = Field(
+        default=None, strict=True, pattern=r"^[0-9a-f]{64}$",
     )
 
     approved: bool = True

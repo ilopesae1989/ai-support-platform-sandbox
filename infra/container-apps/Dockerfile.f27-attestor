@@ -1,0 +1,5 @@
+ARG QUALIFIED_CORE_IMAGE_DIGEST_REF
+FROM ${QUALIFIED_CORE_IMAGE_DIGEST_REF}
+COPY runtime.json /app/f27/runtime.json
+ENTRYPOINT ["python", "-m", "src.attestation.worker_entrypoint"]
+CMD ["--help"]

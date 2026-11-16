@@ -529,36 +529,66 @@ def _assert_declarative_foundry_registry(source):
         (registry, None)
     ]
 
-    # Only this small declarative contract is fixed, not the host's other work.
+    # Both descriptors are declarative opt-ins. Fix their complete small
+    # validation/forwarding contract, retaining rejection of hidden authority.
     contract = ast.parse(
-        f"def contract(*, {parameter}: {registry} | None = None):\n"
+        f"def contract(*, {parameter}: {registry} | None = None, "
+        "vm_start_route: GovernedVmStartRoute | None = None, "
+        "attestation_publisher=None, "
+        "vm_start_binding: VmStartFoundryBinding | None = None, "
+        "procedure_configuration: ProcedureConfiguration | None = None):\n"
+        "    if vm_start_binding is not None:\n"
+        "        if not isinstance(vm_start_binding, VmStartFoundryBinding):\n"
+        "            raise TypeError('vm_start_binding must be VmStartFoundryBinding.')\n"
+        "        if vm_start_route is not None:\n"
+        "            raise ValueError('Specify vm_start_binding or vm_start_route, never both.')\n"
         "    selector_options = {}\n"
+        "    if attestation_publisher is not None:\n"
+        "        from src.attestation.governor_outbox import GovernorAttestationPublisher\n"
+        "        if type(attestation_publisher) is not GovernorAttestationPublisher:\n"
+        "            raise TypeError('Explicit governor attestation publisher required')\n"
+        "        selector_options['attestation_publisher'] = attestation_publisher\n"
+        "    if procedure_configuration is not None:\n"
+        "        if not isinstance(procedure_configuration, ProcedureConfiguration):\n"
+        "            raise TypeError('procedure_configuration must be ProcedureConfiguration.')\n"
+        "        selector_options['procedure_configuration'] = procedure_configuration\n"
+        "    if vm_start_binding is not None:\n"
+        "        selector_options['vm_start_binding'] = vm_start_binding\n"
+        "    if vm_start_route is not None:\n"
+        "        if not isinstance(vm_start_route, GovernedVmStartRoute):\n"
+        "            raise TypeError('vm_start_route must be GovernedVmStartRoute.')\n"
+        "        selector_options['vm_start_route'] = vm_start_route\n"
         f"    if {parameter} is not None:\n"
         f"        if not isinstance({parameter}, {registry}):\n"
         f"            raise TypeError('{parameter} debe ser {registry}.')\n"
         f"        selector_options['{parameter}'] = {parameter}\n"
     ).body[0]
-    parameters = [
-        (argument, default)
-        for argument, default in zip(
-            factory.args.kwonlyargs, factory.args.kw_defaults
-        )
-        if argument.arg == parameter
-    ]
-    assert len(parameters) == 1
-    argument, default = parameters[0]
-    assert ast.dump(argument) == ast.dump(contract.args.kwonlyargs[0])
-    assert isinstance(default, ast.Constant) and default.value is None
+    write_imports = [node for node in tree.body if isinstance(node, ast.ImportFrom)
+                     and node.module == 'src.workflows.incident_resolution.vm_start_foundry_binding']
+    assert len(write_imports) == 1 and write_imports[0].level == 0
+    assert [(x.name, x.asname) for x in write_imports[0].names] == [
+        ('GovernedVmStartRoute', None), ('VmStartFoundryBinding', None)]
+    procedure_imports = [node for node in tree.body if isinstance(node, ast.ImportFrom)
+                         and node.module == 'src.config.procedure_configuration']
+    assert len(procedure_imports) == 1 and procedure_imports[0].level == 0
+    assert [(x.name, x.asname) for x in procedure_imports[0].names] == [('ProcedureConfiguration', None)]
+    arguments = []
+    for expected in contract.args.kwonlyargs:
+        matches = [(a, d) for a, d in zip(factory.args.kwonlyargs, factory.args.kw_defaults)
+                   if a.arg == expected.arg]
+        assert len(matches) == 1
+        argument, default = matches[0]
+        assert ast.dump(argument) == ast.dump(expected)
+        assert isinstance(default, ast.Constant) and default.value is None
+        arguments.append(argument)
     body = factory.body
     if ast.get_docstring(factory) is not None:
         body = body[1:]
-    assert [ast.dump(node) for node in body[:2]] == [
-        ast.dump(node) for node in contract.body
-    ]
+    prefix = body[:len(contract.body)]
+    assert [ast.dump(node) for node in prefix] == [ast.dump(node) for node in contract.body]
 
-    allowed = set(ast.walk(binding_import)) | set(ast.walk(argument))
-    allowed.update(node for statement in body[:2] for node in ast.walk(statement))
-    foundry_regions = (binding_import, argument, *body[:2])
+    foundry_regions = (binding_import, write_imports[0], procedure_imports[0], *arguments, *prefix)
+    allowed = {node for region in foundry_regions for node in ast.walk(region)}
     returns = [node for node in ast.walk(factory) if isinstance(node, ast.Return)]
     assert len(returns) == 2
     for statement in returns:
@@ -583,7 +613,8 @@ def _assert_declarative_foundry_registry(source):
                     assert node.module == "src.channels.teams.production_bootstrap"
                     assert node.level == 0
                     allowed.add(alias)
-    protected = {registry, parameter, "selector_options", factory_name, delegate}
+    protected = {registry, parameter, "selector_options", factory_name, delegate,
+                 "GovernorAttestationPublisher", "attestation_publisher", "VmStartFoundryBinding", "GovernedVmStartRoute", "vm_start_binding", "vm_start_route", "procedure_configuration", "ProcedureConfiguration"}
     for node in ast.walk(tree):
         for field in ("id", "arg", "name", "asname", "rest"):
             value = getattr(node, field, None)
@@ -699,6 +730,29 @@ def test_declarative_registry_guard_accepts_formatting_changes():
             "    CapabilityFoundryAgentBindingRegistry,\n)",
             "    CapabilityFoundryAgentBindingRegistry as Registry,\n)",
             id="registry-import-alias",
+        ),
+        pytest.param(None, "extra = VmStartFoundryBinding()", id="write-binding-construction"),
+        pytest.param(None, "extra = GovernedVmStartRoute()", id="write-route-construction"),
+        pytest.param(
+            "    if incident_agents is None:",
+            "    selector_options['unapproved'] = vm_start_binding\n    if incident_agents is None:",
+            id="write-extra-key",
+        ),
+        pytest.param(
+            "    if vm_start_binding is not None:",
+            "    if vm_start_binding is None:",
+            id="write-inverted-opt-in",
+        ),
+        pytest.param(None, "extra = ProcedureConfiguration()", id="procedure-construction"),
+        pytest.param(
+            "    if incident_agents is None:",
+            "    procedure_configuration.workflow_options()\n    if incident_agents is None:",
+            id="procedure-inspection",
+        ),
+        pytest.param(
+            "    if procedure_configuration is not None:",
+            "    if procedure_configuration is None:",
+            id="procedure-inverted-opt-in",
         ),
         pytest.param(None, "extra = FoundryClient()", id="provider-construction"),
         pytest.param(

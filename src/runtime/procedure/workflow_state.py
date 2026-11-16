@@ -114,7 +114,11 @@ def load_procedure_runtime_state(
         )
     )
 
-    if canonical_snapshot != snapshot:
+    # Only the newly optional null field is normalized for old checkpoints.
+    # An opt-in WRITE route separately rejects old approvals without a hash.
+    comparable_snapshot = dict(snapshot)
+    comparable_snapshot.setdefault("vm_start_binding_fingerprint", None)
+    if canonical_snapshot != comparable_snapshot:
         raise ValueError(
             "El snapshot autoritativo almacenado "
             "no coincide exactamente con el contrato "

@@ -16,6 +16,7 @@ DOCKERFILE = Path(
 CERTIFIED_RUNTIME_REQUIREMENTS = {
     "agent-framework-core==1.13.0",
     "agent-framework-foundry==1.10.4",
+    "azure-ai-projects==2.3.0",
     "azure-identity==1.25.3",
     "pydantic==2.13.4",
     "microsoft-teams-api==2.0.14",
@@ -24,6 +25,8 @@ CERTIFIED_RUNTIME_REQUIREMENTS = {
     "azure-mgmt-compute==38.3.0",
     "mssql-python==1.14.0",
     "cryptography==50.0.2",
+    "azure-storage-blob==12.30.0",
+    "httpx==0.28.1",
 }
 
 

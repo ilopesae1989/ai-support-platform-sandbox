@@ -83,18 +83,20 @@ Tareas conservadas; su aceptación remite al criterio y dependencias del bloque:
 
 ### F27-B06 — Definir y probar la condición técnica que permite cerrar RG List
 
-Estado: **PENDIENTE**.
+Estado: **EN CURSO: cinco subtareas acreditadas localmente; B06-T03 y aceptación global pendientes**.
+
+Contrato y límites: [f27-rg-list-technical-acceptance.md](f27-rg-list-technical-acceptance.md).
 
 Criterio conservado: la resolución del caso RG List depende de una condición verificable del procedimiento. Un juicio favorable del agente no basta para acreditar que la lectura requerida se realizó correctamente.
 
 Tareas conservadas; su aceptación remite al criterio y dependencias del bloque:
 
-- [ ] **F27-B06-T01** — Revisar el riesgo estático technical_success=False/None frente a una validación cognitiva satisfied y delimitar la condición técnica del procedimiento RG List, preservando el contrato de rutas anteriores. Estado: PENDIENTE.
-- [ ] **F27-B06-T02** — Definir qué evidencia acredita su resultado. Estado: PENDIENTE.
+- [x] **F27-B06-T01** — Revisar el riesgo estático technical_success=False/None frente a una validación cognitiva satisfied y delimitar la condición técnica del procedimiento RG List, preservando el contrato de rutas anteriores. Estado: HECHO EN ALCANCE LOCAL: riesgo y contrato definidos.
+- [x] **F27-B06-T02** — Definir qué evidencia acredita su resultado. Estado: HECHO EN ALCANCE LOCAL: contrato de contenido, correlación y salidas documentado.
 - [ ] **F27-B06-T03** — Comprobar su relación con la operación autorizada. Estado: PENDIENTE.
-- [ ] **F27-B06-T04** — Probar resultado técnico fallido, desconocido, incompleto o contradictorio. Estado: PENDIENTE.
-- [ ] **F27-B06-T05** — Comprobar el caso en que el agente propone satisfied pese a esa evidencia. Estado: PENDIENTE.
-- [ ] **F27-B06-T06** — Hacer que Python aplique la salida declarada por el procedimiento cuando no se cumple su condición de aceptación. Estado: PENDIENTE.
+- [x] **F27-B06-T04** — Probar resultado técnico fallido, desconocido, incompleto o contradictorio. Estado: HECHO EN ALCANCE FOCAL: negativos técnicos y de contenido probados.
+- [x] **F27-B06-T05** — Comprobar el caso en que el agente propone satisfied pese a esa evidencia. Estado: HECHO EN ALCANCE FOCAL: satisfied no elude negativos; legacy preservado.
+- [x] **F27-B06-T06** — Hacer que Python aplique la salida declarada por el procedimiento cuando no se cumple su condición de aceptación. Estado: HECHO EN CANDIDATO LOCAL: guarda Python y validación trazables; aceptación E2E separada.
 
 ### F27-B07 — Obtener una validación NON-LIVE completa del conjunto final
 

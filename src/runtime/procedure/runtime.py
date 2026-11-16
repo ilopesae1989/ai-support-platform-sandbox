@@ -505,6 +505,7 @@ class ProcedureRuntime:
             # - validación anterior.
             #
             state.approval_id = None
+            state.vm_start_binding_fingerprint = None
 
             state.approval_status = (
                 ApprovalStatus.PENDING

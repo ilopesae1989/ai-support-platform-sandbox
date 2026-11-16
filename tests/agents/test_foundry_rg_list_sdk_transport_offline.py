@@ -24,10 +24,10 @@ import sys
 _SDK_VERSIONS = {
     "agent-framework-core": "1.13.0",
     "agent-framework-foundry": "1.10.4",
-    "agent-framework-openai": "1.12.0",
+    "agent-framework-openai": "1.13.0",
     "azure-ai-projects": "2.3.0",
     "azure-identity": "1.25.3",
-    "openai": "2.53.0",
+    "openai": "2.54.0",
     "httpx": "0.28.1",
 }
 _SANDBOX_ENDPOINT = (
@@ -53,8 +53,9 @@ def test_configured_read_binding_serializes_version_limits_and_native_continuati
     monkeypatch,
     request,
 ):
-    # Son las versiones de transporte observadas en Windows R4. No se instalan
-    # dependencias ni se permite un fallback a un SDK falso o a otra versión.
+    # Versiones transitivas observadas en SDK R3 y conciliadas para el candidato
+    # WRITE. El transporte READ real se vuelve a probar con estos mismos pins.
+    # No se permite un fallback a un SDK falso o a otra versión.
     assert {
         package: metadata.version(package)
         for package in _SDK_VERSIONS

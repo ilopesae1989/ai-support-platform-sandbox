@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "procedures": [
+    {
+      "procedure_id": "NTTSY-SBX-AZ-RG-LIST-001",
+      "procedure_version": "1.0",
+      "owner": "icenter-microsoft",
+      "governance_approval_status": "approved",
+      "governance_approval_reference": "F27-OP66R-GOV-NTTSY-SBX-AZ-RG-LIST-001-1.0-20261023",
+      "compatible_previous_versions": [],
+      "rollback_version": null
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "files": {
+    "catalog": {
+      "name": "catalog.json",
+      "sha256": "ff80ed6b0cc6812f616ae8aa2c2aeebb821c68e50696c1379a8fee6a163c9cf2"
+    },
+    "bindings": {
+      "name": "bindings.json",
+      "sha256": "dbfea4680b67f937246eab817ef2a1d49b626157160b2ed8a5cbcf490079fb06"
+    },
+    "governance": {
+      "name": "governance.json",
+      "sha256": "afeb4e27a2308745c39425340ecac5f716054bd6fa31f69b493a2e4863c81a98"
+    }
+  }
+}

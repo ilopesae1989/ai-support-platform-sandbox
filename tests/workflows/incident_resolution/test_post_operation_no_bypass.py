@@ -998,12 +998,48 @@ def test_workflow_injects_reader_only_into_observation_executor():
             assert type_error(check.body[0])
             assert check.lineno < initializer.lineno
 
-        # No alias, reassignment, update(), extra consumer or silent fallback.
+        # The only additional key is the explicitly typed WRITE route. Its
+        # validation and forwarding do not grant operational authority.
+        write_contract = ast.parse(
+            "if vm_start_route is not None:\n"
+            "    if not isinstance(vm_start_route, GovernedVmStartRoute):\n"
+            "        raise TypeError('vm_start_route must be GovernedVmStartRoute.')\n"
+            "    selector_options['vm_start_route'] = vm_start_route\n"
+        ).body[0]
+        write_gates = [n for n in fn.body if isinstance(n, ast.If)
+                       and isinstance(n.test, ast.Compare)
+                       and isinstance(n.test.left, ast.Name)
+                       and n.test.left.id == "vm_start_route" and n.lineno < call.lineno]
+        assert len(write_gates) == 1
+        write_gate = write_gates[0]
+        assert ast.dump(write_gate) == ast.dump(write_contract)
+        assert initializer.lineno < write_gate.lineno < call.lineno
+        write_key = write_gate.body[-1].targets[0].value
+
+        # The attestation handoff is typed and forwarded only to operations.
+        publisher_contract = ast.parse(
+            "if attestation_publisher is not None:\n"
+            "    from src.attestation.governor_outbox import GovernorAttestationPublisher\n"
+            "    if type(attestation_publisher) is not GovernorAttestationPublisher:\n"
+            "        raise TypeError('Explicit governor attestation publisher required')\n"
+            "    selector_options['attestation_publisher'] = attestation_publisher\n"
+        ).body[0]
+        publisher_gates = [n for n in fn.body if isinstance(n, ast.If)
+                           and isinstance(n.test, ast.Compare)
+                           and isinstance(n.test.left, ast.Name)
+                           and n.test.left.id == "attestation_publisher"]
+        assert len(publisher_gates) == 1
+        publisher_gate = publisher_gates[0]
+        assert ast.dump(publisher_gate) == ast.dump(publisher_contract)
+        assert initializer.lineno < publisher_gate.lineno < call.lineno
+        publisher_key = publisher_gate.body[-1].targets[0].value
+
+        # No alias, reassignment, update(), extra key or extra consumer.
         references = [n for n in ast.walk(fn)
                       if isinstance(n, ast.Name) and n.id == "selector_options"]
-        assert len(references) == 3
+        assert len(references) == 5
         assert {id(n) for n in references} == {
-            id(initializer.targets[0]), id(key.value), id(expanded.value)
+            id(initializer.targets[0]), id(key.value), id(write_key), id(publisher_key), id(expanded.value)
         }
 
     def one_call(fn, name):

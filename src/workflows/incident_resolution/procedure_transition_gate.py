@@ -11,6 +11,8 @@ from pydantic import (
 
 from src.runtime.procedure.models import (
     NextAction,
+    OperationAction,
+    OperationKind,
     ProcedureExecutionResult,
     ProcedureRuntimeState,
     StepEvidence,
@@ -29,6 +31,8 @@ from src.workflows.incident_resolution.operation_models import (
 from src.workflows.incident_resolution.procedure_validation_models import (
     ProcedureValidationContext,
 )
+
+from src.workflows.incident_resolution.rg_list_acceptance import rg_list_content_accepted
 
 
 class ProcedureTransitionOutcome(BaseModel):
@@ -523,6 +527,45 @@ def _build_verification_evidence(
     )
 
 
+def _rg_list_technical_failure(
+    state: ProcedureRuntimeState,
+    result: OperationResult,
+) -> bool:
+    """Apply RG List's deterministic acceptance contract, preserving legacy routes.
+
+    The authoritative step and registered operation must agree on the
+    canonical capability. Neither a cognitive proposal nor an incomplete
+    identity can opt an RG List operation out of technical acceptance.
+    """
+    capability = "azure.resource_group.list"
+    action = OperationAction.RESOURCE_GROUP_LIST
+    if not any(
+        item.capability_id == capability or item.operation_action == action
+        for item in (state.step, result)
+    ):
+        return False
+
+    expected = ("azure", OperationKind.READ, action, capability)
+    for item in (state.step, result):
+        actual = (
+            item.operation_domain, item.operation_kind,
+            item.operation_action, item.capability_id,
+        )
+        if actual != expected:
+            raise ValueError("RG List requires the exact canonical operation identity.")
+    if state.step.hitl_required != result.hitl_required:
+        raise ValueError("RG List HITL policy differs from the authoritative step.")
+
+    return (
+        result.success is not True
+        or result.technical_success is not True
+        or result.error is not None
+        or result.evidence is None
+        or result.evidence.derive_technical_success() is not True
+        or not rg_list_content_accepted(result)
+    )
+
+
 def apply_procedure_validation_transition_with_outcome(
     *,
     state: ProcedureRuntimeState,
@@ -597,6 +640,27 @@ def apply_procedure_validation_transition_with_outcome(
     )
 
     runtime = ProcedureRuntime()
+
+    if _rg_list_technical_failure(trusted_state, request_result):
+        # BLOCKED is a terminal non-operational transition. Keep the original
+        # operation evidence and cognitive proposal for review; never turn an
+        # uncertain result into a retry, advance, or resolved workflow.
+        runtime.register_verification_result(
+            trusted_state,
+            StepEvidence(
+                success=False,
+                result={
+                    "technical_acceptance": "not_demonstrated",
+                    "operation_id": request_result.operation_id,
+                    "technical_success": request_result.technical_success,
+                    "cognitive_proposal": trusted_context.result.model_dump(mode="json"),
+                },
+                error="RG_LIST_TECHNICAL_ACCEPTANCE_NOT_MET",
+            ),
+        )
+        decision = ProcedureExecutionResult(next_action=NextAction.BLOCKED)
+        runtime.apply_procedure_decision(trusted_state, decision)
+        return ProcedureTransitionOutcome(state=trusted_state, decision=decision)
 
     runtime.register_verification_result(
         trusted_state,

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from src.config.procedure_configuration import ProcedureConfiguration
+
+from src.workflows.incident_resolution.vm_start_foundry_binding import GovernedVmStartRoute, VmStartFoundryBinding
+
 import os
 
 from dataclasses import (
@@ -557,6 +561,10 @@ def build_teams_hitl_app(
     capability_foundry_agent_binding_registry: (
         CapabilityFoundryAgentBindingRegistry | None
     ) = None,
+    vm_start_route: GovernedVmStartRoute | None = None,
+    attestation_publisher=None,
+    vm_start_binding: VmStartFoundryBinding | None = None,
+    procedure_configuration: ProcedureConfiguration | None = None,
 ) -> TeamsHitlBootstrap:
     """
     Construye la aplicación Teams y registra
@@ -576,7 +584,25 @@ def build_teams_hitl_app(
     """
 
     # Only explicit selection crosses this layer; direct legacy calls stay unchanged.
+    if vm_start_binding is not None:
+        if not isinstance(vm_start_binding, VmStartFoundryBinding):
+            raise TypeError("vm_start_binding must be VmStartFoundryBinding.")
+        if vm_start_route is not None:
+            raise ValueError("Specify vm_start_binding or vm_start_route, never both.")
     selector_options = {}
+    if attestation_publisher is not None:
+        from src.attestation.governor_outbox import GovernorAttestationPublisher
+        if type(attestation_publisher) is not GovernorAttestationPublisher:
+            raise TypeError("Explicit governor attestation publisher required")
+        selector_options["attestation_publisher"] = attestation_publisher
+    if procedure_configuration is not None:
+        if not isinstance(procedure_configuration, ProcedureConfiguration):
+            raise TypeError("procedure_configuration must be ProcedureConfiguration.")
+        selector_options.update(procedure_configuration.workflow_options())
+    if vm_start_route is not None:
+        if not isinstance(vm_start_route, GovernedVmStartRoute):
+            raise TypeError("vm_start_route must be GovernedVmStartRoute.")
+        selector_options["vm_start_route"] = vm_start_route
     if capability_foundry_agent_binding_registry is not None:
         if not isinstance(
             capability_foundry_agent_binding_registry,
@@ -668,6 +694,17 @@ def build_teams_hitl_app(
     checkpoint_storage = (
         persistence.checkpoint_storage
     )
+    if vm_start_binding is not None:
+        from src.workflows.incident_resolution.vm_start_approval_binding import (
+            CheckpointApprovedVmStartBindingReader,
+        )
+        selector_options["vm_start_route"] = GovernedVmStartRoute(
+            binding=vm_start_binding,
+            approval_binding_reader=CheckpointApprovedVmStartBindingReader(
+                store=store,
+                checkpoint_storage=checkpoint_storage,
+            ),
+        )
 
     operation_dispatch_ledger = (
         persistence.operation_dispatch_ledger

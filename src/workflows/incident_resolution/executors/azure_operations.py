@@ -44,6 +44,8 @@ from ..azure_operations_models import (
     VerifiedAzureOperationRequest,
 )
 
+from ..vm_start_foundry_binding import GovernedVmStartRoute
+
 from ..mcp_evidence import (
     McpCallEvidence,
 )
@@ -113,6 +115,8 @@ class AzureOperationsExecutor(Executor):
         capability_foundry_agent_binding_registry: (
             CapabilityFoundryAgentBindingRegistry | None
         ) = None,
+        vm_start_route: GovernedVmStartRoute | None = None,
+        attestation_publisher=None,
     ) -> None:
         super().__init__(
             id="azure_operations"
@@ -146,6 +150,20 @@ class AzureOperationsExecutor(Executor):
         self._capability_foundry_agent_binding_registry = (
             capability_foundry_agent_binding_registry
         )
+        if (azure_read_tool_authority_registry is None
+                and capability_foundry_agent_binding_registry is not None
+                and capability_foundry_agent_binding_registry.count()):
+            self._azure_read_tool_authority_registry = (
+                capability_foundry_agent_binding_registry.read_authority_registry()
+            )
+        if vm_start_route is not None and not isinstance(vm_start_route, GovernedVmStartRoute):
+            raise TypeError("vm_start_route must be GovernedVmStartRoute.")
+        self._vm_start_route = vm_start_route
+        if attestation_publisher is not None:
+            from src.attestation.governor_outbox import GovernorAttestationPublisher
+            if type(attestation_publisher) is not GovernorAttestationPublisher:
+                raise TypeError("Governor publisher required")
+        self._attestation_publisher = attestation_publisher
 
     @staticmethod
     def _build_prompt(
@@ -674,6 +692,8 @@ Restricciones obligatorias:
     def _validate_mcp_approval_request(
         request: VerifiedAzureOperationRequest,
         approval,
+        *,
+        expected_server_label: str = "azure-mcp-operations-sbx",
     ) -> None:
         """
         Verifica que la tool MCP propuesta por
@@ -750,7 +770,7 @@ Restricciones obligatorias:
                 "server_label",
                 None,
             )
-            != "azure-mcp-operations-sbx"
+            != expected_server_label
         ):
             raise ValueError(
                 "Servidor MCP distinto del "
@@ -1799,6 +1819,14 @@ Restricciones obligatorias:
                 "verificación inválido."
             )
 
+        # Opt-in WRITE route: resolve before consuming the monotonic claim.
+        # Missing/mismatched persisted approval binding never falls back.
+        governed_write_binding = None
+        if request.operation_kind == OperationKind.WRITE and self._vm_start_route is not None:
+            governed_write_binding = await self._vm_start_route.resolve_for(
+                request, project_endpoint=self._agents.project_endpoint
+            )
+
         governed_read_authority = None
 
         if (
@@ -1807,6 +1835,10 @@ Restricciones obligatorias:
             and request.capability_id
             is not None
         ):
+            # Resolve an explicit selector before looking up its authority.
+            # A partial registry must reject the missing binding, never fall back.
+            if self._capability_foundry_agent_binding_registry is not None:
+                self._capability_foundry_agent_binding_registry.get(request.capability_id)
             governed_read_authority = (
                 self
                 ._azure_read_tool_authority_registry
@@ -1875,6 +1907,12 @@ Restricciones obligatorias:
         # fallido; es una violación de la frontera de
         # dispatch y debe detener el workflow.
         #
+        if self._attestation_publisher is not None:
+            if governed_write_binding is None and governed_read_agent_definition is None:
+                raise ValueError("Attestation requires an explicit governed publication")
+        from datetime import datetime, timezone
+        attestation_started_at = datetime.now(timezone.utc)
+
         self._operation_dispatch_ledger.claim(
             request.operation_id
         )
@@ -1898,10 +1936,14 @@ Restricciones obligatorias:
                 request.operation_kind
                 == OperationKind.WRITE
             ):
+                write_options = {}
+                if governed_write_binding is not None:
+                    write_options["agent_definition"] = governed_write_binding.agent_definition
                 invocation = (
                     await self._agents
                     .begin_azure_operations(
-                        prompt
+                        prompt,
+                        **write_options,
                     )
                 )
 
@@ -1934,10 +1976,20 @@ Restricciones obligatorias:
                 # compara la propuesta del modelo/MCP
                 # contra VerifiedAzureOperationRequest.
                 #
+                guard_options = {}
+                if governed_write_binding is not None:
+                    guard_options["expected_server_label"] = governed_write_binding.server_label
                 self._validate_mcp_approval_request(
                     request,
                     approval,
+                    **guard_options,
                 )
+                if governed_write_binding is not None:
+                    confirmed_binding = await self._vm_start_route.resolve_for(
+                        request, project_endpoint=self._agents.project_endpoint
+                    )
+                    if confirmed_binding != governed_write_binding:
+                        raise ValueError("VM_START binding changed before MCP continuation.")
 
                 #
                 # Correlación anti-confusion:
@@ -2070,6 +2122,13 @@ Restricciones obligatorias:
                         prompt
                     )
                 )
+
+            if self._attestation_publisher is not None:
+                selected = (governed_write_binding.agent_definition if governed_write_binding is not None
+                            else governed_read_agent_definition)
+                self._attestation_publisher.publish(request=request, approval=approval,
+                    response=response, agent_definition=selected,
+                    dispatch_ledger=self._operation_dispatch_ledger, started_at=attestation_started_at)
 
         except Exception as exc:
             await self._emit_result(
