@@ -4,6 +4,8 @@ from dataclasses import (
     dataclass,
 )
 
+from .continuation_payload import TEAMS_CONTINUATION_CODEC
+
 from src.channels.teams.bootstrap import (
     TeamsHitlPersistence,
 )
@@ -133,6 +135,7 @@ def build_azure_sql_teams_hitl_persistence(
 
     continuation_store = (
         AzureSqlIncidentContinuationStore(
+            payload_codec=TEAMS_CONTINUATION_CODEC,
             connection_factory=(
                 connection_factory
             ),

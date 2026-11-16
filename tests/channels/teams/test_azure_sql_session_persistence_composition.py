@@ -258,22 +258,13 @@ def test_composition_builds_seven_adapters_with_one_shared_factory(
     assert connection_open_attempts == []
 
     for name in (
-        "store",
-        "operation_dispatch_ledger",
-        "wait_recheck_consumption_ledger",
-        "continuation_store",
-        "conversation_store",
-        "session_store",
+        "store", "operation_dispatch_ledger", "wait_recheck_consumption_ledger",
+        "continuation_store", "conversation_store", "session_store",
     ):
-        assert adapter_calls[
-            name
-        ] == [
-            {
-                "connection_factory": (
-                    shared_connection_factory
-                )
-            }
-        ]
+        expected = {"connection_factory": shared_connection_factory}
+        if name == "continuation_store":
+            expected["payload_codec"] = module.TEAMS_CONTINUATION_CODEC
+        assert adapter_calls[name] == [expected]
 
     assert len(
         adapter_calls[

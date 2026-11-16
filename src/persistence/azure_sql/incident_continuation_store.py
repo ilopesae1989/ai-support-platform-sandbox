@@ -4,18 +4,16 @@ from collections.abc import (
     Callable,
 )
 
-import json
 import time
 
 from typing import (
     Any,
 )
 
-from src.channels.teams.approval_authorization import (
-    AuthorizedTeamsApprovalInvocation,
-)
+from src.runtime.procedure.authorized_approval import AuthorizedApprovalInvocation
+from src.runtime.incident_continuation_codec import ContinuationPayloadCodec
 
-from src.channels.teams.incident_continuation_store import (
+from src.runtime.incident_continuation_store import (
     IncidentContinuationClaimError,
     IncidentContinuationConflictError,
     IncidentContinuationJob,
@@ -234,37 +232,14 @@ def _require_exact_string(
     return value
 
 
-def _canonical_payload(
-    invocation: AuthorizedTeamsApprovalInvocation,
-) -> str:
-    return json.dumps(
-        invocation.model_dump(
-            mode="json"
-        ),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(
-            ",",
-            ":",
-        ),
-    )
-
-
 def _job_from_row(
     row: Any,
+    *,
+    payload_codec: ContinuationPayloadCodec,
 ) -> IncidentContinuationJob:
-    payload = json.loads(
-        row[1]
-    )
+    invocation = payload_codec.decode(row[1])
 
-    invocation = (
-        AuthorizedTeamsApprovalInvocation
-        .model_validate(
-            payload
-        )
-    )
-
-    return IncidentContinuationJob(
+    return IncidentContinuationJob[payload_codec.invocation_type](
         approval_id=row[0],
         invocation=invocation,
         status=IncidentContinuationStatus(
@@ -289,6 +264,7 @@ class AzureSqlIncidentContinuationStore:
         self,
         *,
         connection_factory: ConnectionFactory,
+        payload_codec: ContinuationPayloadCodec,
     ) -> None:
         if not callable(
             connection_factory
@@ -296,6 +272,10 @@ class AzureSqlIncidentContinuationStore:
             raise TypeError(
                 "connection_factory debe ser callable."
             )
+
+        if not isinstance(payload_codec, ContinuationPayloadCodec):
+            raise TypeError("Explicit continuation payload codec required.")
+        self._payload_codec = payload_codec
 
         self._connection_factory = (
             connection_factory
@@ -326,15 +306,14 @@ class AzureSqlIncidentContinuationStore:
 
     def enqueue(
         self,
-        invocation: AuthorizedTeamsApprovalInvocation,
+        invocation: AuthorizedApprovalInvocation,
     ) -> IncidentContinuationJob:
         if not isinstance(
             invocation,
-            AuthorizedTeamsApprovalInvocation,
+            self._payload_codec.invocation_type,
         ):
             raise TypeError(
-                "invocation debe ser "
-                "AuthorizedTeamsApprovalInvocation."
+                "invocation must match the configured authorized model."
             )
 
         approval_id = (
@@ -342,7 +321,7 @@ class AzureSqlIncidentContinuationStore:
         )
 
         payload_json = (
-            _canonical_payload(
+            self._payload_codec.encode(
                 invocation
             )
         )
@@ -410,13 +389,11 @@ class AzureSqlIncidentContinuationStore:
                     ) from error
 
                 existing_job = (
-                    _job_from_row(
-                        existing
-                    )
+                    _job_from_row(existing, payload_codec=self._payload_codec)
                 )
 
                 if (
-                    _canonical_payload(
+                    self._payload_codec.encode(
                         existing_job.invocation
                     )
                     != payload_json
@@ -439,9 +416,7 @@ class AzureSqlIncidentContinuationStore:
 
             connection.commit()
 
-            return _job_from_row(
-                inserted
-            )
+            return _job_from_row(inserted, payload_codec=self._payload_codec)
 
         except Exception:
             if not rollback_performed:
@@ -496,9 +471,7 @@ class AzureSqlIncidentContinuationStore:
                 f"approval_id={approval_id!r}."
             )
 
-        return _job_from_row(
-            row
-        )
+        return _job_from_row(row, payload_codec=self._payload_codec)
 
     def claim_next(
         self,
@@ -538,9 +511,7 @@ class AzureSqlIncidentContinuationStore:
             if claimed is None:
                 return None
 
-            return _job_from_row(
-                claimed
-            )
+            return _job_from_row(claimed, payload_codec=self._payload_codec)
 
         except Exception:
             connection.rollback()
@@ -604,9 +575,7 @@ class AzureSqlIncidentContinuationStore:
 
             connection.commit()
 
-            return _job_from_row(
-                completed
-            )
+            return _job_from_row(completed, payload_codec=self._payload_codec)
 
         except Exception:
             connection.rollback()
@@ -677,9 +646,7 @@ class AzureSqlIncidentContinuationStore:
 
             connection.commit()
 
-            return _job_from_row(
-                failed
-            )
+            return _job_from_row(failed, payload_codec=self._payload_codec)
 
         except Exception:
             connection.rollback()
@@ -798,9 +765,7 @@ class AzureSqlIncidentContinuationStore:
 
             connection.commit()
 
-            return _job_from_row(
-                recovered
-            )
+            return _job_from_row(recovered, payload_codec=self._payload_codec)
 
         except Exception:
             connection.rollback()

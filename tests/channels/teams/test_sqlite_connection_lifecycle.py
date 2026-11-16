@@ -28,7 +28,7 @@ from src.workflows.incident_resolution.operation_dispatch_ledger import (
 SQLITE_SOURCES = (
     "src/runtime/procedure/approval_store.py",
     "src/workflows/incident_resolution/operation_dispatch_ledger.py",
-    "src/channels/teams/incident_continuation_store.py",
+    "src/persistence/sqlite/incident_continuation_store.py",
     "src/channels/teams/conversation_binding_store.py",
 )
 
@@ -37,7 +37,7 @@ def test_every_connect_context_uses_closing():
     expected = {
         "src/runtime/procedure/approval_store.py": 7,
         "src/workflows/incident_resolution/operation_dispatch_ledger.py": 2,
-        "src/channels/teams/incident_continuation_store.py": 5,
+        "src/persistence/sqlite/incident_continuation_store.py": 5,
         "src/channels/teams/conversation_binding_store.py": 3,
     }
 

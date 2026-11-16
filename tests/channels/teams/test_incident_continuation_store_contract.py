@@ -89,8 +89,7 @@ def test_incident_approval_handoff_handler_depends_on_continuation_protocol():
 
 def test_incident_continuation_worker_depends_on_continuation_protocol():
     source = _read_source(
-        "src/channels/teams/"
-        "incident_continuation_worker.py"
+        "src/runtime/incident_continuation_worker.py"
     )
 
     assert (

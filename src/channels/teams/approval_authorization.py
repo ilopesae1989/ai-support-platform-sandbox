@@ -11,6 +11,8 @@ from pydantic import (
     field_validator,
 )
 
+from src.runtime.procedure.authorized_approval import AuthorizedApprovalInvocation
+
 from .approval_invocation import (
     TeamsApprovalInvocation,
 )
@@ -158,7 +160,7 @@ class ExactTeamsApprovalPolicy(
 
 
 class AuthorizedTeamsApprovalInvocation(
-    BaseModel
+    AuthorizedApprovalInvocation
 ):
     model_config = ConfigDict(
         extra="forbid",

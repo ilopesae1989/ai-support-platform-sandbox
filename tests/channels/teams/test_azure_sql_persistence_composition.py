@@ -322,7 +322,8 @@ def test_azure_sql_composition_builds_one_shared_factory_and_exact_bundle(
             {
                 "connection_factory": (
                     shared_connection_factory
-                )
+                ),
+                "payload_codec": module.TEAMS_CONTINUATION_CODEC
             }
         ]
     )

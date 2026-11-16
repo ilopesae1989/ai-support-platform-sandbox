@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+from src.channels.teams.continuation_payload import TEAMS_CONTINUATION_CODEC
+
 import inspect
 import json
 
@@ -322,6 +324,7 @@ def test_enqueue_new_job_uses_parameterized_insert_output_and_commits():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -434,6 +437,7 @@ def test_enqueue_exact_duplicate_is_idempotent_after_unique_conflict():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -496,6 +500,7 @@ def test_enqueue_same_approval_with_different_payload_fails_closed():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -534,6 +539,7 @@ def test_get_returns_exact_typed_job():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -583,6 +589,7 @@ def test_get_missing_job_fails_closed():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -622,6 +629,7 @@ def test_claim_next_is_ordered_atomic_queue_update_with_output():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -725,6 +733,7 @@ def test_claim_next_without_pending_job_returns_none():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -771,6 +780,7 @@ def test_complete_requires_exact_claim_owner():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -836,6 +846,7 @@ def test_complete_wrong_owner_or_state_fails_closed():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -880,6 +891,7 @@ def test_fail_requires_exact_claim_owner_and_persists_error():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -946,6 +958,7 @@ def test_fail_wrong_owner_or_state_fails_closed():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -1002,6 +1015,7 @@ def test_recovery_revalidates_pending_approval_under_same_sql_transaction():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -1122,6 +1136,7 @@ def test_recovery_consumed_precheck_fails_before_sql_connection():
         )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             forbidden_factory
         )
@@ -1163,6 +1178,7 @@ def test_recovery_locked_recheck_blocks_approval_race():
     )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             lambda: connection
         )
@@ -1205,6 +1221,7 @@ def test_invalid_inputs_fail_before_connection_creation():
         )
 
     store = adapter_type(
+        payload_codec=TEAMS_CONTINUATION_CODEC,
         connection_factory=(
             forbidden_factory
         )

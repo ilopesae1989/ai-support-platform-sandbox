@@ -6,6 +6,16 @@ Base publicada: `6d141382a84e22c97e4c461eb869c96d8433ac2e`, árbol
 La entrega 2 cuenta con 3.400 PASS en Windows, 24 excluidas, 3 avisos,
 y comprobación de los 19 blobs publicados. `phase16-wip` conserva `a88c79c5`.
 
+Actualización posterior: este primer paquete se validó en Windows con **3.428
+passed, 24 deselected, 3 warnings**, 99,82 s, exit code 0, y se publicó en
+`897807a972275e532877aa6b4354e8609f80f264`, rama `codex/e3-core-recuperacion`.
+Se comprobaron sus 19 blobs remotos. Informe `E3_R1_WINDOWS_20261116_165301.xml`,
+SHA256 `0747d3a550a4adcf621fea5de8d100d809616b38c5b703f60e5786adf1eb255a`.
+Las menciones a Windows pendiente describen la preparación de ese primer paquete;
+quedan superadas por esta evidencia. Los apartados siguientes conservan su alcance
+histórico. La entrega 3 continúa con el
+[segundo paquete: contrato de continuación](e3-continuation-boundary.md).
+
 ## Resultado y alcance
 
 La composición del workflow de incidente sale de `channels/teams/bootstrap.py`
