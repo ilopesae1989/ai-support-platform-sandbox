@@ -4,6 +4,9 @@ from types import (
 
 import pytest
 
+import src.runtime.incident_approval_processor as core_processor
+from src.channels.teams.approval_context import to_authorized_approval_context
+
 from src.channels.teams.approval_authorization import (
     AuthorizedTeamsApprovalInvocation,
 )
@@ -166,10 +169,9 @@ def _communication_context_recovery_harness(
         return object()
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "recover_safe_communication_context_from_checkpoint",
         fake_recover,
-        raising=False,
     )
 
 
@@ -252,7 +254,7 @@ async def test_approved_incident_resumes_exactly_once_and_completes(
             "evidence"
         )
 
-        assert invocation is expected_invocation
+        assert invocation == to_authorized_approval_context(expected_invocation)
         assert request is restored_request
 
         return approval_evidence
@@ -263,24 +265,21 @@ async def test_approved_incident_resumes_exactly_once_and_completes(
     expected_invocation = invocation
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "resolve_approval_channel_action",
         fake_resolve,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "restore_and_verify_pending_request",
         fake_restore,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
-        "build_teams_approval_evidence_from_request",
+        core_processor,
+        "build_approval_evidence_from_request",
         fake_build_evidence,
-        raising=False,
     )
 
     result = await (
@@ -371,17 +370,15 @@ async def test_claim_identity_mismatch_fails_before_response(
         return object()
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "resolve_approval_channel_action",
         lambda **kwargs: instruction,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "restore_and_verify_pending_request",
         fake_restore,
-        raising=False,
     )
 
     with pytest.raises(
@@ -448,24 +445,21 @@ async def test_new_request_after_response_fails_closed_without_complete(
         return object()
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "resolve_approval_channel_action",
         lambda **kwargs: instruction,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "restore_and_verify_pending_request",
         fake_restore,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
-        "build_teams_approval_evidence_from_request",
+        core_processor,
+        "build_approval_evidence_from_request",
         fake_evidence,
-        raising=False,
     )
 
     with pytest.raises(

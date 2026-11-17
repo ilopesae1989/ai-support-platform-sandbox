@@ -7,6 +7,15 @@ del primer paquete, su avance de un commit sobre F46 y la evidencia Windows:
 3.428 PASS, 24 excluidas y 3 avisos. El primer paquete está publicado; esta
 segunda extracción permanece candidata hasta aceptación Windows y publicación.
 
+Actualización posterior: este segundo paquete se publicó en
+`5a81ea8cbd37de0646691405a60c58fc32b2e8fd`, rama `codex/e3-core-recuperacion`,
+tras **3.454 passed, 24 deselected, 3 warnings** en Windows, 105,96 s, exit code 0.
+Se verificaron los 24 blobs publicados. Informe
+`E3_P2_R1_WINDOWS_20261116_172911.xml`, SHA256
+`0574ecabd89bb00f2f8483a4fdbe473157af407398598c6127bc3925202bee66`.
+Esta evidencia supera las menciones históricas a candidato/Windows pendiente.
+Continúa [el tercer paquete: procesamiento HITL y evidencia](e3-hitl-processing.md).
+
 ## Problema y resultado
 
 El adaptador Azure SQL importaba `AuthorizedTeamsApprovalInvocation` y el modelo

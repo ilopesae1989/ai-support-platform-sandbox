@@ -11,6 +11,10 @@ from pydantic import (
     field_validator,
 )
 
+from .approval_context import AuthorizedApprovalContext
+from .models import ApprovedProcedureStep
+from .workflow import ApprovalOutcome, ApprovalRequest
+
 from .approval_channel import (
     ApprovalDecision,
 )
@@ -143,3 +147,314 @@ class ApprovalDecisionEvidence(
         return value.astimezone(
             timezone.utc
         )
+
+
+class ApprovalEvidenceError(
+    ValueError
+):
+    pass
+
+
+def build_approval_evidence(
+    *,
+    invocation: AuthorizedApprovalContext,
+    workflow_result: (
+        ApprovedProcedureStep
+        | ApprovalOutcome
+    ),
+) -> ApprovalDecisionEvidence:
+    """
+    Construye evidencia sólo DESPUÉS de que
+    Agent Framework haya aceptado la decisión HITL.
+
+    No basta con que el canal haya enviado un click.
+    """
+
+    if not isinstance(
+        invocation,
+        AuthorizedApprovalContext,
+    ):
+        raise TypeError(
+            "invocation debe ser "
+            "AuthorizedApprovalContext."
+        )
+
+    if (
+        workflow_result.workflow_id
+        == ""
+        or workflow_result.workflow_id
+        is None
+    ):
+        raise ApprovalEvidenceError(
+            "El resultado HITL no contiene "
+            "workflow_id válido."
+        )
+
+    decision = (
+        invocation.action.decision
+    )
+
+    if (
+        decision
+        == ApprovalDecision.APPROVE
+    ):
+        if not isinstance(
+            workflow_result,
+            ApprovedProcedureStep,
+        ):
+            raise ApprovalEvidenceError(
+                "Una decisión approve debe haber "
+                "producido ApprovedProcedureStep."
+            )
+
+        if (
+            workflow_result.approved
+            is not True
+        ):
+            raise ApprovalEvidenceError(
+                "ApprovedProcedureStep no está "
+                "marcado como aprobado."
+            )
+
+        if (
+            workflow_result.approval_id
+            != invocation.action.approval_id
+        ):
+            raise ApprovalEvidenceError(
+                "approval_id del resultado no "
+                "coincide con la decisión del canal."
+            )
+
+    elif (
+        decision
+        == ApprovalDecision.REJECT
+    ):
+        if not isinstance(
+            workflow_result,
+            ApprovalOutcome,
+        ):
+            raise ApprovalEvidenceError(
+                "Una decisión reject debe haber "
+                "producido ApprovalOutcome."
+            )
+
+        if (
+            workflow_result.approved
+            is not False
+        ):
+            raise ApprovalEvidenceError(
+                "ApprovalOutcome no representa "
+                "un rechazo."
+            )
+
+    else:
+        raise ApprovalEvidenceError(
+            "Decisión HITL no soportada."
+        )
+
+    return ApprovalDecisionEvidence(
+        workflow_id=(
+            workflow_result.workflow_id
+        ),
+
+        approval_id=(
+            invocation.action.approval_id
+        ),
+
+        decision=(
+            decision
+        ),
+
+        channel=(
+            invocation.identity.channel
+        ),
+
+        identity_scheme=(
+            invocation.identity.identity_scheme
+        ),
+
+        tenant_id=(
+            invocation.identity.tenant_id
+        ),
+
+        principal_id=(
+            invocation.identity.principal_id
+        ),
+
+        channel_user_id=(
+            invocation.identity.channel_user_id
+        ),
+
+        conversation_id=(
+            invocation.identity.conversation_id
+        ),
+
+        authorization_policy_id=(
+            invocation.policy_id
+        ),
+
+        display_name=(
+            invocation.identity.display_name
+        ),
+
+        decided_at=None,
+    )
+
+def build_approval_evidence_from_request(
+    *,
+    invocation: AuthorizedApprovalContext,
+    request: ApprovalRequest,
+) -> ApprovalDecisionEvidence:
+    """
+    Construye evidencia de una decisión HITL
+    a partir de la ApprovalRequest autoritativa
+    restaurada y la invocación del canal ya autorizada.
+
+    Este builder no interpreta ni valida el
+    resultado técnico posterior de la operación.
+
+    Debe invocarse únicamente después de que
+    el processor haya verificado y aceptado la
+    respuesta HITL en Agent Framework.
+    """
+
+    if not isinstance(
+        invocation,
+        AuthorizedApprovalContext,
+    ):
+        raise TypeError(
+            "invocation debe ser "
+            "AuthorizedApprovalContext."
+        )
+
+    if not isinstance(
+        request,
+        ApprovalRequest,
+    ):
+        raise TypeError(
+            "request debe ser ApprovalRequest."
+        )
+
+    if (
+        not isinstance(
+            request.workflow_id,
+            str,
+        )
+        or not request.workflow_id
+        or not request.workflow_id.strip()
+        or request.workflow_id
+        != request.workflow_id.strip()
+    ):
+        raise ApprovalEvidenceError(
+            "ApprovalRequest no contiene "
+            "workflow_id exacto válido."
+        )
+
+    if (
+        not isinstance(
+            request.approval_id,
+            str,
+        )
+        or not request.approval_id
+        or not request.approval_id.strip()
+        or request.approval_id
+        != request.approval_id.strip()
+    ):
+        raise ApprovalEvidenceError(
+            "ApprovalRequest no contiene "
+            "approval_id exacto válido."
+        )
+
+    if (
+        request.approval_id
+        != invocation.action.approval_id
+    ):
+        raise ApprovalEvidenceError(
+            "approval_id de ApprovalRequest "
+            "no coincide con la decisión del canal."
+        )
+
+    if (
+        not isinstance(
+            request.conversation_id,
+            str,
+        )
+        or not request.conversation_id
+        or not request.conversation_id.strip()
+        or request.conversation_id
+        != request.conversation_id.strip()
+    ):
+        raise ApprovalEvidenceError(
+            "ApprovalRequest no contiene "
+            "conversation_id exacto válido."
+        )
+
+    if (
+        request.conversation_id
+        != invocation.identity.conversation_id
+    ):
+        raise ApprovalEvidenceError(
+            "conversation_id de ApprovalRequest "
+            "no coincide con la conversación "
+            "autenticada del canal."
+        )
+
+    decision = (
+        invocation.action.decision
+    )
+
+    if decision not in (
+        ApprovalDecision.APPROVE,
+        ApprovalDecision.REJECT,
+    ):
+        raise ApprovalEvidenceError(
+            "Decisión HITL no soportada."
+        )
+
+    return ApprovalDecisionEvidence(
+        workflow_id=(
+            request.workflow_id
+        ),
+
+        approval_id=(
+            request.approval_id
+        ),
+
+        decision=(
+            decision
+        ),
+
+        channel=(
+            invocation.identity.channel
+        ),
+
+        identity_scheme=(
+            invocation.identity.identity_scheme
+        ),
+
+        tenant_id=(
+            invocation.identity.tenant_id
+        ),
+
+        principal_id=(
+            invocation.identity.principal_id
+        ),
+
+        channel_user_id=(
+            invocation.identity.channel_user_id
+        ),
+
+        conversation_id=(
+            request.conversation_id
+        ),
+
+        authorization_policy_id=(
+            invocation.policy_id
+        ),
+
+        display_name=(
+            invocation.identity.display_name
+        ),
+
+        decided_at=None,
+    )

@@ -6,6 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
+import src.runtime.incident_approval_processor as core_processor
+from src.channels.teams.approval_context import to_authorized_approval_context
+
 from src.channels.teams.incident_approval_processor import (
     TeamsIncidentApprovalProcessingResult,
 )
@@ -101,10 +104,9 @@ async def test_processor_recovers_exact_checkpoint_context_and_returns_it(
     recovery_calls = []
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "resolve_approval_channel_action",
         lambda **kwargs: instruction,
-        raising=False,
     )
 
     async def fake_restore(
@@ -122,24 +124,21 @@ async def test_processor_recovers_exact_checkpoint_context_and_returns_it(
         return safe_context
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "restore_and_verify_pending_request",
         fake_restore,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "recover_safe_communication_context_from_checkpoint",
         fake_recover,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
-        "build_teams_approval_evidence_from_request",
+        core_processor,
+        "build_approval_evidence_from_request",
         lambda **kwargs: approval_evidence,
-        raising=False,
     )
 
     result = await (
@@ -285,31 +284,27 @@ async def test_safe_context_recovery_occurs_after_restore_before_claim(
         return object()
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "resolve_approval_channel_action",
         fake_resolve,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "restore_and_verify_pending_request",
         fake_restore,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "recover_safe_communication_context_from_checkpoint",
         fake_recover,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
-        "build_teams_approval_evidence_from_request",
+        core_processor,
+        "build_approval_evidence_from_request",
         fake_evidence,
-        raising=False,
     )
 
     await (
@@ -359,10 +354,9 @@ async def test_safe_context_recovery_failure_blocks_approval_claim(
     evidence_calls = []
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "resolve_approval_channel_action",
         lambda **kwargs: instruction,
-        raising=False,
     )
 
     async def fake_restore(
@@ -379,26 +373,23 @@ async def test_safe_context_recovery_failure_blocks_approval_claim(
         )
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "restore_and_verify_pending_request",
         fake_restore,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
+        core_processor,
         "recover_safe_communication_context_from_checkpoint",
         fake_recover,
-        raising=False,
     )
 
     monkeypatch.setattr(
-        processor,
-        "build_teams_approval_evidence_from_request",
+        core_processor,
+        "build_approval_evidence_from_request",
         lambda **kwargs: evidence_calls.append(
             kwargs
         ),
-        raising=False,
     )
 
     with pytest.raises(
@@ -428,7 +419,7 @@ def test_processor_only_transports_safe_context_without_presenting_it():
     import src.channels.teams.incident_approval_processor as processor
 
     source = inspect.getsource(
-        processor
+        core_processor
     ).casefold()
 
     assert (
