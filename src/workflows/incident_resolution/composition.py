@@ -13,6 +13,7 @@ from agent_framework import CheckpointStorage, Workflow
 from src.runtime.procedure.approval_store import PendingApprovalStore
 
 from src.config.procedure_configuration import ProcedureConfiguration
+from src.runtime.execution_affinity import ExecutionAffinity
 from src.workflows.incident_resolution.capability_foundry_agent_binding import (
     CapabilityFoundryAgentBindingRegistry,
 )
@@ -35,6 +36,7 @@ class IncidentWorkflowOptions:
     vm_start_route: GovernedVmStartRoute | None = None
     procedure_configuration: ProcedureConfiguration | None = None
     attestation_publisher: object | None = None
+    execution_affinity: ExecutionAffinity | None = None
 
     def __post_init__(self) -> None:
         expected_types = (
@@ -42,6 +44,7 @@ class IncidentWorkflowOptions:
             ("vm_start_binding", VmStartFoundryBinding),
             ("vm_start_route", GovernedVmStartRoute),
             ("procedure_configuration", ProcedureConfiguration),
+            ("execution_affinity", ExecutionAffinity),
         )
         for name, expected in expected_types:
             value = getattr(self, name)
@@ -49,6 +52,12 @@ class IncidentWorkflowOptions:
                 raise TypeError(f"{name} must be {expected.__name__}.")
         if self.vm_start_binding is not None and self.vm_start_route is not None:
             raise ValueError("Specify vm_start_binding or vm_start_route, never both.")
+        if self.execution_affinity is not None:
+            if (self.procedure_configuration is None
+                    or self.procedure_configuration.fingerprint != self.execution_affinity.procedures_sha256):
+                raise ValueError("Execution affinity differs from the verified procedure snapshot.")
+            if getattr(self.agents, "deployment_fingerprint", None) != self.execution_affinity.foundry_sha256:
+                raise ValueError("Execution affinity differs from the configured Foundry agents.")
         if self.attestation_publisher is not None:
             from src.attestation.governor_outbox import GovernorAttestationPublisher
             if type(self.attestation_publisher) is not GovernorAttestationPublisher:
@@ -105,7 +114,11 @@ def build_incident_workflow_factory(
         if value is not None:
             arguments[name] = value
     if options.procedure_configuration is not None:
-        arguments.update(options.procedure_configuration.workflow_options())
+        if options.execution_affinity is None:
+            arguments.update(options.procedure_configuration.workflow_options())
+        else:
+            arguments["affinity_procedures"] = options.procedure_configuration
+            arguments["execution_affinity"] = options.execution_affinity
     if options.vm_start_binding is not None:
         from src.workflows.incident_resolution.vm_start_approval_binding import (
             CheckpointApprovedVmStartBindingReader,

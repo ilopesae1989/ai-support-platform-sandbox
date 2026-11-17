@@ -285,11 +285,11 @@ def _load_json_payload(
 def load_procedure_catalog(
     path,
 ) -> ProcedureCatalog:
-    manifest_path = Path(path)
+    return parse_procedure_catalog(_load_json_payload(Path(path)))
 
-    payload = _load_json_payload(
-        manifest_path
-    )
+
+def parse_procedure_catalog(payload: object) -> ProcedureCatalog:
+    """Validate an already decoded snapshot without reopening its source file."""
 
     if not isinstance(payload, dict):
         raise ProcedureCatalogError(

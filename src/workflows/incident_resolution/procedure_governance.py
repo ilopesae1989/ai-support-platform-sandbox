@@ -408,9 +408,11 @@ def load_procedure_governance(
     operacional.
     """
 
-    payload = _read_governance_manifest(
-        Path(path)
-    )
+    return parse_procedure_governance(_read_governance_manifest(Path(path)), catalog=catalog)
+
+
+def parse_procedure_governance(payload: object, *, catalog: ProcedureCatalog) -> ProcedureGovernanceRegistry:
+    """Validate the same bytes that the configuration loader verified."""
 
     if (
         not isinstance(

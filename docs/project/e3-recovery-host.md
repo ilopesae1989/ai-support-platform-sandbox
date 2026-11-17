@@ -5,6 +5,11 @@ Base publicada: `56b8c67f5cca4e297b9600f1c651b354008b979e`.
 Árbol base: `247d1d515169e80c4536400fccba54e437b08606`.
 P6 R1 obtuvo 3.641 PASS tanto en Windows como en Linux y está publicado.
 
+Actualización posterior: P7 fue aceptado en Windows con 3.703 PASS, 24 excluidas,
+3 avisos, y publicado en `55927f1ff420e5d29bf16eabb592a297aa3987c8`.
+El árbol coincide con el candidato Linux: `0530acc2843dd93ad3fc50c99e301201e551eb84`.
+El siguiente contrato se documenta en [E3-P8-R1](e3-release-affinity-contract.md).
+
 ## Decisión y secuencia acotada
 
 P6 proporciona recuperación transaccional explícita, pero ningún consumidor
@@ -154,8 +159,9 @@ La selección ampliada obtuvo 181 PASS y 2 FAIL porque la guarda AST esperaba
 retorno directo del bootstrap. Se actualizó para exigir el envoltorio exacto
 y seguir comprobando el mismo delegado y selector. Se conservan ambos informes.
 
-Windows, publicación de P7, SQL real, activación por cliente, observabilidad
-desplegada y aceptación del ciclo de cierre en Azure permanecen pendientes.
+Windows y publicación de P7 aceptados según la actualización anterior. SQL real,
+activación por cliente, observabilidad desplegada y aceptación del ciclo de cierre
+en Azure permanecen pendientes.
 Antes de activar: todos los consumidores deben usar P5, drenar binarios antiguos,
 validar stores/identidades, definir la política y cualificar las carreras SQL.
 

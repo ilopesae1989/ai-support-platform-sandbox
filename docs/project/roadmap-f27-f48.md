@@ -30,10 +30,16 @@ P6 es [recuperación pre-HITL por lotes](e3-continuation-recovery.md): selector
 limitado, guardas transaccionales y detención ante resultado incierto.
 **3.641 PASS en Linux y Windows**, publicado y verificado en
 `56b8c67f5cca4e297b9600f1c651b354008b979e`.
-El paquete activo P7 es [integración opcional en el host](e3-recovery-host.md):
+P7 es [integración opcional en el host](e3-recovery-host.md):
 configuración explícita, ciclos limitados, observación y parada con drenaje.
-Linux FULL **3,703 PASS**; conserva los 3.641 casos de P6 y añade 62.
-Validación Windows y publicación de P7 pendientes.
+Linux y Windows **3.703 PASS**; conserva los 3.641 casos de P6 y añade 62.
+Publicado y verificado en `55927f1ff420e5d29bf16eabb592a297aa3987c8`.
+El primer paquete P8 es [identidad de release y afinidad](e3-release-affinity-contract.md):
+snapshot verificado de procedimientos y barrera de compatibilidad en el grafo.
+Linux FULL **3.780 PASS**; 77 casos nuevos. Windows y publicación pendientes.
+Es un contrato candidato: activación productiva bloqueada; asignación durable,
+selección previa al claim, recuperación por afinidad y drenaje siguen pendientes.
+No se considera resuelto todavía el gasto de intentos por incompatibilidad.
 Se documenta la [retirada de workflows del portal Foundry](foundry-workflow-retirement.md)
 el 1/12/2026 y se mantiene la orquestación Python de Agent Framework.
 P5 coordina propiedad y consumo HITL; P6 prepara la recuperación explícita.

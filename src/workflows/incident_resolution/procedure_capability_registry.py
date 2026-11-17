@@ -410,6 +410,16 @@ def load_procedure_capability_bindings(
         manifest_path
     )
 
+    return parse_procedure_capability_bindings(payload, catalog=catalog, capability_registry=capability_registry)
+
+
+def parse_procedure_capability_bindings(
+    payload: object, *, catalog: ProcedureCatalog, capability_registry: CapabilityRegistry,
+) -> ProcedureCapabilityRegistry:
+    """Validate a verified snapshot without reading mutable files a second time."""
+    if not isinstance(catalog, ProcedureCatalog) or not isinstance(capability_registry, CapabilityRegistry):
+        raise ProcedureCapabilityRegistryError("Explicit catalog and capability registry required.")
+
     if (
         not isinstance(
             payload,

@@ -7,6 +7,7 @@ from agent_framework import (
 from src.agents.foundry_agents import (
     FoundryAgents,
 )
+from src.runtime.execution_affinity import AFFINITY_STATE_KEY, ExecutionAffinity
 from src.workflows.incident_resolution.alert_models import (
     NormalizedAlert,
 )
@@ -44,12 +45,16 @@ class ClassificationExecutor(Executor):
         agents: FoundryAgents,
         *,
         id: str = "classification",
+        execution_affinity: ExecutionAffinity | None = None,
     ) -> None:
         super().__init__(
             id=id,
         )
 
         self._agents = agents
+        if execution_affinity is not None and type(execution_affinity) is not ExecutionAffinity:
+            raise TypeError("execution_affinity must be ExecutionAffinity.")
+        self._execution_affinity = execution_affinity
 
     @handler
     async def classify_workflow_input(
@@ -88,6 +93,12 @@ class ClassificationExecutor(Executor):
             ClassifiedAlertContext
         ],
     ) -> None:
+        if self._execution_affinity is not None:
+            document = self._execution_affinity.to_document()
+            existing = ctx.get_state(AFFINITY_STATE_KEY, None)
+            if existing is not None and existing != document:
+                raise ValueError("Incident state contains a different execution affinity.")
+            ctx.set_state(AFFINITY_STATE_KEY, document)
         prompt = self._build_prompt(
             alert
         )

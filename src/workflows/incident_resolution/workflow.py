@@ -176,6 +176,8 @@ def build_incident_resolution_workflow(
     ) = None,
     vm_start_route: GovernedVmStartRoute | None = None,
     attestation_publisher=None,
+    execution_affinity=None,
+    affinity_procedures=None,
 ):
     """
     IncidentResolutionWorkflow.
@@ -266,6 +268,29 @@ def build_incident_resolution_workflow(
     - el consumo de operation_id.
     """
 
+    # Strict candidate path: configuration identity is supplied by the trusted
+    # factory, never taken from an alert, channel action or restored state.
+    if execution_affinity is not None:
+        from src.runtime.execution_affinity import ExecutionAffinity
+        from src.config.procedure_configuration import ProcedureConfiguration
+        if type(execution_affinity) is not ExecutionAffinity:
+            raise TypeError("execution_affinity must be ExecutionAffinity.")
+        if (type(affinity_procedures) is not ProcedureConfiguration
+                or affinity_procedures.fingerprint != execution_affinity.procedures_sha256):
+            raise ValueError("Execution affinity requires its exact procedure snapshot.")
+        if getattr(agents, "deployment_fingerprint", None) != execution_affinity.foundry_sha256:
+            raise ValueError("Execution affinity requires its exact Foundry configuration.")
+        if any(value is not None for value in (
+            procedure_capability_registry, governed_procedure_admission_policy,
+            domain_execution_registrations, resource_identity_registry,
+        )):
+            raise ValueError("Affinity cannot be combined with unversioned procedure/domain overrides.")
+        verified = affinity_procedures.verified_workflow_options()
+        procedure_capability_registry = verified["procedure_capability_registry"]
+        governed_procedure_admission_policy = verified["governed_procedure_admission_policy"]
+    elif affinity_procedures is not None:
+        raise ValueError("affinity_procedures requires an explicit execution affinity.")
+
     foundry_agents = (
         agents if agents is not None else FoundryAgents()
     )
@@ -326,6 +351,9 @@ def build_incident_resolution_workflow(
         if not re.fullmatch(r"[0-9a-f]{64}", deployment_fingerprint):
             raise ValueError("Invalid deployment fingerprint.")
         classification_options["id"] = "classification-" + deployment_fingerprint
+    if execution_affinity is not None:
+        classification_options["id"] = "classification-affinity-" + execution_affinity.fingerprint
+        classification_options["execution_affinity"] = execution_affinity
     classification = (
         ClassificationExecutor(
             agents=foundry_agents,

@@ -250,7 +250,11 @@ def _read_manifest(path: Path) -> object:
 def load_procedure_compatibility(
     path,
 ) -> tuple[LegacyProcedureCompatibility, ...]:
-    payload = _read_manifest(Path(path))
+    return parse_procedure_compatibility(_read_manifest(Path(path)))
+
+
+def parse_procedure_compatibility(payload: object) -> tuple[LegacyProcedureCompatibility, ...]:
+    """Validate an already decoded compatibility snapshot."""
 
     if (
         not isinstance(payload, dict)

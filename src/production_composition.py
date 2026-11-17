@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.config.continuation_recovery import parse_continuation_recovery_policy
+from src.config.release_identity import reject_incomplete_affinity_activation
 
 from collections.abc import Mapping
 from src.config.procedure_configuration import build_procedure_configuration
@@ -54,6 +55,7 @@ def build_production_application(
         )
 
     # Validate opt-in host configuration before creating provider dependencies.
+    reject_incomplete_affinity_activation(environment)
     parse_continuation_recovery_policy(environment)
     deployment = build_foundry_deployment_configuration(environment)
     if deployment is not None:
