@@ -269,6 +269,7 @@ def test_phase23_failed_continuation_rejects_exact_replay(
     failed = continuation.fail(
         approval_id=APPROVAL_ID,
         worker_id="worker-phase23-terminal",
+        expected_attempt_count=claimed.attempt_count,
         error="SyntheticPreApprovalFailure",
     )
 

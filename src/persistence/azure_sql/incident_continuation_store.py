@@ -14,6 +14,7 @@ from src.runtime.procedure.authorized_approval import AuthorizedApprovalInvocati
 from src.runtime.incident_continuation_codec import ContinuationPayloadCodec
 
 from src.runtime.incident_continuation_store import (
+    MAX_PREAPPROVAL_RECOVERY_ATTEMPTS, require_continuation_attempt,
     IncidentContinuationClaimError,
     IncidentContinuationConflictError,
     IncidentContinuationJob,
@@ -148,6 +149,7 @@ WHERE
     approval_id = %(approval_id)s
     AND status = 'claimed'
     AND claimed_by = %(worker_id)s
+    AND attempt_count = %(expected_attempt_count)s
 """
 
 
@@ -171,6 +173,7 @@ WHERE
     approval_id = %(approval_id)s
     AND status = 'claimed'
     AND claimed_by = %(worker_id)s
+    AND attempt_count = %(expected_attempt_count)s
 """
 
 
@@ -207,6 +210,8 @@ WHERE
     approval_id = %(approval_id)s
     AND status = 'claimed'
     AND claimed_by = %(worker_id)s
+    AND attempt_count = %(expected_attempt_count)s
+    AND attempt_count < %(max_attempts)s
 """
 
 
@@ -528,7 +533,10 @@ class AzureSqlIncidentContinuationStore:
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
     ) -> IncidentContinuationJob:
+        expected_attempt_count = require_continuation_attempt(expected_attempt_count)
+
         approval_id = _require_exact_string(
             name="approval_id",
             value=approval_id,
@@ -557,6 +565,7 @@ class AzureSqlIncidentContinuationStore:
                     "worker_id": (
                         worker_id
                     ),
+                    "expected_attempt_count": expected_attempt_count,
                     "updated_at": (
                         time.time()
                     ),
@@ -592,8 +601,11 @@ class AzureSqlIncidentContinuationStore:
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
         error: str,
     ) -> IncidentContinuationJob:
+        expected_attempt_count = require_continuation_attempt(expected_attempt_count)
+
         approval_id = _require_exact_string(
             name="approval_id",
             value=approval_id,
@@ -627,6 +639,7 @@ class AzureSqlIncidentContinuationStore:
                     "worker_id": (
                         worker_id
                     ),
+                    "expected_attempt_count": expected_attempt_count,
                     "error": error,
                     "updated_at": (
                         time.time()
@@ -663,8 +676,11 @@ class AzureSqlIncidentContinuationStore:
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
         approval_store: object,
     ) -> IncidentContinuationJob:
+        expected_attempt_count = require_continuation_attempt(expected_attempt_count)
+
         approval_id = _require_exact_string(
             name="approval_id",
             value=approval_id,
@@ -747,6 +763,8 @@ class AzureSqlIncidentContinuationStore:
                     "worker_id": (
                         worker_id
                     ),
+                    "expected_attempt_count": expected_attempt_count,
+                    "max_attempts": MAX_PREAPPROVAL_RECOVERY_ATTEMPTS,
                     "updated_at": (
                         time.time()
                     ),

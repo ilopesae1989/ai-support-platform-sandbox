@@ -10,16 +10,21 @@ El LLM interpreta y propone; Python gobierna identidad, procedimientos, parámet
 
 ## Estado que debe retomarse
 
-**Actualización 16/11/2026:** el plan de refactorización adelanta la configuración
+**Actualización 17/11/2026:** el plan de refactorización adelanta la configuración
 por cliente de F46, con apoyo de F40 y contratos F27-B03/B04/B06. La entrega 2
 está validada en Windows (3.400 PASS) y publicada en `6d141382`; su evidencia
 se documenta en [F46 — configuración por cliente](f46-customer-configuration.md).
 El primer paquete de [Entrega 3 — núcleo y recuperación](e3-core-recovery.md)
 está publicado en `897807a`, con 3.428 PASS en Windows. El segundo paquete,
 [contrato de continuación](e3-continuation-boundary.md), está publicado en
-`5a81ea8`, con 3.454 PASS en Windows. El paquete activo es
-[procesamiento HITL y evidencia](e3-hitl-processing.md), con F30-T03/T04 y
-apoyo F37/F40; no cierra F30/F31/F37 completas.
+`5a81ea8`, con 3.454 PASS en Windows. El tercero,
+[procesamiento HITL y evidencia](e3-hitl-processing.md), está publicado en
+`2659416`, con 3.482 PASS en Windows. El paquete activo P4 es
+[propiedad por intento de continuación](e3-continuation-ownership.md):
+3.517 PASS en Linux; validación Windows y publicación pendientes.
+Prepara la recuperación de huérfanos dentro de F30/F31; protege las transiciones
+de cola, pero no activa recuperación por vencimiento ni atomicidad con el claim
+HITL. No cierra F30/F31/F37 ni la entrega 3 completa.
 F27 LIVE permanece pausada. Los estados OP54 siguientes se conservan como histórico;
 no ordenan repetir acciones ya acreditadas ni prevalecen sobre la continuidad de noviembre.
 Se mantienen los IDs y los criterios F27–F48; esta entrega no cierra F46 ni F27.

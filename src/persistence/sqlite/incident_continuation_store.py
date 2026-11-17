@@ -8,6 +8,7 @@ import time
 from src.runtime.procedure.authorized_approval import AuthorizedApprovalInvocation
 from src.runtime.incident_continuation_codec import ContinuationPayloadCodec
 from src.runtime.incident_continuation_store import (
+    MAX_PREAPPROVAL_RECOVERY_ATTEMPTS, require_continuation_attempt,
     IncidentContinuationClaimError, IncidentContinuationConflictError,
     IncidentContinuationJob, IncidentContinuationStatus,
 )
@@ -487,7 +488,10 @@ class SqliteIncidentContinuationStore:
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
     ) -> IncidentContinuationJob:
+        expected_attempt_count = require_continuation_attempt(expected_attempt_count)
+
         approval_id = (
             self._validate_exact_string(
                 name="approval_id",
@@ -517,6 +521,7 @@ class SqliteIncidentContinuationStore:
                     approval_id = ?
                     AND status = ?
                     AND claimed_by = ?
+                    AND attempt_count = ?
                 """,
                 (
                     IncidentContinuationStatus
@@ -528,6 +533,7 @@ class SqliteIncidentContinuationStore:
                     .CLAIMED
                     .value,
                     worker_id,
+                    expected_attempt_count,
                 ),
             )
 
@@ -548,8 +554,11 @@ class SqliteIncidentContinuationStore:
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
         error: str,
     ) -> IncidentContinuationJob:
+        expected_attempt_count = require_continuation_attempt(expected_attempt_count)
+
         approval_id = (
             self._validate_exact_string(
                 name="approval_id",
@@ -586,6 +595,7 @@ class SqliteIncidentContinuationStore:
                     approval_id = ?
                     AND status = ?
                     AND claimed_by = ?
+                    AND attempt_count = ?
                 """,
                 (
                     IncidentContinuationStatus
@@ -598,6 +608,7 @@ class SqliteIncidentContinuationStore:
                     .CLAIMED
                     .value,
                     worker_id,
+                    expected_attempt_count,
                 ),
             )
 
@@ -617,6 +628,7 @@ class SqliteIncidentContinuationStore:
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
         approval_store,
     ) -> IncidentContinuationJob:
         """
@@ -651,6 +663,8 @@ class SqliteIncidentContinuationStore:
 
         No inspecciona ni modifica Azure/MCP/checkpoints.
         """
+
+        expected_attempt_count = require_continuation_attempt(expected_attempt_count)
 
         approval_id = (
             self._validate_exact_string(
@@ -717,6 +731,8 @@ class SqliteIncidentContinuationStore:
                     approval_id = ?
                     AND status = ?
                     AND claimed_by = ?
+                    AND attempt_count = ?
+                    AND attempt_count < ?
                 """,
                 (
                     IncidentContinuationStatus
@@ -728,6 +744,8 @@ class SqliteIncidentContinuationStore:
                     .CLAIMED
                     .value,
                     worker_id,
+                    expected_attempt_count,
+                    MAX_PREAPPROVAL_RECOVERY_ATTEMPTS,
                 ),
             )
 

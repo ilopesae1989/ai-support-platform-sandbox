@@ -28,6 +28,16 @@ class FakeMembershipChecker:
         )
 
 
+def test_two_host_compositions_have_distinct_worker_owners(monkeypatch, tmp_path):
+    install_future_component_fakes(monkeypatch=monkeypatch)
+    hosts = [teams_bootstrap.build_teams_hitl_app(
+        create_settings(tmp_path / name), membership_checker=FakeMembershipChecker(),
+    ) for name in ("first", "second")]
+    owners = [host.continuation_worker._dependencies.worker_id for host in hosts]
+    assert owners[0] != owners[1]
+    assert all(owner != "teams-incident-worker-sbx" for owner in owners)
+
+
 def create_settings(tmp_path):
     return TeamsHitlSettings(
         client_id="11111111-1111-1111-1111-111111111111",

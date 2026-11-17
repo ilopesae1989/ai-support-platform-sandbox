@@ -8,6 +8,16 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from src.runtime.incident_continuation_codec import InvocationT
 
 
+MAX_PREAPPROVAL_RECOVERY_ATTEMPTS = 3
+
+
+def require_continuation_attempt(value: object) -> int:
+    """Require the generation returned by claim_next, never infer a current one."""
+    if type(value) is not int or value < 1:
+        raise ValueError("expected_attempt_count must be a positive exact integer.")
+    return value
+
+
 class IncidentContinuationConflictError(
     RuntimeError
 ):
@@ -166,6 +176,13 @@ class IncidentContinuationJob(
 class IncidentContinuationStore(
     Protocol[InvocationT]
 ):
+    """Queue transitions compare owner and the generation returned by claim_next.
+
+    Callers must retain that generation. Reading a newer attempt to retry a
+    rejected transition would adopt another execution's ownership.
+    These guards cover queue rows, not the separate HITL claim or remote effects.
+    """
+
     def enqueue(
         self,
         invocation: (
@@ -192,6 +209,7 @@ class IncidentContinuationStore(
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
     ) -> IncidentContinuationJob[InvocationT]:
         ...
 
@@ -200,6 +218,7 @@ class IncidentContinuationStore(
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
         error: str,
     ) -> IncidentContinuationJob[InvocationT]:
         ...
@@ -209,6 +228,7 @@ class IncidentContinuationStore(
         *,
         approval_id: str,
         worker_id: str,
+        expected_attempt_count: int,
         approval_store: object,
     ) -> IncidentContinuationJob[InvocationT]:
         ...

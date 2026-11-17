@@ -99,7 +99,12 @@ Focal existente: **618 passed, 1 warning**. Suite nueva: **28 passed**:
 
 Regresión completa Linux: **3.482 passed, 24 deselected, 3 warnings**, 81,11 s,
 exit code 0. Conserva los 3.454 casos anteriores y añade los 28 indicados.
-Windows: pendiente para este tercer paquete. Los focales no se suman a la FULL.
+Aceptación Windows posterior: **3.482 passed, 24 deselected, 3 warnings**,
+126,11 s, exit code 0. Informe `E3_P3_R1_WINDOWS_20261116_185543.xml`, SHA256
+`b1f3bea00e136c6aed8a0848b55e742088e75c23fc9a27e9943f27042ca2a682`.
+Publicado en `2659416ff59febe3bac2e11ae13d9312e224d5ec`, árbol
+`e9fbee5539502e878f39b320e45a0fb80bfdbde9`; los 16 blobs remotos coinciden
+con el candidato probado. Los focales no se suman a la FULL.
 
 La prueba nativa usa Agent Framework real y agentes simulados. SQLite acredita
 el consumo local observado; no sustituye pruebas de aislamiento/concurrencia
@@ -111,12 +116,14 @@ operaciones Azure, despliegues ni migraciones. No se actualizan dependencias.
 IDs conservados: F30-T03/T04 y apoyo F37/F40 en el alcance de evidencia de la
 decisión. No se cierran F30/F31/F37 ni la entrega 3 completa.
 
-La extracción del procesamiento HITL queda implementada en este candidato.
+La extracción del procesamiento HITL queda validada y publicada.
 Continúan las ventanas ya documentadas: trabajos claimed abandonados por caída
 dura, notificación recuperable, exclusión de turnos de sesión, afinidad de release
 y recuperación remota. El siguiente paquete debe concretar la recuperación de
 trabajos huérfanos, preservando aprobación y dispatch consumidos y delimitando
-las pruebas que necesitan SQL real de ensayo. No se añade otra fase al roadmap.
+las pruebas que necesitan SQL real de ensayo. Su primer incremento es
+[P4: propiedad por intento](e3-continuation-ownership.md). No se añade otra fase
+al roadmap.
 
 Reversión: volver al código previo manteniendo el formato Teams y las tablas
 actuales. No borrar aprobaciones, trabajos ni ledgers para facilitar el rollback.

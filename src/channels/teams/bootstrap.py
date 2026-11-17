@@ -875,9 +875,6 @@ def build_teams_hitl_app(
                 terminal_notifier=(
                     terminal_notifier
                 ),
-                worker_id=(
-                    "teams-incident-worker-sbx"
-                ),
             )
         )
     )

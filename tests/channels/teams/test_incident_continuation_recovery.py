@@ -120,6 +120,7 @@ def test_claimed_before_approval_can_return_to_pending(
         continuation
         .recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id="worker-old",
             approval_store=approval,
         )
@@ -185,6 +186,7 @@ def test_claimed_approval_blocks_recovery(
     ):
         continuation.recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id="worker-old",
             approval_store=approval,
         )
@@ -236,6 +238,7 @@ def test_completed_approval_blocks_recovery(
     ):
         continuation.recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id="worker-old",
             approval_store=approval,
         )
@@ -261,6 +264,7 @@ def test_wrong_worker_blocks_recovery(
     ):
         continuation.recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id="worker-other",
             approval_store=approval,
         )
@@ -287,6 +291,7 @@ def test_pending_job_cannot_be_recovered_as_claimed(
     ):
         continuation.recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id="worker-old",
             approval_store=approval,
         )
@@ -350,6 +355,7 @@ def test_recovery_survives_restart(
         restarted_continuation
         .recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id="worker-old",
             approval_store=restarted_approval,
         )
@@ -382,6 +388,7 @@ def test_recovery_does_not_change_authorized_payload(
         continuation
         .recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id="worker-old",
             approval_store=approval,
         )

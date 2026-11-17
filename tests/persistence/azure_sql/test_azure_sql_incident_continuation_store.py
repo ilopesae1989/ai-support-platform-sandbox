@@ -36,6 +36,34 @@ MODULE_NAME = (
 )
 
 
+@pytest.mark.parametrize("method", ["complete", "fail", "recover_claimed_before_approval"])
+def test_attempt_mismatch_output_rolls_back_without_adopting_new_generation(method):
+    rows = [("pending", None), None] if method == "recover_claimed_before_approval" else [None]
+    cursor = FakeCursor(fetchone_results=rows)
+    connection = FakeConnection(cursor=cursor)
+    store = _load_adapter_class()(
+        payload_codec=TEAMS_CONTINUATION_CODEC, connection_factory=lambda: connection,
+    )
+    kwargs = dict(approval_id=APPROVAL_ID, worker_id=WORKER_ID, expected_attempt_count=2)
+    if method == "fail":
+        kwargs["error"] = "stale"
+    elif method == "recover_claimed_before_approval":
+        kwargs["approval_store"] = FakeApprovalStore(("pending", None))
+    with pytest.raises(IncidentContinuationClaimError):
+        getattr(store, method)(**kwargs)
+    statement, parameters = cursor.executions[-1]
+    assert "AND ATTEMPT_COUNT = %(EXPECTED_ATTEMPT_COUNT)S" in _normalize_sql(statement)
+    assert "AND CLAIMED_BY = %(WORKER_ID)S" in _normalize_sql(statement)
+    assert parameters["expected_attempt_count"] == 2
+    if method == "recover_claimed_before_approval":
+        assert "AND ATTEMPT_COUNT < %(MAX_ATTEMPTS)S" in _normalize_sql(statement)
+        assert parameters["max_attempts"] == 3
+    assert len(cursor.executions) == len(rows)
+    assert connection.commit_count == 0
+    assert connection.rollback_count == 1
+    _assert_closed(connection, cursor)
+
+
 REPO_ROOT = (
     Path(__file__)
     .resolve()
@@ -788,6 +816,7 @@ def test_complete_requires_exact_claim_owner():
 
     completed = store.complete(
         approval_id=APPROVAL_ID,
+        expected_attempt_count=1,
         worker_id=WORKER_ID,
     )
 
@@ -857,6 +886,7 @@ def test_complete_wrong_owner_or_state_fails_closed():
     ):
         store.complete(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id=WORKER_ID,
         )
 
@@ -899,6 +929,7 @@ def test_fail_requires_exact_claim_owner_and_persists_error():
 
     failed = store.fail(
         approval_id=APPROVAL_ID,
+        expected_attempt_count=1,
         worker_id=WORKER_ID,
         error="PROCESSING FAILED",
     )
@@ -969,6 +1000,7 @@ def test_fail_wrong_owner_or_state_fails_closed():
     ):
         store.fail(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id=WORKER_ID,
             error="FAIL",
         )
@@ -1025,6 +1057,7 @@ def test_recovery_revalidates_pending_approval_under_same_sql_transaction():
         store
         .recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id=WORKER_ID,
             approval_store=approval_store,
         )
@@ -1147,6 +1180,7 @@ def test_recovery_consumed_precheck_fails_before_sql_connection():
     ):
         store.recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id=WORKER_ID,
             approval_store=approval_store,
         )
@@ -1189,6 +1223,7 @@ def test_recovery_locked_recheck_blocks_approval_race():
     ):
         store.recover_claimed_before_approval(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id=WORKER_ID,
             approval_store=approval_store,
         )
@@ -1253,6 +1288,7 @@ def test_invalid_inputs_fail_before_connection_creation():
     ):
         store.complete(
             approval_id=" bad",
+            expected_attempt_count=1,
             worker_id=WORKER_ID,
         )
 
@@ -1261,6 +1297,7 @@ def test_invalid_inputs_fail_before_connection_creation():
     ):
         store.fail(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id=" bad ",
             error="failure",
         )
@@ -1270,6 +1307,7 @@ def test_invalid_inputs_fail_before_connection_creation():
     ):
         store.fail(
             approval_id=APPROVAL_ID,
+            expected_attempt_count=1,
             worker_id=WORKER_ID,
             error="",
         )

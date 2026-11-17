@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from uuid import uuid4
 
 from collections.abc import (
     Awaitable,
@@ -9,6 +10,7 @@ from collections.abc import (
 
 from dataclasses import (
     dataclass,
+    field,
 )
 
 from enum import (
@@ -23,6 +25,10 @@ from src.runtime.procedure.approval_store import (
 
 from src.runtime.incident_continuation_store import (
     IncidentContinuationClaimError,
+    IncidentContinuationJob,
+    IncidentContinuationStatus,
+    MAX_PREAPPROVAL_RECOVERY_ATTEMPTS,
+    require_continuation_attempt,
     IncidentContinuationStore,
 )
 
@@ -45,9 +51,6 @@ TerminalNotifier = Callable[
 ]
 
 
-MAX_PREAPPROVAL_RECOVERY_ATTEMPTS = 3
-
-
 class IncidentContinuationWorkerOutcome(
     str,
     Enum,
@@ -58,6 +61,7 @@ class IncidentContinuationWorkerOutcome(
         "requeued_preapproval"
     )
     FAILED_CLOSED = "failed_closed"
+    CLAIM_LOST = "claim_lost"
 
 
 @dataclass(
@@ -86,7 +90,9 @@ class IncidentContinuationWorkerDependencies:
 
     terminal_notifier: TerminalNotifier
 
-    worker_id: str
+    # Generated once per dependency bundle. Hosts may supply an explicit unique
+    # instance identity; the database generation also fences reuse of that ID.
+    worker_id: str = field(default_factory=lambda: f"continuation-{uuid4().hex}")
 
     poll_interval_seconds: float = 0.25
 
@@ -144,6 +150,8 @@ class IncidentContinuationWorker:
       falla cerrado y NO reintenta;
     - el mensaje terminal se envía antes de
       marcar el continuation job completed.
+    - las transiciones de cola conservan el intento reclamado;
+      no constituyen una lease ni un fence del claim HITL.
     """
 
     def __init__(
@@ -165,213 +173,82 @@ class IncidentContinuationWorker:
             dependencies
         )
 
+    def _fail_owned_job(
+        self, job: IncidentContinuationJob, error: str,
+    ) -> IncidentContinuationWorkerOutcome:
+        try:
+            self._dependencies.continuation_store.fail(
+                approval_id=job.approval_id,
+                worker_id=self._dependencies.worker_id,
+                expected_attempt_count=job.attempt_count,
+                error=error,
+            )
+        except IncidentContinuationClaimError:
+            # Another attempt owns the row, or it is already terminal. Never
+            # fetch a newer generation and use it to overwrite that attempt.
+            return IncidentContinuationWorkerOutcome.CLAIM_LOST
+        return IncidentContinuationWorkerOutcome.FAILED_CLOSED
+
     async def process_next_once(
         self,
     ) -> IncidentContinuationWorkerOutcome:
-        dependencies = (
-            self._dependencies
+        dependencies = self._dependencies
+        job = dependencies.continuation_store.claim_next(
+            worker_id=dependencies.worker_id,
         )
-
-        job = (
-            dependencies
-            .continuation_store
-            .claim_next(
-                worker_id=(
-                    dependencies.worker_id
-                )
-            )
-        )
-
         if job is None:
-            return (
-                IncidentContinuationWorkerOutcome
-                .IDLE
-            )
-
-        approval_id = (
-            job.approval_id
-        )
+            return IncidentContinuationWorkerOutcome.IDLE
+        if (job.status != IncidentContinuationStatus.CLAIMED
+                or job.claimed_by != dependencies.worker_id):
+            return IncidentContinuationWorkerOutcome.CLAIM_LOST
+        try:
+            require_continuation_attempt(job.attempt_count)
+        except ValueError:
+            return IncidentContinuationWorkerOutcome.CLAIM_LOST
 
         try:
-            workflow = (
-                dependencies
-                .workflow_factory()
+            workflow = dependencies.workflow_factory()
+            processed = await dependencies.processor(
+                invocation=job.invocation,
+                store=dependencies.approval_store,
+                workflow=workflow,
             )
-
-            processed = (
-                await dependencies.processor(
-                    invocation=(
-                        job.invocation
-                    ),
-                    store=(
-                        dependencies
-                        .approval_store
-                    ),
-                    workflow=(
-                        workflow
-                    ),
-                )
-            )
-
             await dependencies.terminal_notifier(
-                invocation=(
-                    job.invocation
-                ),
-                processed=(
-                    processed
-                ),
+                invocation=job.invocation,
+                processed=processed,
             )
-
             dependencies.continuation_store.complete(
-                approval_id=(
-                    approval_id
-                ),
-                worker_id=(
-                    dependencies.worker_id
-                ),
+                approval_id=job.approval_id,
+                worker_id=dependencies.worker_id,
+                expected_attempt_count=job.attempt_count,
             )
-
-            return (
-                IncidentContinuationWorkerOutcome
-                .COMPLETED
-            )
-
+            return IncidentContinuationWorkerOutcome.COMPLETED
         except Exception as exc:
-            #
-            # Antes de decidir recovery comprobamos
-            # el estado durable de la aprobación.
-            #
-            # Un fallo de esta lectura tampoco puede
-            # habilitar un retry automático.
-            #
-            error_name = (
-                type(exc).__name__
-            )
-
+            error_name = type(exc).__name__
             try:
-                (
-                    approval_status,
-                    approved_decision,
-                ) = (
-                    dependencies
-                    .approval_store
-                    .get_consumption_record(
-                        approval_id
-                    )
+                status, decision = dependencies.approval_store.get_consumption_record(
+                    job.approval_id,
                 )
-
             except Exception:
-                dependencies.continuation_store.fail(
-                    approval_id=(
-                        approval_id
-                    ),
-                    worker_id=(
-                        dependencies.worker_id
-                    ),
-                    error=(
-                        error_name
-                    ),
-                )
+                return self._fail_owned_job(job, error_name)
 
-                return (
-                    IncidentContinuationWorkerOutcome
-                    .FAILED_CLOSED
-                )
-
-            #
-            # Sólo existe recovery automático cuando:
-            #
-            # - la aprobación sigue pending;
-            # - no existe decisión consumida;
-            # - todavía no se agotó el presupuesto
-            #   explícito de recovery pre-claim.
-            #
-            if (
-                approval_status
-                == "pending"
-                and approved_decision
-                is None
-            ):
-                if (
-                    job.attempt_count
-                    >= MAX_PREAPPROVAL_RECOVERY_ATTEMPTS
-                ):
-                    dependencies.continuation_store.fail(
-                        approval_id=(
-                            approval_id
-                        ),
-                        worker_id=(
-                            dependencies.worker_id
-                        ),
-                        error=(
-                            error_name
-                        ),
-                    )
-
-                    return (
-                        IncidentContinuationWorkerOutcome
-                        .FAILED_CLOSED
-                    )
-
+            if status == "pending" and decision is None:
+                if job.attempt_count >= MAX_PREAPPROVAL_RECOVERY_ATTEMPTS:
+                    return self._fail_owned_job(job, error_name)
                 try:
                     dependencies.continuation_store.recover_claimed_before_approval(
-                        approval_id=(
-                            approval_id
-                        ),
-                        worker_id=(
-                            dependencies.worker_id
-                        ),
-                        approval_store=(
-                            dependencies
-                            .approval_store
-                        ),
+                        approval_id=job.approval_id,
+                        worker_id=dependencies.worker_id,
+                        expected_attempt_count=job.attempt_count,
+                        approval_store=dependencies.approval_store,
                     )
-
                 except IncidentContinuationClaimError:
-                    dependencies.continuation_store.fail(
-                        approval_id=(
-                            approval_id
-                        ),
-                        worker_id=(
-                            dependencies.worker_id
-                        ),
-                        error=(
-                            error_name
-                        ),
-                    )
+                    # The approval may have been consumed, or ownership changed.
+                    # fail() must still match our original attempt in either case.
+                    return self._fail_owned_job(job, error_name)
+                return IncidentContinuationWorkerOutcome.REQUEUED_PREAPPROVAL
 
-                    return (
-                        IncidentContinuationWorkerOutcome
-                        .FAILED_CLOSED
-                    )
-
-                return (
-                    IncidentContinuationWorkerOutcome
-                    .REQUEUED_PREAPPROVAL
-                )
-
-            #
-            # Claimed/completed o cualquier estado
-            # distinto de pending+NULL:
-            #
-            # nunca requeue.
-            #
-            dependencies.continuation_store.fail(
-                approval_id=(
-                    approval_id
-                ),
-                worker_id=(
-                    dependencies.worker_id
-                ),
-                error=(
-                    error_name
-                ),
-            )
-
-            return (
-                IncidentContinuationWorkerOutcome
-                .FAILED_CLOSED
-            )
+            return self._fail_owned_job(job, error_name)
 
     async def run(
         self,

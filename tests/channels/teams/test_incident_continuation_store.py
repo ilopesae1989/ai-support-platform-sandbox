@@ -348,6 +348,7 @@ def test_complete_requires_claim_owner(
             approval_id=(
                 claimed.approval_id
             ),
+            expected_attempt_count=1,
             worker_id="worker-2",
         )
 
@@ -355,6 +356,7 @@ def test_complete_requires_claim_owner(
         approval_id=(
             claimed.approval_id
         ),
+        expected_attempt_count=1,
         worker_id="worker-1",
     )
 
@@ -397,6 +399,7 @@ def test_failed_job_is_terminal_and_not_reclaimed(
         approval_id=(
             claimed.approval_id
         ),
+        expected_attempt_count=1,
         worker_id="worker-1",
         error=(
             "LOCAL TEST FAILURE"
