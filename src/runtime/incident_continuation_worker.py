@@ -19,6 +19,8 @@ from enum import (
 
 from typing import Any
 
+from src.runtime.continuation_approval_store import ContinuationApprovalStore
+
 from src.runtime.procedure.approval_store import (
     PendingApprovalStore,
 )
@@ -151,7 +153,8 @@ class IncidentContinuationWorker:
     - el mensaje terminal se envía antes de
       marcar el continuation job completed.
     - las transiciones de cola conservan el intento reclamado;
-      no constituyen una lease ni un fence del claim HITL.
+      el claim HITL usa el almacén ligado a ese intento.
+    - no constituye una lease ni recuperación automática de huérfanos.
     """
 
     def __init__(
@@ -206,11 +209,15 @@ class IncidentContinuationWorker:
         except ValueError:
             return IncidentContinuationWorkerOutcome.CLAIM_LOST
 
+        scoped_store = ContinuationApprovalStore(
+            job=job, continuation_store=dependencies.continuation_store,
+            approval_store=dependencies.approval_store,
+        )
         try:
             workflow = dependencies.workflow_factory()
             processed = await dependencies.processor(
                 invocation=job.invocation,
-                store=dependencies.approval_store,
+                store=scoped_store,
                 workflow=workflow,
             )
             await dependencies.terminal_notifier(
@@ -225,6 +232,10 @@ class IncidentContinuationWorker:
             return IncidentContinuationWorkerOutcome.COMPLETED
         except Exception as exc:
             error_name = type(exc).__name__
+            if scoped_store.claim_attempted:
+                # The claim may have committed even when its acknowledgement
+                # failed. Never turn a readback into authority for another try.
+                return self._fail_owned_job(job, error_name)
             try:
                 status, decision = dependencies.approval_store.get_consumption_record(
                     job.approval_id,

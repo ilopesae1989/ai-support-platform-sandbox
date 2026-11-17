@@ -37,7 +37,7 @@ def test_every_connect_context_uses_closing():
     expected = {
         "src/runtime/procedure/approval_store.py": 7,
         "src/workflows/incident_resolution/operation_dispatch_ledger.py": 2,
-        "src/persistence/sqlite/incident_continuation_store.py": 5,
+        "src/persistence/sqlite/incident_continuation_store.py": 4,
         "src/channels/teams/conversation_binding_store.py": 3,
     }
 
@@ -103,7 +103,7 @@ def test_every_connect_context_uses_closing():
             relative
         ]
 
-    assert total == 17
+    assert total == 16  # Coordinated approval transaction owns its connection separately.
 
 
 def test_database_handles_are_released_after_operations(

@@ -4,7 +4,14 @@ Paquete E3-P4-R1, 17/11/2026. Base publicada:
 `2659416ff59febe3bac2e11ae13d9312e224d5ec`, árbol
 `e9fbee5539502e878f39b320e45a0fb80bfdbde9`.
 Alcance NON-LIVE dentro de la entrega 3, preparación de F30-T02/T03/T04 y
-F31-T02/T03/T04. Windows y publicación de P4 pendientes.
+F31-T02/T03/T04. P4 validado en Windows: **3.517 passed, 24 deselected,
+3 warnings**, 133,45 s, Python 3.14.2, exit code 0. Informe
+`E3_P4_R1_WINDOWS_20261117_082912.xml`, SHA256
+`e060e1648ba443b8a9dfbb1a3b60e2973cc387d335ef1e32b0952649cb053628`.
+Publicado en `a54050897f354acae94f9ed3dd25452f5f38ec3a`, árbol
+`5648705188bfc1d2df5e11618b5bb2996fbe5841`; parent, árbol completo, 14 paths y
+estadísticas contrastados con GitHub. La frontera HITL se aborda en
+[P5](e3-continuation-hitl-claim.md); los límites siguientes describen P4.
 
 ## Problema reproducido
 
@@ -67,7 +74,8 @@ y se propaga; un reinicio no lo devuelve automáticamente a pending.
 - Regresión Linux completa: **3.517 passed, 24 deselected, 3 warnings**, 70,03 s,
   exit code 0. Se conservan exactamente los 3.482 casos anteriores y se añaden 35.
 - Entorno Linux: CPython 3.14.10; Agent Framework core 1.13.0 y Foundry 1.10.4.
-  No se modifican dependencias del repositorio. Windows: pendiente.
+  No se modifican dependencias del repositorio. Windows: aceptado según el
+  recibo indicado al inicio de este documento.
 
 Las carreras usan conexiones SQLite independientes. Las pruebas Azure SQL usan
 dobles de conexión/cursor: acreditan el WHERE, los parámetros, rollback ante

@@ -160,6 +160,10 @@ class AzureSqlPendingApprovalStore:
             connection_factory
         )
 
+    def uses_connection_factory(self, factory: ConnectionFactory) -> bool:
+        """Require the same trusted database factory for a coordinated claim."""
+        return self._connection_factory is factory
+
     @staticmethod
     def _is_integrity_error(
         *,

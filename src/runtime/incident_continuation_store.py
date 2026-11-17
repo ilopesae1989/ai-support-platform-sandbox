@@ -6,6 +6,7 @@ from typing import Generic, Protocol
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from src.runtime.incident_continuation_codec import InvocationT
+from src.runtime.procedure.approval_correlation import PendingApprovalCorrelation
 
 
 MAX_PREAPPROVAL_RECOVERY_ATTEMPTS = 3
@@ -182,6 +183,17 @@ class IncidentContinuationStore(
     rejected transition would adopt another execution's ownership.
     These guards cover queue rows, not the separate HITL claim or remote effects.
     """
+
+    def claim_approval(
+        self, *, approval_id: str, worker_id: str, expected_attempt_count: int,
+        approved: bool, approval_store: object,
+    ) -> PendingApprovalCorrelation:
+        """Claim HITL with ownership checked in the same persistence transaction.
+
+        No response may be delivered until this returns after commit. An error
+        must not be retried by inferring permission from a subsequent read.
+        """
+        ...
 
     def enqueue(
         self,

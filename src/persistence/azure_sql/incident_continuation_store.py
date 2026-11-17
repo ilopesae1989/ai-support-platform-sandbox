@@ -10,6 +10,11 @@ from typing import (
     Any,
 )
 
+from src.persistence.azure_sql.pending_approval_store import AzureSqlPendingApprovalStore
+from src.runtime.procedure.approval_store import ApprovalAlreadyConsumedError
+from src.runtime.procedure.approval_correlation import PendingApprovalCorrelation
+from src.runtime.procedure.approval_channel import ApprovalDecision
+
 from src.runtime.procedure.authorized_approval import AuthorizedApprovalInvocation
 from src.runtime.incident_continuation_codec import ContinuationPayloadCodec
 
@@ -669,6 +674,67 @@ class AzureSqlIncidentContinuationStore:
             if cursor is not None:
                 cursor.close()
 
+            connection.close()
+
+    def claim_approval(self, *, approval_id: str, worker_id: str,
+                       expected_attempt_count: int, approved: bool,
+                       approval_store) -> PendingApprovalCorrelation:
+        expected_attempt_count = require_continuation_attempt(expected_attempt_count)
+        approval_id = _require_exact_string(name="approval_id", value=approval_id)
+        worker_id = _require_exact_string(name="worker_id", value=worker_id)
+        if type(approved) is not bool:
+            raise TypeError("approved must be bool.")
+        if (not isinstance(approval_store, AzureSqlPendingApprovalStore) or
+                not approval_store.uses_connection_factory(self._connection_factory)):
+            raise TypeError("Coordinated claim requires the same SQL connection factory.")
+        connection = self._connection_factory()
+        cursor = None
+        try:
+            if getattr(connection, "autocommit", False) is not False:
+                raise RuntimeError("Coordinated claim requires autocommit=False.")
+            cursor = connection.cursor()
+            parameters = dict(approval_id=approval_id, worker_id=worker_id,
+                              expected_attempt_count=expected_attempt_count,
+                              approved_decision=int(approved))
+            # Same lock order as recovery: approval first, continuation second.
+            cursor.execute(_RECOVERY_APPROVAL_GUARD, {"approval_id": approval_id})
+            row = cursor.fetchone()
+            if row is None or row[0] != "pending" or row[1] is not None:
+                raise ApprovalAlreadyConsumedError("Approval absent, consumed or inconsistent.")
+            cursor.execute("""
+SELECT payload_json FROM dbo.incident_continuation_jobs WITH (UPDLOCK, HOLDLOCK)
+WHERE approval_id = %(approval_id)s AND status = 'claimed'
+  AND claimed_by = %(worker_id)s AND attempt_count = %(expected_attempt_count)s
+""", parameters)
+            job = cursor.fetchone()
+            if job is None:
+                raise IncidentContinuationClaimError("Continuation ownership lost before HITL claim.")
+            invocation = self._payload_codec.decode(job[0])
+            if (invocation.action.approval_id != approval_id or
+                    (invocation.action.decision == ApprovalDecision.APPROVE) is not approved):
+                raise IncidentContinuationClaimError("Decision differs from durable invocation.")
+            cursor.execute("""
+UPDATE dbo.pending_approvals
+SET consumption_status = 'claimed', approved_decision = %(approved_decision)s
+OUTPUT inserted.approval_id, inserted.workflow_id, inserted.request_id, inserted.checkpoint_id
+WHERE approval_id = %(approval_id)s
+  AND consumption_status = 'pending' AND approved_decision IS NULL
+""", parameters)
+            claimed = cursor.fetchone()
+            if claimed is None:
+                raise ApprovalAlreadyConsumedError("Approval was consumed concurrently.")
+            result = PendingApprovalCorrelation(
+                approval_id=claimed[0], workflow_id=claimed[1],
+                request_id=claimed[2], checkpoint_id=claimed[3],
+            )
+            connection.commit()
+            return result
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            if cursor is not None:
+                cursor.close()
             connection.close()
 
     def recover_claimed_before_approval(

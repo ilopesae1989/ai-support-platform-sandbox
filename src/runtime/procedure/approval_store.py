@@ -141,6 +141,11 @@ class SqlitePendingApprovalStore:
 
         self._initialize()
 
+    @property
+    def database_path(self) -> Path:
+        """Configured durable location, for the coordinated continuation adapter."""
+        return self._database_path.resolve()
+
     def _connect(
         self,
     ) -> sqlite3.Connection:

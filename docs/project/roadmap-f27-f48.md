@@ -19,12 +19,17 @@ está publicado en `897807a`, con 3.428 PASS en Windows. El segundo paquete,
 [contrato de continuación](e3-continuation-boundary.md), está publicado en
 `5a81ea8`, con 3.454 PASS en Windows. El tercero,
 [procesamiento HITL y evidencia](e3-hitl-processing.md), está publicado en
-`2659416`, con 3.482 PASS en Windows. El paquete activo P4 es
-[propiedad por intento de continuación](e3-continuation-ownership.md):
-3.517 PASS en Linux; validación Windows y publicación pendientes.
-Prepara la recuperación de huérfanos dentro de F30/F31; protege las transiciones
-de cola, pero no activa recuperación por vencimiento ni atomicidad con el claim
-HITL. No cierra F30/F31/F37 ni la entrega 3 completa.
+`2659416`, con 3.482 PASS en Windows. P4,
+[propiedad por intento de continuación](e3-continuation-ownership.md), está
+publicado en `a540508`, con 3.517 PASS en Windows. El paquete activo P5 es
+[claim HITL ligado al intento](e3-continuation-hitl-claim.md): R1 obtuvo 3.562 PASS
+en Linux y 3.561 PASS/1 FAIL en Windows (conexión abierta en el helper de pruebas).
+R2 corrige ese cierre y obtiene 3.562 PASS en Linux; aceptación Windows y publicación pendientes.
+Se documenta la [retirada de workflows del portal Foundry](foundry-workflow-retirement.md)
+el 1/12/2026 y se mantiene la orquestación Python de Agent Framework.
+Coordina propiedad y consumo HITL
+antes de habilitar recuperación automática de huérfanos, que sigue pendiente.
+No cierra F30/F31/F37 ni la entrega 3 completa.
 F27 LIVE permanece pausada. Los estados OP54 siguientes se conservan como histórico;
 no ordenan repetir acciones ya acreditadas ni prevalecen sobre la continuidad de noviembre.
 Se mantienen los IDs y los criterios F27–F48; esta entrega no cierra F46 ni F27.

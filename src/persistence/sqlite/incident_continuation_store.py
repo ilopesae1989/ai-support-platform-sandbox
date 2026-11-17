@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 import sqlite3
 import time
+
+from src.runtime.procedure.approval_store import SqlitePendingApprovalStore, ApprovalAlreadyConsumedError
+from src.runtime.procedure.approval_correlation import PendingApprovalCorrelation
+from src.runtime.procedure.approval_channel import ApprovalDecision
 
 from src.runtime.procedure.authorized_approval import AuthorizedApprovalInvocation
 from src.runtime.incident_continuation_codec import ContinuationPayloadCodec
@@ -623,141 +627,92 @@ class SqliteIncidentContinuationStore:
         return self.get(
             approval_id
         )
-    def recover_claimed_before_approval(
-        self,
-        *,
-        approval_id: str,
-        worker_id: str,
-        expected_attempt_count: int,
-        approval_store,
-    ) -> IncidentContinuationJob:
-        """
-        Recuperación estrictamente limitada a la
-        ventana previa al consumo HITL.
+    @contextmanager
+    def _approval_transaction(self, approval_store):
+        if not isinstance(approval_store, SqlitePendingApprovalStore):
+            raise TypeError("Coordinated SQLite approval store required.")
+        path = approval_store.database_path
+        # Open existing files only. Fixed aliases; the configured path is bound.
+        with closing(sqlite3.connect(
+            self._database_path.resolve().as_uri() + "?mode=rw", uri=True, timeout=30,
+        )) as connection:
+            connection.row_factory = sqlite3.Row
+            schema = "main"
+            if path != self._database_path.resolve():
+                connection.execute("ATTACH DATABASE ? AS approval_side",
+                                   (path.as_uri() + "?mode=rw",))
+                schema = "approval_side"
+            try:
+                connection.execute("BEGIN IMMEDIATE")
+                yield connection, schema
+                connection.commit()
+            except BaseException:
+                connection.rollback()
+                raise
 
-        Única transición permitida:
-
-            continuation=claimed
-            approval=pending
-            approved_decision=None
-                ->
-            continuation=pending
-
-        La seguridad depende del contrato certificado
-        del incident approval processor:
-
-            approval store claim
-                ANTES DE
-            workflow.run(responses=...)
-
-        Por tanto, si la aprobación continúa pending,
-        ese intento no pudo haber entregado la respuesta
-        HITL al workflow y no pudo llegar al dispatch.
-
-        No recupera:
-        - approval claimed;
-        - approval completed;
-        - decisión ya persistida;
-        - otro worker;
-        - estados completed/failed/pending.
-
-        No inspecciona ni modifica Azure/MCP/checkpoints.
-        """
-
+    def claim_approval(self, *, approval_id: str, worker_id: str,
+                       expected_attempt_count: int, approved: bool,
+                       approval_store) -> PendingApprovalCorrelation:
         expected_attempt_count = require_continuation_attempt(expected_attempt_count)
-
-        approval_id = (
-            self._validate_exact_string(
-                name="approval_id",
-                value=approval_id,
+        self._validate_exact_string(name="approval_id", value=approval_id)
+        self._validate_exact_string(name="worker_id", value=worker_id)
+        if type(approved) is not bool:
+            raise TypeError("approved must be bool.")
+        with self._approval_transaction(approval_store) as (connection, schema):
+            job = connection.execute(
+                "SELECT payload_json FROM main.incident_continuation_jobs "
+                "WHERE approval_id=? AND status='claimed' AND claimed_by=? AND attempt_count=?",
+                (approval_id, worker_id, expected_attempt_count),
+            ).fetchone()
+            if job is None:
+                raise IncidentContinuationClaimError("Continuation ownership lost before HITL claim.")
+            invocation = self._payload_codec.decode(job["payload_json"])
+            if (invocation.action.approval_id != approval_id or
+                    (invocation.action.decision == ApprovalDecision.APPROVE) is not approved):
+                raise IncidentContinuationClaimError("Decision differs from durable invocation.")
+            row = connection.execute(
+                f"SELECT * FROM {schema}.pending_approvals WHERE approval_id=?",
+                (approval_id,),
+            ).fetchone()
+            if row is None or row["consumption_status"] != "pending" or row["approved_decision"] is not None:
+                raise ApprovalAlreadyConsumedError("Approval absent, consumed or inconsistent.")
+            result = PendingApprovalCorrelation(
+                approval_id=row["approval_id"], workflow_id=row["workflow_id"],
+                request_id=row["request_id"], checkpoint_id=row["checkpoint_id"],
             )
-        )
-
-        worker_id = (
-            self._validate_exact_string(
-                name="worker_id",
-                value=worker_id,
+            changed = connection.execute(
+                f"UPDATE {schema}.pending_approvals SET consumption_status='claimed', approved_decision=? "
+                "WHERE approval_id=? AND consumption_status='pending' AND approved_decision IS NULL",
+                (int(approved), approval_id),
             )
-        )
+            if changed.rowcount != 1:
+                raise ApprovalAlreadyConsumedError("Approval was consumed concurrently.")
+        return result
 
-        get_record = getattr(
-            approval_store,
-            "get_consumption_record",
-            None,
-        )
+    def recover_claimed_before_approval(self, *, approval_id: str, worker_id: str,
+                                       expected_attempt_count: int, approval_store):
+        """Serialize recovery with the HITL claim on the configured database pair.
 
-        if not callable(
-            get_record
-        ):
-            raise TypeError(
-                "approval_store debe exponer "
-                "get_consumption_record callable."
+        The transaction writes only the queue; claim_approval writes only the
+        approval file. No multi-file atomic write or orphan sweep is introduced.
+        """
+        expected_attempt_count = require_continuation_attempt(expected_attempt_count)
+        self._validate_exact_string(name="approval_id", value=approval_id)
+        self._validate_exact_string(name="worker_id", value=worker_id)
+        with self._approval_transaction(approval_store) as (connection, schema):
+            row = connection.execute(
+                f"SELECT consumption_status, approved_decision FROM {schema}.pending_approvals WHERE approval_id=?",
+                (approval_id,),
+            ).fetchone()
+            if row is None or row[0] != "pending" or row[1] is not None:
+                raise IncidentContinuationClaimError("Recovery requires pending approval without decision.")
+            changed = connection.execute(
+                "UPDATE main.incident_continuation_jobs SET status='pending', claimed_by=NULL, "
+                "last_error=NULL, updated_at=? WHERE approval_id=? AND status='claimed' "
+                "AND claimed_by=? AND attempt_count=? AND attempt_count < ?",
+                (time.time(), approval_id, worker_id, expected_attempt_count,
+                 MAX_PREAPPROVAL_RECOVERY_ATTEMPTS),
             )
-
-        approval_status, approved_decision = (
-            get_record(
-                approval_id
-            )
-        )
-
-        if (
-            approval_status != "pending"
-            or approved_decision is not None
-        ):
-            raise (
-                IncidentContinuationClaimError(
-                    "Recovery bloqueado: la aprobación "
-                    "ya no está pending sin decisión."
-                )
-            )
-
-        now = time.time()
-
-        with (
-            closing(
-                self._connect()
-            ) as connection,
-            connection
-        ):
-            cursor = connection.execute(
-                """
-                UPDATE incident_continuation_jobs
-                SET
-                    status = ?,
-                    claimed_by = NULL,
-                    last_error = NULL,
-                    updated_at = ?
-                WHERE
-                    approval_id = ?
-                    AND status = ?
-                    AND claimed_by = ?
-                    AND attempt_count = ?
-                    AND attempt_count < ?
-                """,
-                (
-                    IncidentContinuationStatus
-                    .PENDING
-                    .value,
-                    now,
-                    approval_id,
-                    IncidentContinuationStatus
-                    .CLAIMED
-                    .value,
-                    worker_id,
-                    expected_attempt_count,
-                    MAX_PREAPPROVAL_RECOVERY_ATTEMPTS,
-                ),
-            )
-
-            if cursor.rowcount != 1:
-                raise (
-                    IncidentContinuationClaimError(
-                        "Recovery bloqueado: el "
-                        "continuation job no está "
-                        "claimed por el worker exacto."
-                    )
-                )
-
-        return self.get(
-            approval_id
-        )
+            if changed.rowcount != 1:
+                raise IncidentContinuationClaimError("Recovery ownership lost or budget exhausted.")
+        return self.get(approval_id)
