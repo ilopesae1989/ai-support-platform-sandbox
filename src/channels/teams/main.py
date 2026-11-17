@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
+
+from src.config.continuation_recovery import parse_continuation_recovery_policy
+from src.channels.teams.recovery_composition import attach_continuation_recovery
 
 from azure.identity import (
     AzureCliCredential,
@@ -106,6 +110,7 @@ async def run_teams_hitl_app() -> None:
     No introduce autoridad operacional.
     """
 
+    recovery_policy = parse_continuation_recovery_policy(dict(os.environ))
     settings = (
         TeamsHitlSettings
         .from_environment()
@@ -131,6 +136,7 @@ async def run_teams_hitl_app() -> None:
         )
     )
 
+    bootstrap = attach_continuation_recovery(bootstrap, recovery_policy)
     stop_event = asyncio.Event()
 
     async def run_app() -> None:
@@ -140,6 +146,9 @@ async def run_teams_hitl_app() -> None:
             stop_event.set()
 
     async with asyncio.TaskGroup() as task_group:
+        recovery = getattr(bootstrap, "continuation_recovery_runner", None)
+        if recovery is not None:
+            task_group.create_task(recovery.run(stop_event=stop_event))
         task_group.create_task(
             bootstrap.continuation_worker.run(
                 stop_event=stop_event

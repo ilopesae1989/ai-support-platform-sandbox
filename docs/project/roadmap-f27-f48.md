@@ -26,14 +26,18 @@ publicado en `a540508`, con 3.517 PASS en Windows. P5 es
 en Linux y 3.561 PASS/1 FAIL en Windows (conexión abierta en el helper de pruebas).
 R2 corrige ese cierre y obtiene **3.562 PASS en Linux y Windows**, publicado y
 verificado en `148ff9dcb4e73f23ea66059c75c6c1b26ef470fb`.
-El paquete activo P6 es [recuperación pre-HITL por lotes](e3-continuation-recovery.md):
-selector limitado, guardas transaccionales y detención ante resultado incierto.
-Linux FULL **3.641 PASS**, conservando los 3.562 anteriores y añadiendo 79.
-Aceptación Windows y publicación de P6 pendientes.
+P6 es [recuperación pre-HITL por lotes](e3-continuation-recovery.md): selector
+limitado, guardas transaccionales y detención ante resultado incierto.
+**3.641 PASS en Linux y Windows**, publicado y verificado en
+`56b8c67f5cca4e297b9600f1c651b354008b979e`.
+El paquete activo P7 es [integración opcional en el host](e3-recovery-host.md):
+configuración explícita, ciclos limitados, observación y parada con drenaje.
+Linux FULL **3,703 PASS**; conserva los 3.641 casos de P6 y añade 62.
+Validación Windows y publicación de P7 pendientes.
 Se documenta la [retirada de workflows del portal Foundry](foundry-workflow-retirement.md)
 el 1/12/2026 y se mantiene la orquestación Python de Agent Framework.
 P5 coordina propiedad y consumo HITL; P6 prepara la recuperación explícita.
-La programación/activación del barrido y la aceptación SQL real siguen pendientes.
+P7 añade programación opt-in; activación del barrido y aceptación SQL real pendientes.
 No cierra F30/F31/F37 ni la entrega 3 completa.
 F27 LIVE permanece pausada. Los estados OP54 siguientes se conservan como histórico;
 no ordenan repetir acciones ya acreditadas ni prevalecen sobre la continuidad de noviembre.

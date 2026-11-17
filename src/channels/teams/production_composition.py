@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from src.config.continuation_recovery import parse_continuation_recovery_policy
+from src.channels.teams.recovery_composition import attach_continuation_recovery
+
 from src.config.procedure_configuration import ProcedureConfiguration
 
 from src.workflows.incident_resolution.vm_start_foundry_binding import GovernedVmStartRoute, VmStartFoundryBinding
@@ -42,6 +45,8 @@ def build_production_teams_host(
             "environment debe implementar Mapping."
         )
 
+    recovery_policy = parse_continuation_recovery_policy(environment)
+
     host_settings = (
         build_production_teams_host_settings(
             environment
@@ -85,7 +90,7 @@ def build_production_teams_host(
             )
         )
 
-        return build_production_teams_hitl_app(
+        return attach_continuation_recovery(build_production_teams_hitl_app(
             host_settings.app_settings,
             host_settings.azure_sql_settings,
             membership_checker=(
@@ -95,16 +100,16 @@ def build_production_teams_host(
             operator_identity_resolver=(
                 operator_identity_resolver
             ),
-        )
+        ), recovery_policy)
 
-    return build_production_teams_hitl_app(
+    return attach_continuation_recovery(build_production_teams_hitl_app(
         host_settings.app_settings,
         host_settings.azure_sql_settings,
         membership_checker=(
             membership_checker
         ),
         azure_vm_power_state_reader=reader,
-    )
+    ), recovery_policy)
 
 
 from src.channels.teams.production_bootstrap import (
@@ -132,6 +137,8 @@ def build_production_teams_host_with_communication(
             "communication_runner debe ser callable."
         )
 
+    recovery_policy = parse_continuation_recovery_policy(environment)
+
     host_settings = (
         build_production_teams_host_settings(
             environment
@@ -175,7 +182,7 @@ def build_production_teams_host_with_communication(
             )
         )
 
-        return (
+        return attach_continuation_recovery((
             build_production_teams_hitl_app_with_communication(
                 host_settings.app_settings,
                 host_settings.azure_sql_settings,
@@ -190,9 +197,9 @@ def build_production_teams_host_with_communication(
                     operator_identity_resolver
                 ),
             )
-        )
+        ), recovery_policy)
 
-    return (
+    return attach_continuation_recovery((
         build_production_teams_hitl_app_with_communication(
             host_settings.app_settings,
             host_settings.azure_sql_settings,
@@ -204,7 +211,7 @@ def build_production_teams_host_with_communication(
                 communication_runner
             ),
         )
-    )
+    ), recovery_policy)
 
 from src.channels.teams.production_bootstrap import (
     build_production_teams_hitl_app_with_communication_and_incident_agents,
@@ -304,6 +311,8 @@ def build_production_teams_host_with_communication_and_incident_agents(
             "incident_agents debe existir."
         )
 
+    recovery_policy = parse_continuation_recovery_policy(environment)
+
     host_settings = (
         build_production_teams_host_settings(
             environment
@@ -347,7 +356,7 @@ def build_production_teams_host_with_communication_and_incident_agents(
             )
         )
 
-        return (
+        return attach_continuation_recovery((
             build_production_teams_hitl_app_with_communication_and_incident_agents(
                 host_settings.app_settings,
                 host_settings.azure_sql_settings,
@@ -371,9 +380,9 @@ def build_production_teams_host_with_communication_and_incident_agents(
                 ),
                 **selector_options,
             )
-        )
+        ), recovery_policy)
 
-    return (
+    return attach_continuation_recovery((
         build_production_teams_hitl_app_with_communication_and_incident_agents(
             host_settings.app_settings,
             host_settings.azure_sql_settings,
@@ -394,4 +403,4 @@ def build_production_teams_host_with_communication_and_incident_agents(
             ),
             **selector_options,
         )
-    )
+    ), recovery_policy)

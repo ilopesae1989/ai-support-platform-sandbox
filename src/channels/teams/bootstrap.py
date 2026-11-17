@@ -468,6 +468,8 @@ class TeamsHitlBootstrap:
 
     outbound: TeamsOutboundDependencies
 
+    continuation_recovery_runner: object | None = field(default=None, kw_only=True)
+
 
 def build_local_teams_hitl_persistence(
     settings: TeamsHitlSettings,

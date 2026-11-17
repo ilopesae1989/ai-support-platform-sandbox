@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from src.config.continuation_recovery import parse_continuation_recovery_policy
+
 from collections.abc import Mapping
 from src.config.procedure_configuration import build_procedure_configuration
 from src.config.foundry_deployment import build_foundry_deployment_configuration
@@ -51,6 +53,8 @@ def build_production_application(
             "environment debe implementar Mapping."
         )
 
+    # Validate opt-in host configuration before creating provider dependencies.
+    parse_continuation_recovery_policy(environment)
     deployment = build_foundry_deployment_configuration(environment)
     if deployment is not None:
         if capability_foundry_agent_binding_registry is not None:

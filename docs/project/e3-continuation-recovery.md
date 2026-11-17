@@ -118,8 +118,13 @@ se apoya en las guardas, no en considerar el reloj una prueba de exclusividad.
   lectura, commit y cierre; rechazo sin OUTPUT y sin adoptar otra generación.
 - Linux FULL NON-LIVE: **3.641 passed, 24 deselected, 3 warnings**, 72,82 s,
   exit 0. Comparación de XML: conserva los 3.562 casos de P5 y añade los 79
-  anteriores. No se suman los focales a la FULL. Aceptación Windows y publicación
-  de P6 pendientes. No se ejecutan SQL real, agentes remotos, MCP, JWT ni Azure.
+  anteriores. No se suman los focales a la FULL. Windows: **3.641 PASS**,
+  24 excluidas, 3 avisos, 117,28 s, Python 3.14.2, exit 0. P6 publicado y
+  verificado en `56b8c67f5cca4e297b9600f1c651b354008b979e`. No se ejecutan
+  SQL real, agentes remotos, MCP, JWT ni Azure.
+
+P7 integra el consumidor opcional del host en [e3-recovery-host.md](e3-recovery-host.md).
+La activación permanece deshabilitada sin configuración explícita.
 
 ## Despliegue por cliente y pendientes
 

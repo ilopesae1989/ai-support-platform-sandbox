@@ -594,6 +594,13 @@ def _assert_declarative_foundry_registry(source):
     for statement in returns:
         call = statement.value
         assert isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+        # P7 attaches a host-owned runner after the same declarative delegate.
+        # Only this exact wrapper is allowed; selector forwarding is unchanged.
+        assert call.func.id == "attach_continuation_recovery"
+        assert not call.keywords and len(call.args) == 2
+        assert isinstance(call.args[1], ast.Name) and call.args[1].id == "recovery_policy"
+        call = call.args[0]
+        assert isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
         assert call.func.id == delegate
         forwarding = [
             keyword.value for keyword in call.keywords

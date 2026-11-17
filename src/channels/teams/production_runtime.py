@@ -27,6 +27,9 @@ async def run_production_teams_host(
             stop_event.set()
 
     async with asyncio.TaskGroup() as task_group:
+        recovery = bootstrap.continuation_recovery_runner
+        if recovery is not None:
+            task_group.create_task(recovery.run(stop_event=stop_event))
         task_group.create_task(
             bootstrap.continuation_worker.run(
                 stop_event=stop_event
