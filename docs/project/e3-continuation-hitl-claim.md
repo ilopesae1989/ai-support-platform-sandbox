@@ -92,7 +92,13 @@ conexión. Se añade `contextlib.closing` conservando el contexto transaccional.
 La comprobación local con referencias retenidas y GC desactivado encontró dos
 conexiones abiertas en R1 y cero en R2. No se elimina ni se omite el caso.
 No cambia el código de producto, dependencias ni contrato de recuperación.
-La validación Windows R2 y publicación siguen pendientes.
+Actualización 17/11/2026: Windows R2 completado con **3.562 PASS, 24 deselected,
+3 warnings**, 117,27 s, exit 0, Python 3.14.2. XML
+`E3_P5_R2_WINDOWS_20261117_120346.xml`, SHA256
+`e6ebf10c61bd3598e866ef9c81c4c5c0b2a126b281db8d72357e9dd242c4155b`.
+Publicado y verificado en `148ff9dcb4e73f23ea66059c75c6c1b26ef470fb`, único padre
+`a54050897f354acae94f9ed3dd25452f5f38ec3a`, árbol
+`d0f2a9b9814c82415ceb8d0a0ad83be29d02a90f`. Conserva 3.517 casos previos y añade 45.
 Linux FULL R2: **3.562 passed, 24 deselected, 3 warnings**, 73,75 s, exit 0;
 se conserva exactamente la selección de casos Linux R1.
 
@@ -128,9 +134,10 @@ de sesión, afinidad de release y recuperación remota siguen abiertos.
 El resultado incierto de un claim se bloquea; no se afirma resolver todos los
 commits inciertos del resto de stores. No se acredita exactly-once distribuido.
 
-El siguiente incremento, tras aceptar/publicar P5, debe concretar el recuperador
-de huérfanos sobre esta frontera, sin considerar un timeout prueba de muerte,
-y separar aceptación SQLite/contratos SQL del ensayo autorizado con SQL real.
+El siguiente incremento, [P6: recuperación por lotes explícitos](e3-continuation-recovery.md),
+añade selección y transición sobre esta frontera sin considerar un timeout
+prueba de muerte. Su integración automática en el host y la aceptación SQL real
+siguen separadas; no cambian retrospectivamente el alcance de P5.
 No se cierra la entrega 3, F30/F31/F37 ni F27 LIVE, que permanece pausada.
 
 ## Fuentes de la decisión

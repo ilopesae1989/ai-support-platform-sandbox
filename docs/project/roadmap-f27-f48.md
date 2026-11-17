@@ -21,14 +21,19 @@ está publicado en `897807a`, con 3.428 PASS en Windows. El segundo paquete,
 [procesamiento HITL y evidencia](e3-hitl-processing.md), está publicado en
 `2659416`, con 3.482 PASS en Windows. P4,
 [propiedad por intento de continuación](e3-continuation-ownership.md), está
-publicado en `a540508`, con 3.517 PASS en Windows. El paquete activo P5 es
+publicado en `a540508`, con 3.517 PASS en Windows. P5 es
 [claim HITL ligado al intento](e3-continuation-hitl-claim.md): R1 obtuvo 3.562 PASS
 en Linux y 3.561 PASS/1 FAIL en Windows (conexión abierta en el helper de pruebas).
-R2 corrige ese cierre y obtiene 3.562 PASS en Linux; aceptación Windows y publicación pendientes.
+R2 corrige ese cierre y obtiene **3.562 PASS en Linux y Windows**, publicado y
+verificado en `148ff9dcb4e73f23ea66059c75c6c1b26ef470fb`.
+El paquete activo P6 es [recuperación pre-HITL por lotes](e3-continuation-recovery.md):
+selector limitado, guardas transaccionales y detención ante resultado incierto.
+Linux FULL **3.641 PASS**, conservando los 3.562 anteriores y añadiendo 79.
+Aceptación Windows y publicación de P6 pendientes.
 Se documenta la [retirada de workflows del portal Foundry](foundry-workflow-retirement.md)
 el 1/12/2026 y se mantiene la orquestación Python de Agent Framework.
-Coordina propiedad y consumo HITL
-antes de habilitar recuperación automática de huérfanos, que sigue pendiente.
+P5 coordina propiedad y consumo HITL; P6 prepara la recuperación explícita.
+La programación/activación del barrido y la aceptación SQL real siguen pendientes.
 No cierra F30/F31/F37 ni la entrega 3 completa.
 F27 LIVE permanece pausada. Los estados OP54 siguientes se conservan como histórico;
 no ordenan repetir acciones ya acreditadas ni prevalecen sobre la continuidad de noviembre.

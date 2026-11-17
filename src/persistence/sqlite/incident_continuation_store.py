@@ -11,6 +11,9 @@ from src.runtime.procedure.approval_channel import ApprovalDecision
 
 from src.runtime.procedure.authorized_approval import AuthorizedApprovalInvocation
 from src.runtime.incident_continuation_codec import ContinuationPayloadCodec
+from src.runtime.incident_continuation_recovery import (
+    ContinuationRecoveryCandidate, validate_recovery_candidate, validate_recovery_selection,
+)
 from src.runtime.incident_continuation_store import (
     MAX_PREAPPROVAL_RECOVERY_ATTEMPTS, require_continuation_attempt,
     IncidentContinuationClaimError, IncidentContinuationConflictError,
@@ -627,6 +630,45 @@ class SqliteIncidentContinuationStore:
         return self.get(
             approval_id
         )
+    def list_stale_claims(self, *, stale_before: float, limit: int,
+                         after_id: str | None = None) -> tuple[ContinuationRecoveryCandidate, ...]:
+        cutoff = validate_recovery_selection(stale_before=stale_before,
+                                             limit=limit, after_id=after_id)
+        # A scan must not recreate an absent database or decode an invocation.
+        with closing(sqlite3.connect(
+            self._database_path.resolve().as_uri() + "?mode=rw", uri=True, timeout=30,
+        )) as connection:
+            rows = connection.execute("""
+SELECT approval_id, claimed_by, attempt_count, updated_at
+FROM incident_continuation_jobs
+WHERE status = 'claimed' AND updated_at < ?
+  AND (? IS NULL OR approval_id > ?)
+ORDER BY approval_id ASC LIMIT ?
+""", (cutoff, after_id, after_id, limit)).fetchall()
+            return tuple(ContinuationRecoveryCandidate(*row) for row in rows)
+
+    def recover_stale_before_approval(self, *, candidate: ContinuationRecoveryCandidate,
+                                      stale_before: float, approval_store: object) -> None:
+        cutoff = validate_recovery_candidate(candidate, stale_before)
+        with self._approval_transaction(approval_store) as (connection, schema):
+            row = connection.execute(f"""
+SELECT consumption_status, approved_decision FROM {schema}.pending_approvals
+WHERE approval_id = ?
+""", (candidate.approval_id,)).fetchone()
+            if row is None or row[0] != "pending" or row[1] is not None:
+                raise IncidentContinuationClaimError("Approval absent, consumed or inconsistent.")
+            cursor = connection.execute("""
+UPDATE incident_continuation_jobs
+SET status = 'pending', claimed_by = NULL, last_error = NULL, updated_at = ?
+WHERE approval_id = ? AND status = 'claimed' AND claimed_by = ?
+  AND attempt_count = ? AND attempt_count < ?
+  AND updated_at = ? AND updated_at < ?
+""", (time.time(), candidate.approval_id, candidate.worker_id, candidate.attempt_count,
+      MAX_PREAPPROVAL_RECOVERY_ATTEMPTS, candidate.updated_at, cutoff))
+            if cursor.rowcount != 1:
+                raise IncidentContinuationClaimError("Recovery candidate changed or exhausted its attempts.")
+        # No post-commit read: it could observe a newly claimed generation.
+
     @contextmanager
     def _approval_transaction(self, approval_store):
         if not isinstance(approval_store, SqlitePendingApprovalStore):

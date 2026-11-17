@@ -17,6 +17,9 @@ from src.runtime.procedure.approval_channel import ApprovalDecision
 
 from src.runtime.procedure.authorized_approval import AuthorizedApprovalInvocation
 from src.runtime.incident_continuation_codec import ContinuationPayloadCodec
+from src.runtime.incident_continuation_recovery import (
+    ContinuationRecoveryCandidate, validate_recovery_candidate, validate_recovery_selection,
+)
 
 from src.runtime.incident_continuation_store import (
     MAX_PREAPPROVAL_RECOVERY_ATTEMPTS, require_continuation_attempt,
@@ -736,6 +739,80 @@ WHERE approval_id = %(approval_id)s
             if cursor is not None:
                 cursor.close()
             connection.close()
+
+    def list_stale_claims(self, *, stale_before: float, limit: int,
+                         after_id: str | None = None) -> tuple[ContinuationRecoveryCandidate, ...]:
+        cutoff = validate_recovery_selection(stale_before=stale_before,
+                                             limit=limit, after_id=after_id)
+        connection = self._connection_factory()
+        cursor = None
+        try:
+            cursor = connection.cursor()
+            cursor.execute("""
+SELECT TOP (%(limit)s) approval_id, claimed_by, attempt_count, updated_at
+FROM dbo.incident_continuation_jobs
+WHERE status = 'claimed' AND updated_at < %(stale_before)s
+  AND (%(after_id)s IS NULL OR approval_id > %(after_id)s)
+ORDER BY approval_id ASC
+""", dict(limit=limit, stale_before=cutoff, after_id=after_id))
+            rows = cursor.fetchall()
+            result = tuple(ContinuationRecoveryCandidate(*row) for row in rows)
+            connection.commit()
+            return result
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            try:
+                if cursor is not None:
+                    cursor.close()
+            finally:
+                connection.close()
+
+    def recover_stale_before_approval(self, *, candidate: ContinuationRecoveryCandidate,
+                                      stale_before: float, approval_store: object) -> None:
+        cutoff = validate_recovery_candidate(candidate, stale_before)
+        if (not isinstance(approval_store, AzureSqlPendingApprovalStore) or
+                not approval_store.uses_connection_factory(self._connection_factory)):
+            raise TypeError("Coordinated recovery requires the same SQL connection factory.")
+        connection = self._connection_factory()
+        cursor = None
+        try:
+            if getattr(connection, "autocommit", None) is not False:
+                raise RuntimeError("Coordinated recovery requires explicit autocommit=False.")
+            cursor = connection.cursor()
+            # Same lock order as the coordinated HITL claim, held until commit.
+            cursor.execute(_RECOVERY_APPROVAL_GUARD, {"approval_id": candidate.approval_id})
+            row = cursor.fetchone()
+            if row is None or row[0] != "pending" or row[1] is not None:
+                raise IncidentContinuationClaimError("Approval absent, consumed or inconsistent.")
+            cursor.execute("""
+UPDATE dbo.incident_continuation_jobs
+SET status = 'pending', claimed_by = NULL, last_error = NULL, updated_at = %(updated_at)s
+OUTPUT inserted.approval_id, inserted.attempt_count
+WHERE approval_id = %(approval_id)s AND status = 'claimed'
+  AND claimed_by = %(worker_id)s AND attempt_count = %(expected_attempt_count)s
+  AND attempt_count < %(max_attempts)s
+  AND updated_at = %(expected_updated_at)s AND updated_at < %(stale_before)s
+""", dict(approval_id=candidate.approval_id, worker_id=candidate.worker_id,
+          expected_attempt_count=candidate.attempt_count,
+          max_attempts=MAX_PREAPPROVAL_RECOVERY_ATTEMPTS,
+          expected_updated_at=candidate.updated_at, stale_before=cutoff, updated_at=time.time()))
+            row = cursor.fetchone()
+            if row is None:
+                raise IncidentContinuationClaimError("Recovery candidate changed or exhausted its attempts.")
+            if row[0] != candidate.approval_id or row[1] != candidate.attempt_count:
+                raise RuntimeError("Recovery output differs from the original candidate.")
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            try:
+                if cursor is not None:
+                    cursor.close()
+            finally:
+                connection.close()
 
     def recover_claimed_before_approval(
         self,
