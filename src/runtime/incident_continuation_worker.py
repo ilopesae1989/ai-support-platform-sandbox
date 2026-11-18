@@ -236,11 +236,16 @@ class IncidentContinuationWorker:
                 invocation=job.invocation,
                 processed=processed,
             )
-            dependencies.continuation_store.complete(
-                approval_id=job.approval_id,
-                worker_id=dependencies.worker_id,
-                expected_attempt_count=job.attempt_count,
-            )
+            from src.runtime.procedure.workflow import ApprovalOutcome
+
+            complete_rejection = getattr(dependencies.continuation_store, "complete_rejection", None)
+            result = getattr(processed, "workflow_result", None)
+            completion = dict(approval_id=job.approval_id, worker_id=dependencies.worker_id,
+                              expected_attempt_count=job.attempt_count)
+            if callable(complete_rejection) and isinstance(result, ApprovalOutcome) and result.approved is False:
+                complete_rejection(outcome=result, **completion)
+            else:
+                dependencies.continuation_store.complete(**completion)
             return IncidentContinuationWorkerOutcome.COMPLETED
         except Exception as exc:
             error_name = type(exc).__name__

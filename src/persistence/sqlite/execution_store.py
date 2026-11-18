@@ -28,6 +28,12 @@ last_error TEXT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL,
 execution_id TEXT NOT NULL REFERENCES incident_executions(execution_id),
 CHECK((status='claimed' AND claimed_by IS NOT NULL) OR (status<>'claimed' AND claimed_by IS NULL)))
 """)
+            cursor.execute("""
+CREATE TABLE IF NOT EXISTS incident_rejection_closures (
+execution_id TEXT NOT NULL PRIMARY KEY REFERENCES incident_executions(execution_id),
+approval_id TEXT NOT NULL UNIQUE REFERENCES incident_affine_continuation_jobs(approval_id),
+worker_id TEXT NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0))
+""")
             cursor.execute("CREATE INDEX IF NOT EXISTS ix_execution_affinity ON incident_executions(affinity_sha256, execution_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS ix_affine_queue ON incident_affine_continuation_jobs(status, created_at, approval_id)")
 

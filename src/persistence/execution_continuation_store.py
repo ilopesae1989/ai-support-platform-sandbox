@@ -42,6 +42,7 @@ class ExecutionContinuationStore:
         self._sql_server = sql_server
         prefix = "dbo." if sql_server else ""
         self._executions = prefix + "incident_executions"
+        self._closures = prefix + "incident_rejection_closures"
         self._jobs = prefix + "incident_affine_continuation_jobs"
         self._pending = prefix + "pending_approvals"
 
@@ -256,6 +257,41 @@ AND execution_id = %(execution)s AND updated_at = %(updated)s
         if result.status.value != status or result.attempt_count != job.attempt_count:
             raise IncidentContinuationClaimError("Continuation transition was not retained.")
         return result
+
+    def rejection_closure(self, execution_id):
+        """Return the terminal approval ID for this affinity, if committed."""
+        with self._transaction() as cursor:
+            self._execution(cursor, execution_id)
+            row = self._execute(cursor, f"SELECT approval_id FROM {self._closures} "
+                                "WHERE execution_id = %(id)s", {"id": execution_id}).fetchone()
+            return None if row is None else row[0]
+
+    def complete_rejection(self, *, approval_id, worker_id, expected_attempt_count, outcome):
+        from src.runtime.procedure.workflow import ApprovalOutcome
+
+        self._identifier(worker_id)
+        require_continuation_attempt(expected_attempt_count)
+        if type(outcome) is not ApprovalOutcome or outcome.approved is not False or outcome.status != "blocked":
+            raise IncidentExecutionConflictError("Expected a terminal human rejection.")
+        with self._transaction() as cursor:
+            job = self._job(cursor, approval_id)
+            correlation, status, approved = self._approval(cursor, approval_id)
+            if (outcome.workflow_id != job.execution_id or correlation.workflow_id != job.execution_id
+                    or status != "completed" or approved != 0):
+                raise IncidentExecutionConflictError("Rejected execution lacks completed decision evidence.")
+            params = dict(id=job.execution_id, approval=approval_id, worker=worker_id, attempt=expected_attempt_count)
+            row = self._execute(cursor, f"SELECT approval_id, worker_id, attempt FROM {self._closures} "
+                                f"{self._lock()} WHERE execution_id = %(id)s", {"id": job.execution_id}).fetchone()
+            if row is not None:
+                if (tuple(row) != (approval_id, worker_id, expected_attempt_count)
+                        or job.status.value != "completed" or job.attempt_count != expected_attempt_count):
+                    raise IncidentExecutionConflictError("Closure conflicts with the recorded attempt.")
+                return job
+            owned = self._owned(cursor, approval_id, worker_id, expected_attempt_count)
+            completed = self._transition(cursor, owned, "completed")
+            self._execute(cursor, f"INSERT INTO {self._closures} (execution_id, approval_id, worker_id, attempt) "
+                          "VALUES (%(id)s, %(approval)s, %(worker)s, %(attempt)s)", params)
+            return completed
 
     def complete(self, *, approval_id, worker_id, expected_attempt_count):
         with self._transaction() as cursor:

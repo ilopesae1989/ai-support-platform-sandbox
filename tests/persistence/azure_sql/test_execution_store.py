@@ -206,3 +206,22 @@ def test_candidate_schema_is_additive_and_has_no_historical_adoption():
     assert "REFERENCES DBO.PENDING_APPROVALS(APPROVAL_ID)" in sql
     assert "REFERENCES DBO.INCIDENT_EXECUTIONS(EXECUTION_ID)" in sql
     assert "ALTER TABLE" not in sql and "INSERT INTO" not in sql and "GRANT " not in sql
+
+
+@pytest.mark.parametrize("insert_fails", [False, True])
+def test_rejection_receipt_shares_fenced_completion_transaction(insert_fails):
+    from src.runtime.procedure.workflow import ApprovalOutcome
+
+    claimed = job_row("claimed", 1, "worker")
+    queue, _, conn, cur = adapters([claimed, execution_row(), approval_row("completed", False),
+                                    None, claimed, execution_row(), job_row("completed", 1), execution_row()])
+    args = dict(approval_id="apr-one", worker_id="worker", expected_attempt_count=1,
+                outcome=ApprovalOutcome(workflow_id="wf-one", approved=False, status="blocked"))
+    if insert_fails:
+        cur.execute_error_at, cur.execute_error = 10, OSError("receipt write")
+        with pytest.raises(OSError, match="receipt write"):
+            queue.complete_rejection(**args)
+    else:
+        assert queue.complete_rejection(**args).status.value == "completed"
+    assert sqls(cur)[-1].startswith("INSERT INTO DBO.INCIDENT_REJECTION_CLOSURES")
+    assert_closed(conn, cur, committed=int(not insert_fails), rolled_back=int(insert_fails))
