@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from src.persistence.execution_inventory import load_inventory_json, sqlite_inventory_page, sqlite_store_residuals
+from src.persistence.execution_inventory import load_inventory_json, sqlite_inventory_page, sqlite_release_drain, sqlite_store_residuals
 from src.runtime.execution_affinity import ExecutionAffinity
 
 
@@ -34,6 +34,8 @@ def main(argv=None):
     parser.add_argument("--checkpoints", type=Path, required=True)
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--consumer-affinity", type=Path)
+    scope.add_argument("--release-drain", type=Path, metavar="AFFINITY",
+                       help="Assess all pages on a stable copy of all stores and checkpoints")
     scope.add_argument("--store-residuals", action="store_true", help="Whole-store administrator counts")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--legacy-database", type=Path)
@@ -45,7 +47,12 @@ def main(argv=None):
         parser.error("Choose an output outside the checkpoint directory.")
     sources = dict(database=args.database, checkpoints=args.checkpoints, legacy_database=args.legacy_database,
                    checkpoint_encoding=args.checkpoint_encoding)
-    if args.store_residuals:
+    if args.release_drain:
+        if args.after is not None:
+            parser.error("A complete drain assessment starts at the first page.")
+        consumer = ExecutionAffinity.from_document(load_inventory_json(args.release_drain.read_bytes()))
+        page = sqlite_release_drain(**sources, consumer=consumer, page_size=50 if args.limit is None else args.limit)
+    elif args.store_residuals:
         if args.limit is not None or args.after is not None:
             parser.error("Pagination applies only to scoped admissions.")
         page = sqlite_store_residuals(**sources)

@@ -420,3 +420,37 @@ def test_drain_page_filters_release_and_preserves_cursor(tmp_path):
     assert second["drain_release_id"] == scope.release.release_id
     assert second["page_drain_blockers"] == [
         {"execution_id": "b-current", "reasons": ["start_unconfirmed"]}]
+
+
+def test_complete_drain_reads_last_page_and_keeps_other_customers_private(tmp_path):
+    from src.persistence.execution_inventory import sqlite_release_drain
+
+    queue, _, path = sources(tmp_path)
+    scope = affinity()
+    older, _, _ = stores(tmp_path, replace(scope, release=replace(scope.release, release_id="older")))
+    older.admit(execution_id="first", input_sha256="a"*64)
+    queue.admit(execution_id="last", input_sha256="b"*64)
+    other, _, _ = stores(tmp_path, replace(scope, installation_id="other"))
+    other.admit(execution_id="foreign-sensitive", input_sha256="b"*64)
+    queue.begin_drain()
+    report = sqlite_release_drain(database=path, checkpoints=tmp_path/"checkpoints", consumer=scope, page_size=1)
+    assert report["pages_read"] == 2 and report["admission_closed"] and report["status"] == "blocked"
+    assert report["execution_blockers"] == [{"execution_id": "last", "reasons": ["start_unconfirmed"]}]
+    assert "foreign-sensitive" not in json.dumps(report)
+
+
+def test_complete_drain_requires_closed_admissions_and_attributed_history(tmp_path):
+    from src.persistence.execution_inventory import sqlite_release_drain
+
+    queue, _, path = sources(tmp_path)
+    args = dict(database=path, checkpoints=tmp_path/"checkpoints", consumer=affinity())
+    assert sqlite_release_drain(**args)["status"] == "blocked"
+    queue.begin_drain()
+    assert sqlite_release_drain(**args)["coverage_gaps"] == ["legacy_queue_unavailable"]
+    SqliteIncidentContinuationStore(path, payload_codec=CODEC)
+    assert sqlite_release_drain(**args)["status"] == "no_observed_blockers"
+    write_cp(tmp_path, document(execution="unassigned"))
+    report = sqlite_release_drain(**args)
+    assert report["status"] == "unconfirmed"
+    assert report["coverage_gaps"] == ["unattributed_store_history"]
+    assert "unassigned" not in json.dumps(report)

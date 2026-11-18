@@ -133,3 +133,16 @@ def test_sql_receipt_requires_completed_job_of_admitted_execution(owner, expecte
     assert row["rejection_receipt"]["status"] == expected
     assert db.statements[3][1] == {"execution": "wf-one"}
     assert "apr-one" not in json.dumps(row)
+
+
+def test_release_drain_uses_one_snapshot_for_marker_pages_and_residuals():
+    from src.persistence.execution_inventory import azure_sql_release_drain
+
+    db = Connection([("SET TRANSACTION", []), ("FROM dbo.incident_admission_drains", [(1,)]),
+                     ("SELECT TOP (51)", []), ("SELECT TOP (64)", []),
+                     ("FROM dbo.incident_continuation_jobs j", [(0,)]),
+                     ("FROM dbo.pending_approvals record", [(0,)]),
+                     ("FROM dbo.incident_affine_continuation_jobs record", [(0,)])])
+    result = azure_sql_release_drain(connection_factory=lambda: db, consumer=affinity())
+    assert result["status"] == "no_observed_blockers" and result["pages_read"] == 1
+    assert db.closed and db.rollbacks == 1 and all(cursor.closed for cursor in db.cursors)

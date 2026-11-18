@@ -260,28 +260,32 @@ def _sql_source(connection_factory):
 
 def azure_sql_inventory_page(*, connection_factory, consumer, limit=50, after=None):
     with _sql_source(connection_factory) as reader:
-        evidence, following = reader.page(consumer, limit, after)
-        reader.terminal_receipts(evidence, "rejection")
-        reader.terminal_receipts(evidence, "resolution")
-        for item in evidence.values():
-            reader.jobs(item, reader.approvals(item), reader)
-            rows = reader.rows("""SELECT checkpoint_id, payload_json FROM dbo.workflow_checkpoints
-                WHERE workflow_name = 'incident-resolution'
-                AND JSON_VALUE(payload_json, '$.state.incident_execution_id')
-                COLLATE Latin1_General_100_BIN2 = %(execution)s""", {'execution': item.execution_id})
-            for stored_id, raw in rows:
-                doc = load_inventory_json(raw)
-                if doc['workflow_name'] != 'incident-resolution':
-                    raise ValueError('Checkpoint workflow mismatch.')
-                item.observe_checkpoint(doc, stored_id)
+        return _sql_page(reader, consumer, limit, after)
 
-            def lookup(parent):
-                roots = list(reader.rows("""SELECT payload_json FROM dbo.workflow_checkpoints
-                    WHERE workflow_name = 'incident-resolution' AND checkpoint_id = %(parent)s""",
-                    {'parent': parent}))
-                return load_inventory_json(roots[0][0]) if roots else None
-            item.verify_entry(lookup)
-        return _report(consumer, evidence, following, reader)
+
+def _sql_page(reader, consumer, limit, after):
+    evidence, following = reader.page(consumer, limit, after)
+    reader.terminal_receipts(evidence, "rejection")
+    reader.terminal_receipts(evidence, "resolution")
+    for item in evidence.values():
+        reader.jobs(item, reader.approvals(item), reader)
+        rows = reader.rows("""SELECT checkpoint_id, payload_json FROM dbo.workflow_checkpoints
+            WHERE workflow_name = 'incident-resolution'
+            AND JSON_VALUE(payload_json, '$.state.incident_execution_id')
+            COLLATE Latin1_General_100_BIN2 = %(execution)s""", {'execution': item.execution_id})
+        for stored_id, raw in rows:
+            doc = load_inventory_json(raw)
+            if doc['workflow_name'] != 'incident-resolution':
+                raise ValueError('Checkpoint workflow mismatch.')
+            item.observe_checkpoint(doc, stored_id)
+
+        def lookup(parent):
+            roots = list(reader.rows("""SELECT payload_json FROM dbo.workflow_checkpoints
+                WHERE workflow_name = 'incident-resolution' AND checkpoint_id = %(parent)s""",
+                {'parent': parent}))
+            return load_inventory_json(roots[0][0]) if roots else None
+        item.verify_entry(lookup)
+    return _report(consumer, evidence, following, reader)
 
 
 def _residuals(reader, legacy, documents):
@@ -352,17 +356,78 @@ def sqlite_store_residuals(*, database, checkpoints, legacy_database=None, check
 
 def azure_sql_store_residuals(*, connection_factory):
     with _sql_source(connection_factory) as reader:
-        # Keyset batches leave no active result set for the admission lookups;
-        # this also works on a connection without multiple active result sets.
-        def documents():
-            after = ''
-            while True:
-                rows = list(reader.rows("""SELECT TOP (64) checkpoint_id, payload_json FROM dbo.workflow_checkpoints
-                    WHERE workflow_name = 'incident-resolution' AND checkpoint_id > %(after)s
-                    ORDER BY checkpoint_id""", {'after': after}))
-                if not rows:
-                    return
-                for _, raw in rows:
-                    yield load_inventory_json(raw)
-                after = rows[-1][0]
-        return _residuals(reader, reader, documents())
+        return _residuals(reader, reader, _sql_documents(reader))
+
+
+# Keyset batches leave no active result set for the admission lookups;
+# this also works on a connection without multiple active result sets.
+def _sql_documents(reader):
+    after = ''
+    while True:
+        rows = list(reader.rows("""SELECT TOP (64) checkpoint_id, payload_json FROM dbo.workflow_checkpoints
+            WHERE workflow_name = 'incident-resolution' AND checkpoint_id > %(after)s
+            ORDER BY checkpoint_id""", {'after': after}))
+        if not rows:
+            return
+        for _, raw in rows:
+            yield load_inventory_json(raw)
+        after = rows[-1][0]
+
+def _drain_report(reader, consumer, page_size, page, residuals):
+    scope = {"installation": consumer.installation_id, "release": consumer.release.release_id}
+    closed = bool(list(reader.rows(
+        f"SELECT 1 FROM {reader.prefix}incident_admission_drains "
+        f"WHERE installation_id = {reader.bind('installation')} AND release_id = {reader.bind('release')}",
+        scope)))
+    blockers = []
+    after = None
+    pages = 0
+    while True:
+        result = page(after, page_size)
+        pages += 1
+        blockers.extend(result["page_drain_blockers"])
+        after = result["next_after"]
+        if after is None:
+            break
+    history = residuals()
+    gaps = []
+    if history["legacy_jobs_without_attributed_approval"] is None:
+        gaps.append("legacy_queue_unavailable")
+    if (any(history["checkpoints"].values()) or history["approvals_without_admission"]
+            or history["candidate_jobs_without_admission"] or history["legacy_jobs_without_attributed_approval"]):
+        gaps.append("unattributed_store_history")
+    return {"schema": "incident-release-drain-v1", "installation_id": scope["installation"],
+            "release_id": scope["release"], "admission_closed": closed, "pages_read": pages,
+            "execution_blockers": blockers, "coverage_gaps": gaps,
+            "status": ("blocked" if not closed or blockers else
+                       "unconfirmed" if gaps else "no_observed_blockers")}
+
+
+def azure_sql_release_drain(*, connection_factory, consumer, page_size=50):
+    with _sql_source(connection_factory) as reader:
+        return _drain_report(reader, consumer, page_size,
+                             lambda after, size: _sql_page(reader, consumer, size, after),
+                             lambda: _residuals(reader, reader, _sql_documents(reader)))
+
+
+def sqlite_release_drain(*, database, checkpoints, consumer, page_size=50,
+                         legacy_database=None, checkpoint_encoding=None):
+    """Offline assessment on a stable, jointly captured copy of all sources."""
+    with _sqlite_sources(database, checkpoints, legacy_database) as (reader, legacy, directory):
+        documents = {p.stem: _read_file(p, checkpoint_encoding)
+                     for p in directory.iterdir() if p.suffix == ".json"}
+
+        def page(after, size):
+            evidence, following = reader.page(consumer, size, after)
+            reader.terminal_receipts(evidence, "rejection")
+            reader.terminal_receipts(evidence, "resolution")
+            for item in evidence.values():
+                reader.jobs(item, reader.approvals(item), legacy)
+            for key, doc in documents.items():
+                _observe(doc, key, evidence)
+            for item in evidence.values():
+                item.verify_entry(documents.get)
+            return _report(consumer, evidence, following, legacy)
+
+        return _drain_report(reader, consumer, page_size, page,
+                             lambda: _residuals(reader, legacy, documents.values()))
