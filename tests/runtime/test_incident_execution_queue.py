@@ -266,3 +266,55 @@ def test_recovery_excludes_foreign_rows_before_applying_batch_limit(tmp_path):
     batch = queue.list_stale_claims(stale_before=1e20, limit=1)
     assert len(batch) == 1 and batch[0].approval_id == "apr-z-local"
     assert queue.list_stale_claims(stale_before=1e20, limit=1, after_id=batch[0].approval_id) == ()
+
+
+@pytest.mark.parametrize("first_is_drain", [False, True])
+def test_drain_serializes_with_admission_and_survives_restart(tmp_path, monkeypatch, first_is_drain):
+    from threading import Event
+    from src.runtime.incident_execution import AdmissionClosedError
+
+    first, approvals, path = stores(tmp_path)
+    def reopen(scope):
+        return SqliteExecutionStore(path, execution_affinity=scope, payload_codec=CODEC, approval_store=approvals)
+
+    second = reopen(first.execution_affinity)
+    def admit(store):
+        return store.admit(execution_id="wf-race", input_sha256="f"*64)
+
+    # Hold the first writer inside the transaction until the second begins its write transaction.
+    locked, contending = Event(), Event()
+    check = first._is_draining
+    def hold(cursor, scope):
+        value = check(cursor, scope)
+        locked.set()
+        assert contending.wait(10)
+        return value
+    connect = second._connect
+    def observed_connection():
+        connection = connect()
+        connection.set_trace_callback(lambda sql: contending.set() if sql == "BEGIN IMMEDIATE" else None)
+        return connection
+    monkeypatch.setattr(first, "_is_draining", hold)
+    monkeypatch.setattr(second, "_connect", observed_connection)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        leader = pool.submit(first.begin_drain if first_is_drain else lambda: admit(first))
+        assert locked.wait(10)
+        follower = pool.submit(lambda: admit(second)) if first_is_drain else pool.submit(second.begin_drain)
+        leader.result(timeout=15)
+        if first_is_drain:
+            with pytest.raises(AdmissionClosedError):
+                follower.result(timeout=15)
+        else:
+            follower.result(timeout=15)
+
+    reopened = reopen(first.execution_affinity)
+    reopened.begin_drain()
+    if first_is_drain:
+        with pytest.raises(KeyError):
+            reopened.get_execution("wf-race")
+    else:
+        assert admit(reopened) == reopened.get_execution("wf-race")
+    with pytest.raises(AdmissionClosedError):
+        reopened.admit(execution_id="new", input_sha256="e"*64)
+    other = reopen(replace(first.execution_affinity, installation_id="other-client"))
+    other.admit(execution_id="other", input_sha256="e"*64)

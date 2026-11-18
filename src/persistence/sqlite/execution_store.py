@@ -15,6 +15,10 @@ class SqliteExecutionStore(ExecutionContinuationStore):
                         approval_store=approval_store, sql_server=False)
         with self._transaction() as cursor:
             cursor.execute("""
+CREATE TABLE IF NOT EXISTS incident_admission_drains (
+installation_id TEXT NOT NULL, release_id TEXT NOT NULL, PRIMARY KEY (installation_id, release_id))
+""")
+            cursor.execute("""
 CREATE TABLE IF NOT EXISTS incident_executions (
 execution_id TEXT PRIMARY KEY, input_sha256 TEXT NOT NULL,
 affinity_sha256 TEXT NOT NULL, affinity_json TEXT NOT NULL)

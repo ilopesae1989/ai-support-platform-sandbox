@@ -112,12 +112,13 @@ def test_autocommit_must_be_explicitly_disabled_before_sql(setting):
 
 
 def test_admission_holds_absent_key_range_before_insert_and_commits_once():
-    queue, _, conn, cur = adapters([None])
+    queue, _, conn, cur = adapters([None, None])
     record = queue.admit(execution_id="wf-one", input_sha256="f"*64)
     assert record.affinity == affinity()
     assert "WITH (UPDLOCK, HOLDLOCK)" in sqls(cur)[0]
-    assert sqls(cur)[1].startswith("INSERT INTO DBO.INCIDENT_EXECUTIONS")
-    assert cur.executions[1][1]["affinity_sha256"] == affinity().fingerprint
+    assert "DBO.INCIDENT_ADMISSION_DRAINS WITH (UPDLOCK, HOLDLOCK)" in sqls(cur)[1]
+    assert sqls(cur)[2].startswith("INSERT INTO DBO.INCIDENT_EXECUTIONS")
+    assert cur.executions[2][1]["affinity_sha256"] == affinity().fingerprint
     assert_closed(conn, cur)
 
 
@@ -225,3 +226,24 @@ def test_rejection_receipt_shares_fenced_completion_transaction(insert_fails):
         assert queue.complete_rejection(**args).status.value == "completed"
     assert sqls(cur)[-1].startswith("INSERT INTO DBO.INCIDENT_REJECTION_CLOSURES")
     assert_closed(conn, cur, committed=int(not insert_fails), rolled_back=int(insert_fails))
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_begin_drain_locks_release_scope_and_is_idempotent(existing):
+    queue, _, conn, cur = adapters([(1,) if existing else None])
+    queue.begin_drain()
+    assert "DBO.INCIDENT_ADMISSION_DRAINS WITH (UPDLOCK, HOLDLOCK)" in sqls(cur)[0]
+    assert cur.executions[0][1] == {"installation": "a", "release": "n"}
+    assert len(cur.executions) == (1 if existing else 2)
+    if not existing:
+        assert sqls(cur)[1].startswith("INSERT INTO DBO.INCIDENT_ADMISSION_DRAINS")
+    assert_closed(conn, cur)
+
+
+def test_sql_closed_drain_rolls_back_new_admission():
+    from src.runtime.incident_execution import AdmissionClosedError
+    queue, _, conn, cur = adapters([None, (1,)])
+    with pytest.raises(AdmissionClosedError):
+        queue.admit(execution_id="wf-one", input_sha256="f"*64)
+    assert all("INSERT INTO" not in statement for statement in sqls(cur))
+    assert_closed(conn, cur, committed=0, rolled_back=1)

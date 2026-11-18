@@ -11,7 +11,7 @@ import time
 from typing import Generic
 
 from src.runtime.execution_affinity import ExecutionAffinity, require_digest, require_identifier
-from src.runtime.incident_execution import IncidentExecution, IncidentExecutionConflictError
+from src.runtime.incident_execution import AdmissionClosedError, IncidentExecution, IncidentExecutionConflictError
 from src.runtime.incident_continuation_codec import ContinuationPayloadCodec, InvocationT
 from src.runtime.incident_continuation_store import (
     IncidentContinuationJob, IncidentContinuationStatus, IncidentContinuationClaimError,
@@ -43,6 +43,7 @@ class ExecutionContinuationStore:
         self._sql_server = sql_server
         prefix = "dbo." if sql_server else ""
         self._executions = prefix + "incident_executions"
+        self._drains = prefix + "incident_admission_drains"
         self._closures = prefix + "incident_rejection_closures"
         self._resolutions = prefix + "incident_resolution_closures"
         self._jobs = prefix + "incident_affine_continuation_jobs"
@@ -110,6 +111,25 @@ FROM {self._executions} {self._lock()} WHERE execution_id = %(execution_id)s
             raise IncidentExecutionConflictError("Execution identity changed.")
         return IncidentExecution(execution_id=row[0], input_sha256=row[1], affinity=affinity)
 
+    def _drain_scope(self):
+        affinity = self.execution_affinity
+        return {"installation": affinity.installation_id, "release": affinity.release.release_id}
+
+    def _is_draining(self, cursor, scope):
+        return self._execute(cursor, f"""
+SELECT 1 FROM {self._drains} {self._lock()}
+WHERE installation_id = %(installation)s AND release_id = %(release)s
+""", scope).fetchone() is not None
+
+    def begin_drain(self):
+        """Close new admissions for this installation and release, including after restart."""
+        scope = self._drain_scope()
+        with self._transaction() as cursor:
+            if not self._is_draining(cursor, scope):
+                self._execute(cursor, f"""
+INSERT INTO {self._drains} (installation_id, release_id) VALUES (%(installation)s, %(release)s)
+""", scope)
+
     def admit(self, *, execution_id, input_sha256):
         require_identifier(execution_id, "execution_id")
         require_digest(input_sha256, "input_sha256")
@@ -117,6 +137,8 @@ FROM {self._executions} {self._lock()} WHERE execution_id = %(execution_id)s
             try:
                 existing = self._execution(cursor, execution_id)
             except KeyError:
+                if self._is_draining(cursor, self._drain_scope()):
+                    raise AdmissionClosedError("New admissions are closed for this installation and release.") from None
                 self._execute(cursor, f"""
 INSERT INTO {self._executions} (execution_id, input_sha256, affinity_sha256, affinity_json)
 VALUES (%(execution_id)s, %(input_sha256)s, %(affinity_sha256)s, %(affinity_json)s)

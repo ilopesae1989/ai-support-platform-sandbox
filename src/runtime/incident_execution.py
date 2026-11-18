@@ -14,6 +14,10 @@ class IncidentExecutionConflictError(ValueError):
     pass
 
 
+class AdmissionClosedError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True, kw_only=True)
 class IncidentExecution:
     execution_id: str
