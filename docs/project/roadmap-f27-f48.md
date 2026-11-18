@@ -43,9 +43,12 @@ registro antes del primer agente, identidad compartida con HITL y selector/recup
 que filtran antes de gastar intentos. Es una composición candidata explícita, con
 cola separada de la histórica. Corrige también la combinación incompatible de
 READCOMMITTEDLOCK y ROWLOCK del selector SQL existente.
-La aceptación Windows y publicación de P8-P2 R1 siguen pendientes. La activación
-productiva continúa bloqueada: wiring de host, diagnóstico durable, admisión/drenaje
-coordinados y cualificación SQL real todavía no están completos.
+P8-P2 R1 obtuvo 3.852 PASS en Linux y Windows y se publicó en `c14c077`.
+El siguiente candidato incorpora el [inventario de ejecuciones y diagnóstico
+persistente](e3-execution-inventory.md). Concilia admisiones, checkpoints, HITL
+y ambas colas e identifica evidencias históricas sin instalación acreditada.
+P8 sigue abierto por cierre durable, coordinación de admisión y drenaje,
+integración del host y cualificación SQL real.
 Se documenta la [retirada de workflows del portal Foundry](foundry-workflow-retirement.md)
 el 1/12/2026 y se mantiene la orquestación Python de Agent Framework.
 P5 coordina propiedad y consumo HITL; P6 prepara la recuperación explícita.

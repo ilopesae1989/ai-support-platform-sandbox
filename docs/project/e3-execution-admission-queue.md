@@ -151,7 +151,11 @@ No se usa una operación Azure real ni falsa para acreditar esta frontera: la pr
 integrada termina por rechazo humano. SQL con dobles no demuestra que la consulta
 se haya ejecutado en un servidor ni cualifica su concurrencia o rendimiento.
 
-## Pendientes que permanecen
+P8-P2 R1 obtuvo posteriormente 3.852 PASS en Windows y se publicó en `c14c077`.
+El [inventario P8-P3](e3-execution-inventory.md) desarrolla la observación de
+ambas colas y las admisiones sin arranque confirmado.
+
+## Pendientes registrados al preparar P8-P2
 
 - Admisión y drenaje coordinados, inventario completo, fin de ejecuciones y carrera
   del último conteo; admisiones cuyo arranque no quedó confirmado.
