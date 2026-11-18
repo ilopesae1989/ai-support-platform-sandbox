@@ -699,7 +699,8 @@ def test_claim_next_is_ordered_atomic_queue_update_with_output():
     assert "UPDLOCK" in normalized
     assert "READPAST" in normalized
     assert "READCOMMITTEDLOCK" in normalized
-    assert "ROWLOCK" in normalized
+    # READCOMMITTEDLOCK and ROWLOCK are mutually exclusive granularity hints.
+    assert "ROWLOCK" not in normalized
 
     assert (
         "WHERE STATUS = 'PENDING'"
@@ -1341,7 +1342,6 @@ def test_runtime_adapter_has_queue_hints_atomic_recovery_and_no_runtime_ddl():
         "READPAST",
         "UPDLOCK",
         "READCOMMITTEDLOCK",
-        "ROWLOCK",
         "HOLDLOCK",
         "ORDER BY",
         "CREATED_AT ASC",

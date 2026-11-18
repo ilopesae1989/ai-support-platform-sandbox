@@ -111,8 +111,7 @@ _CLAIM_NEXT = """
         WITH (
             UPDLOCK,
             READPAST,
-            READCOMMITTEDLOCK,
-            ROWLOCK
+            READCOMMITTEDLOCK
         )
     WHERE status = 'pending'
     ORDER BY

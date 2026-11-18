@@ -5,6 +5,13 @@ Base publicada: `55927f1ff420e5d29bf16eabb592a297aa3987c8`.
 Árbol base: `0530acc2843dd93ad3fc50c99e301201e551eb84`.
 P7 aceptado Linux/Windows con 3.703 PASS; publicado y verificado.
 
+Actualización posterior: P8-R1 aceptado Linux/Windows con 3.780 PASS y publicado
+en `a81f5111dbaa9615059b75aed1c71f5f30378707`, árbol
+`797388284b25a4bbad2f848a11c4a165a4fec821`. Las notas de preparación posteriores
+describen ese corte histórico. El siguiente paquete de
+[admisión durable y cola por afinidad](e3-execution-admission-queue.md) implementa
+su consumidor candidato persistente; la activación productiva continúa bloqueada.
+
 ## Alcance exacto
 
 Primer paquete de implementación del punto 8 de entrega 3. P8 completo comprende

@@ -178,6 +178,7 @@ def build_incident_resolution_workflow(
     attestation_publisher=None,
     execution_affinity=None,
     affinity_procedures=None,
+    execution_store=None,
 ):
     """
     IncidentResolutionWorkflow.
@@ -290,6 +291,11 @@ def build_incident_resolution_workflow(
         governed_procedure_admission_policy = verified["governed_procedure_admission_policy"]
     elif affinity_procedures is not None:
         raise ValueError("affinity_procedures requires an explicit execution affinity.")
+    if execution_store is not None:
+        from src.runtime.incident_execution import IncidentExecutionStore
+        if (execution_affinity is None or not isinstance(execution_store, IncidentExecutionStore)
+                or execution_store.execution_affinity != execution_affinity):
+            raise ValueError("Execution admission requires the matching affinity store.")
 
     foundry_agents = (
         agents if agents is not None else FoundryAgents()
@@ -354,6 +360,9 @@ def build_incident_resolution_workflow(
     if execution_affinity is not None:
         classification_options["id"] = "classification-affinity-" + execution_affinity.fingerprint
         classification_options["execution_affinity"] = execution_affinity
+    if execution_store is not None:
+        classification_options["id"] += "-admitted-v1"
+        classification_options["execution_store"] = execution_store
     classification = (
         ClassificationExecutor(
             agents=foundry_agents,

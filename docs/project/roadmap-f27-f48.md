@@ -36,10 +36,16 @@ Linux y Windows **3.703 PASS**; conserva los 3.641 casos de P6 y añade 62.
 Publicado y verificado en `55927f1ff420e5d29bf16eabb592a297aa3987c8`.
 El primer paquete P8 es [identidad de release y afinidad](e3-release-affinity-contract.md):
 snapshot verificado de procedimientos y barrera de compatibilidad en el grafo.
-Linux FULL **3.780 PASS**; 77 casos nuevos. Windows y publicación pendientes.
-Es un contrato candidato: activación productiva bloqueada; asignación durable,
-selección previa al claim, recuperación por afinidad y drenaje siguen pendientes.
-No se considera resuelto todavía el gasto de intentos por incompatibilidad.
+Linux/Windows FULL **3.780 PASS**; 77 casos nuevos; publicado y verificado en
+`a81f5111dbaa9615059b75aed1c71f5f30378707`.
+P8-P2 R1 incorpora [admisión durable y cola por afinidad](e3-execution-admission-queue.md):
+registro antes del primer agente, identidad compartida con HITL y selector/recuperador
+que filtran antes de gastar intentos. Es una composición candidata explícita, con
+cola separada de la histórica. Corrige también la combinación incompatible de
+READCOMMITTEDLOCK y ROWLOCK del selector SQL existente.
+La aceptación Windows y publicación de P8-P2 R1 siguen pendientes. La activación
+productiva continúa bloqueada: wiring de host, diagnóstico durable, admisión/drenaje
+coordinados y cualificación SQL real todavía no están completos.
 Se documenta la [retirada de workflows del portal Foundry](foundry-workflow-retirement.md)
 el 1/12/2026 y se mantiene la orquestación Python de Agent Framework.
 P5 coordina propiedad y consumo HITL; P6 prepara la recuperación explícita.

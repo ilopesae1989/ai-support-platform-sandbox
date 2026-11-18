@@ -1,4 +1,6 @@
 from typing import Never
+from src.runtime.incident_execution import EXECUTION_ID_STATE_KEY
+from src.runtime.execution_affinity import require_identifier
 
 from agent_framework import (
     Executor,
@@ -112,9 +114,12 @@ class ProcedureRequestExecutor(Executor):
             )
         )
 
+        admitted_id = ctx.get_state(EXECUTION_ID_STATE_KEY, None)
+        if admitted_id is not None:
+            require_identifier(admitted_id, "execution_id")
         execution_identity = ExecutionIdentity(
             workflow_id=(
-                create_workflow_id()
+                admitted_id if admitted_id is not None else create_workflow_id()
             ),
 
             alert_id=(

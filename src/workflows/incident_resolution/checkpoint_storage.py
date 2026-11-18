@@ -140,6 +140,13 @@ def incident_checkpoint_allowed_types() -> set[str]:
     )
 
 
+def admitted_incident_checkpoint_allowed_types() -> set[str]:
+    """Explicit candidate codec; historical readers keep their existing allowlist."""
+    return incident_checkpoint_allowed_types() | {
+        "src.workflows.incident_resolution.workflow_input:AdmittedIncidentWorkflowInput"
+    }
+
+
 def build_incident_checkpoint_storage(
     checkpoint_path: str | Path,
 ) -> FileCheckpointStorage:

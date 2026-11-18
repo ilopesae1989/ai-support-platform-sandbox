@@ -101,6 +101,12 @@ class IncidentContinuationWorkerDependencies:
     def __post_init__(
         self,
     ) -> None:
+        affinity = getattr(self.continuation_store, "execution_affinity", None)
+        if affinity is not None and (
+                getattr(self.workflow_factory, "execution_affinity", None) != affinity
+                or getattr(self.workflow_factory, "execution_store", None) is not self.continuation_store
+                or not self.continuation_store.uses_approval_store(self.approval_store)):
+            raise ValueError("Candidate worker requires the factory bound to its exact execution store.")
         if (
             not isinstance(
                 self.worker_id,
@@ -196,6 +202,11 @@ class IncidentContinuationWorker:
         self,
     ) -> IncidentContinuationWorkerOutcome:
         dependencies = self._dependencies
+        # Candidate graph construction verifies current configuration before any
+        # queue claim. It performs no provider invocation. The legacy path is unchanged.
+        workflow = None
+        if getattr(dependencies.continuation_store, "execution_affinity", None) is not None:
+            workflow = dependencies.workflow_factory()
         job = dependencies.continuation_store.claim_next(
             worker_id=dependencies.worker_id,
         )
@@ -214,7 +225,8 @@ class IncidentContinuationWorker:
             approval_store=dependencies.approval_store,
         )
         try:
-            workflow = dependencies.workflow_factory()
+            if workflow is None:
+                workflow = dependencies.workflow_factory()
             processed = await dependencies.processor(
                 invocation=job.invocation,
                 store=scoped_store,

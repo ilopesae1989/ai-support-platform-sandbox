@@ -14,6 +14,7 @@ from src.runtime.procedure.approval_store import PendingApprovalStore
 
 from src.config.procedure_configuration import ProcedureConfiguration
 from src.runtime.execution_affinity import ExecutionAffinity
+from src.runtime.incident_execution import IncidentExecutionStore
 from src.workflows.incident_resolution.capability_foundry_agent_binding import (
     CapabilityFoundryAgentBindingRegistry,
 )
@@ -37,6 +38,7 @@ class IncidentWorkflowOptions:
     procedure_configuration: ProcedureConfiguration | None = None
     attestation_publisher: object | None = None
     execution_affinity: ExecutionAffinity | None = None
+    execution_store: IncidentExecutionStore | None = None
 
     def __post_init__(self) -> None:
         expected_types = (
@@ -52,6 +54,11 @@ class IncidentWorkflowOptions:
                 raise TypeError(f"{name} must be {expected.__name__}.")
         if self.vm_start_binding is not None and self.vm_start_route is not None:
             raise ValueError("Specify vm_start_binding or vm_start_route, never both.")
+        if self.execution_store is not None and (
+                not isinstance(self.execution_store, IncidentExecutionStore)
+                or self.execution_affinity is None
+                or self.execution_store.execution_affinity != self.execution_affinity):
+            raise ValueError("Execution store must match the configured affinity.")
         if self.execution_affinity is not None:
             if (self.procedure_configuration is None
                     or self.procedure_configuration.fingerprint != self.execution_affinity.procedures_sha256):
@@ -75,6 +82,14 @@ class IncidentWorkflowFactory:
 
     def __call__(self) -> Workflow:
         return build_incident_resolution_workflow(**self._arguments)
+
+    @property
+    def execution_affinity(self):
+        return self._arguments.get("execution_affinity")
+
+    @property
+    def execution_store(self):
+        return self._arguments.get("execution_store")
 
 
 def build_incident_workflow_factory(
@@ -108,6 +123,10 @@ def build_incident_workflow_factory(
         "wait_recheck_consumption_ledger": wait_recheck_consumption_ledger,
         "azure_vm_power_state_reader": azure_vm_power_state_reader,
     }
+    if options.execution_store is not None:
+        if not options.execution_store.uses_approval_store(approval_store):
+            raise ValueError("Candidate composition requires its co-located approval store.")
+        arguments["execution_store"] = options.execution_store
     for name in ("agents", "capability_foundry_agent_binding_registry",
                  "vm_start_route", "attestation_publisher"):
         value = getattr(options, name)

@@ -89,6 +89,41 @@ class IncidentWorkflowInput:
         )
 
 
+@dataclass(frozen=True)
+class AdmittedIncidentWorkflowInput(IncidentWorkflowInput):
+    """Trusted host input; separate from the unchanged channel transport envelope."""
+
+    execution_id: str
+
+    def __post_init__(self):
+        super().__post_init__()
+        from src.runtime.execution_affinity import require_identifier
+        require_identifier(self.execution_id, "execution_id")
+
+
+def incident_input_fingerprint(workflow_input: IncidentWorkflowInput) -> str:
+    """Bind the admitted alert and transport correlation, excluding the record ID."""
+    from src.runtime.execution_affinity import canonical_digest
+    return canonical_digest({"alert": workflow_input.alert.model_dump(mode="json"),
+                             "conversation_id": workflow_input.conversation_id})
+
+
+def admit_incident_workflow_input(*, alert, conversation_id, execution_store) -> AdmittedIncidentWorkflowInput:
+    """Trusted host admission, committed before workflow.run creates its entry checkpoint.
+
+    A new invocation creates a distinct execution, as in the historical identity
+    contract. This is not alert deduplication or permission to replay an execution.
+    """
+    from src.runtime.incident_execution import IncidentExecutionStore
+    from src.runtime.procedure.identity import create_workflow_id
+    if not isinstance(execution_store, IncidentExecutionStore):
+        raise TypeError("Explicit execution persistence required.")
+    result = AdmittedIncidentWorkflowInput(alert=alert, conversation_id=conversation_id,
+                                   execution_id=create_workflow_id())
+    execution_store.admit(execution_id=result.execution_id, input_sha256=incident_input_fingerprint(result))
+    return result
+
+
 def store_incident_conversation_id(
     ctx: WorkflowContext,
     conversation_id: str,
