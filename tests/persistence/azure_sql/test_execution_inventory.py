@@ -70,6 +70,7 @@ def test_sql_inventory_scopes_before_limit_binds_ids_and_reconciles_checkpoint_a
             "pending_request_info_events": {}, "state": {},
             "messages": {f"internal:classification-affinity-{a.fingerprint}-admitted-v1": []}}
     db = Connection([("SET TRANSACTION", []), ("SELECT TOP (3)", [record()]),
+                     ("SELECT OBJECT_ID", [(None,)]),
                      ("FROM dbo.pending_approvals", [("apr-one", "wf-one", "req-one", "cp-one", "pending")]),
                      ("FROM dbo.incident_affine_continuation_jobs", []),
                      ("FROM dbo.incident_continuation_jobs", [("apr-one", "claimed")]),
@@ -117,3 +118,17 @@ def test_sql_historical_counts_are_store_wide_and_paginate_checkpoint_rows():
     assert result["legacy_jobs_without_attributed_approval"] == 1
     assert result["approvals_without_admission"] == 2 and result["checkpoints"] == {"other_without_execution_id": 1}
     assert db.closed and db.rollbacks == 1 and all(c.closed for c in db.cursors)
+
+
+@pytest.mark.parametrize("owner,expected", [("wf-one", "recorded"), ("foreign", "conflict")])
+def test_sql_receipt_requires_completed_job_of_admitted_execution(owner, expected):
+    db = Connection([("SET TRANSACTION", []), ("SELECT TOP", [record()]),
+                     ("SELECT OBJECT_ID", [(1,)]),
+                     ("WHERE c.execution_id = %(execution)s", [("apr-one", owner, "completed")]),
+                     ("FROM dbo.pending_approvals", []), ("FROM dbo.incident_affine_continuation_jobs", []),
+                     ("JSON_VALUE(payload_json", [])])
+    page = azure_sql_inventory_page(connection_factory=lambda: db, consumer=affinity())
+    row, = page["executions"]
+    assert row["rejection_receipt"]["status"] == expected
+    assert db.statements[3][1] == {"execution": "wf-one"}
+    assert "apr-one" not in json.dumps(row)

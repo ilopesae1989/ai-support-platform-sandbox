@@ -1,6 +1,7 @@
 """Offline inventory contract on real SQLite and MAF file checkpoints."""
 from contextlib import closing
 from dataclasses import replace
+import hashlib
 import json
 import sqlite3
 from uuid import UUID
@@ -69,6 +70,11 @@ async def test_native_admission_hitl_claim_and_terminal_rejection_are_observable
     assert done["observed_state"] == "terminal_checkpoint" and done["checkpoint_count"] > row["checkpoint_count"]
     assert done["candidate_jobs"] == {"completed": 1} and done["approvals"] == {"completed": 1}
     assert before == snapshot(state.path)
+    assert first["rejection_receipt"] == {"status": "absent"}
+    assert done["rejection_receipt"] == {
+        "status": "recorded", "notification_delivery": "unconfirmed",
+        "approval_sha256": hashlib.sha256(request.data.approval_id.encode()).hexdigest(),
+    }
     assert request.data.approval_id not in json.dumps(done)
 
 
@@ -384,3 +390,10 @@ def test_legacy_checkpoint_errors_prevent_export_without_rewriting_source(tmp_pa
         main(["--store-residuals", "--database", str(tmp_path / "state.db"),
               "--checkpoints", str(directory), "--output", str(output)])
     assert not output.exists() and path.read_bytes() == original
+
+def test_historical_database_without_receipt_table_remains_readable(tmp_path):
+    enter(tmp_path)
+    with closing(sqlite3.connect(tmp_path / "state.db")) as connection:
+        connection.execute("DROP TABLE incident_rejection_closures")
+    row, = observe(tmp_path)["executions"]
+    assert row["rejection_receipt"] == {"status": "unavailable"}

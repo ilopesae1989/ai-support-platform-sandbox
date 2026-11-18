@@ -111,3 +111,13 @@ el bloqueo de nuevas admisiones y el drenaje, los consumidores del host y la
 cualificación con el almacén real. F27 LIVE continúa pausada.
 
 [Admisión y colas](e3-execution-admission-queue.md) · [Afinidad](e3-release-affinity-contract.md) · [Roadmap](roadmap-f27-f48.md)
+
+## Recibo de rechazo humano
+
+Cada ejecución incluye `rejection_receipt.status`. El valor `recorded` vincula
+el recibo al trabajo completado de la misma ejecución. La huella SHA-256 del ID
+de aprobación en UTF-8 permite cotejarlo sin exportar el identificador original.
+La entrega de la notificación sigue como `unconfirmed`. Una tabla visible sin
+recibo produce `absent`. Una tabla ausente o invisible produce `unavailable`.
+Una correlación contradictoria produce `conflict` y requiere conciliación.
+La consulta utiliza la transacción de lectura del inventario.
