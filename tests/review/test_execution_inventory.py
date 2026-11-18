@@ -62,6 +62,9 @@ async def test_native_admission_hitl_claim_and_terminal_rejection_are_observable
     row, = sqlite_inventory_page(**args)["executions"]
     assert row["observed_state"] == "hitl_checkpoint" and row["issues"] == []
     assert row["approvals"] == {"pending": 1} and row["candidate_jobs"] == {"pending": 1}
+    report = sqlite_inventory_page(**args)
+    assert report["page_drain_blockers"] == [{"execution_id": row["execution_id"], "reasons": [
+        "hitl_checkpoint", "approval_unfinished", "continuation_unfinished"]}]
     assert snapshot(state.path) == before
     active, _ = worker(state)
     assert (await active.process_next_once()).value == "completed"
@@ -75,6 +78,8 @@ async def test_native_admission_hitl_claim_and_terminal_rejection_are_observable
         "status": "recorded", "notification_delivery": "unconfirmed",
         "approval_sha256": hashlib.sha256(request.data.approval_id.encode()).hexdigest(),
     }
+    assert sqlite_inventory_page(**args)["page_drain_blockers"] == [{
+        "execution_id": done["execution_id"], "reasons": ["notification_delivery_unconfirmed"]}]
     assert request.data.approval_id not in json.dumps(done)
 
 
@@ -126,7 +131,10 @@ def test_invalid_pagination_is_rejected(tmp_path, options):
 def test_report_uses_positive_checkpoint_evidence(tmp_path, status, messages, requests, phase):
     enter(tmp_path)
     write_cp(tmp_path, document(status=status, messages=messages, requests=requests))
-    assert observe(tmp_path)["executions"][0]["observed_state"] == phase
+    page = observe(tmp_path)
+    assert page["executions"][0]["observed_state"] == phase
+    expected = "terminal_closure_unconfirmed" if phase == "terminal_checkpoint" else phase
+    assert page["page_drain_blockers"] == [{"execution_id": "wf-one", "reasons": [expected]}]
 
 
 @pytest.mark.parametrize("fault", ["fork", "cycle", "missing-entry", "wrong-id", "wrong-affinity", "changed-graph"])
@@ -397,3 +405,18 @@ def test_historical_database_without_receipt_table_remains_readable(tmp_path):
         connection.execute("DROP TABLE incident_rejection_closures")
     row, = observe(tmp_path)["executions"]
     assert row["rejection_receipt"] == {"status": "unavailable"}
+
+
+def test_drain_page_filters_release_and_preserves_cursor(tmp_path):
+    queue, _, _ = sources(tmp_path)
+    scope = affinity()
+    previous = replace(scope, release=replace(scope.release, release_id="previous"))
+    old, _, _ = stores(tmp_path, previous)
+    old.admit(execution_id="a-old", input_sha256="a"*64)
+    queue.admit(execution_id="b-current", input_sha256="a"*64)
+    first = observe(tmp_path, limit=1)
+    assert first["page_drain_blockers"] == [] and first["next_after"] == "a-old"
+    second = observe(tmp_path, after=first["next_after"])
+    assert second["drain_release_id"] == scope.release.release_id
+    assert second["page_drain_blockers"] == [
+        {"execution_id": "b-current", "reasons": ["start_unconfirmed"]}]

@@ -158,3 +158,26 @@ def _wait_request(value):
 
 def _counts(values):
     return dict(sorted(Counter(values).items()))
+
+
+def drain_reasons(row):
+    """Explain outstanding work on one attributed execution in this inventory page."""
+    reasons = list(row["issues"])
+    phase = row["observed_state"]
+    if phase == "manual_analysis_requested":
+        reasons.append("manual_handoff_unconfirmed")
+    elif phase != "terminal_checkpoint":
+        reasons.append(phase)
+    if any(status != "completed" for status in row["approvals"]):
+        reasons.append("approval_unfinished")
+    if any(status != "completed" for key in ("candidate_jobs", "legacy_jobs") for status in row[key]):
+        reasons.append("continuation_unfinished")
+    receipts = [row["resolution_receipt"], row["rejection_receipt"]]
+    recorded = [receipt for receipt in receipts if receipt["status"] == "recorded"]
+    if len(recorded) > 1:
+        reasons.append("conflicting_terminal_receipts")
+    if phase == "terminal_checkpoint" and not recorded:
+        reasons.append("terminal_closure_unconfirmed")
+    if recorded and any(r.get("notification_delivery") != "confirmed" for r in recorded):
+        reasons.append("notification_delivery_unconfirmed")
+    return reasons

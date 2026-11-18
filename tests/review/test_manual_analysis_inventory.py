@@ -35,9 +35,13 @@ async def test_manual_output_and_reopened_inventory(tmp_path, monkeypatch, route
     assert row["execution_id"] == state.admitted.execution_id
     assert row["observed_state"] == "manual_analysis_requested"
     assert row["manual_analysis_reason"] == reason
+    report = sqlite_inventory_page(database=state.path, checkpoints=tmp_path / "checkpoints",
+                                   consumer=state.case.affinity)
+    assert report["page_drain_blockers"] == [
+        {"execution_id": row["execution_id"], "reasons": ["manual_handoff_unconfirmed"]}]
     other = replace(state.case.affinity, installation_id="customer-b")
-    assert sqlite_inventory_page(database=state.path, checkpoints=tmp_path / "checkpoints",
-                                 consumer=other)["executions"] == []
+    foreign = sqlite_inventory_page(database=state.path, checkpoints=tmp_path / "checkpoints", consumer=other)
+    assert foreign["executions"] == foreign["page_drain_blockers"] == []
     assert row["approvals"] == row["candidate_jobs"] == {}
     assert row["resolution_receipt"]["status"] == row["rejection_receipt"]["status"] == "absent"
 

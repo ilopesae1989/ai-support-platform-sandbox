@@ -9,7 +9,7 @@ from pathlib import Path
 import sqlite3
 
 from src.runtime.execution_affinity import ExecutionAffinity, require_digest, require_identifier
-from src.runtime.execution_inventory import ExecutionEvidence
+from src.runtime.execution_inventory import ExecutionEvidence, drain_reasons
 from src.runtime.incident_execution import EXECUTION_ID_STATE_KEY
 
 
@@ -159,11 +159,19 @@ def _observe(doc, stored_id, evidence):
 
 
 def _report(consumer, evidence, following, legacy):
+    rows = [item.describe(consumer) for item in evidence.values()]
+    blockers = []
+    for row in rows:
+        if row["release_id"] == consumer.release.release_id:
+            reasons = drain_reasons(row)
+            if reasons:
+                blockers.append({"execution_id": row["execution_id"], "reasons": reasons})
     return {'schema': 'incident-inventory-page-v1', 'installation_id': consumer.installation_id,
             'consumer_affinity_sha256': consumer.fingerprint, 'next_after': following,
             'coverage': 'attributed_admissions', 'unattributed_history': 'separate_store_review',
             'legacy_queue': legacy.legacy_coverage if legacy else 'unavailable',
-            'executions': [item.describe(consumer) for item in evidence.values()]}
+            'executions': rows, 'drain_release_id': consumer.release.release_id,
+            'page_drain_blockers': blockers}
 
 
 def _sqlite(path):
