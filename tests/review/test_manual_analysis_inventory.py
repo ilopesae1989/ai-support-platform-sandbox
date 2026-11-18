@@ -1,4 +1,9 @@
+import json
+from dataclasses import replace
+
 import pytest
+
+from src.runtime.incident_execution import MANUAL_ANALYSIS_REASON_KEY
 
 from src.persistence.execution_inventory import sqlite_inventory_page
 from src.workflows.incident_resolution.models import ManualAnalysisRequest
@@ -28,6 +33,27 @@ async def test_manual_output_and_reopened_inventory(tmp_path, monkeypatch, route
     row, = sqlite_inventory_page(database=state.path, checkpoints=tmp_path / "checkpoints",
                                  consumer=state.case.affinity)["executions"]
     assert row["execution_id"] == state.admitted.execution_id
-    assert row["observed_state"] == "end_unconfirmed"
+    assert row["observed_state"] == "manual_analysis_requested"
+    assert row["manual_analysis_reason"] == reason
+    other = replace(state.case.affinity, installation_id="customer-b")
+    assert sqlite_inventory_page(database=state.path, checkpoints=tmp_path / "checkpoints",
+                                 consumer=other)["executions"] == []
     assert row["approvals"] == row["candidate_jobs"] == {}
     assert row["resolution_receipt"]["status"] == row["rejection_receipt"]["status"] == "absent"
+
+    # Model a historical checkpoint and then a malformed one on the same admitted chain.
+    for path in (tmp_path / "checkpoints").glob("*.json"):
+        doc = json.loads(path.read_text())
+        if MANUAL_ANALYSIS_REASON_KEY in doc["state"]:
+            break
+    else:
+        pytest.fail("Missing terminal checkpoint marker")
+    for replacement, expected in [(None, "end_unconfirmed"), ("invalid", "unresolved")]:
+        doc["state"].pop(MANUAL_ANALYSIS_REASON_KEY, None)
+        if replacement is not None:
+            doc["state"][MANUAL_ANALYSIS_REASON_KEY] = replacement
+        path.write_text(json.dumps(doc), encoding="utf-8")
+        historical, = sqlite_inventory_page(database=state.path, checkpoints=tmp_path / "checkpoints",
+                                             consumer=state.case.affinity)["executions"]
+        assert historical["observed_state"] == expected
+        assert historical["manual_analysis_reason"] is None

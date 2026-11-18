@@ -7,6 +7,9 @@ from src.runtime.execution_affinity import ExecutionAffinity, require_digest, re
 EXECUTION_ID_STATE_KEY = "incident_execution_id"
 
 
+MANUAL_ANALYSIS_REASON_KEY = "incident_manual_analysis_reason"
+
+
 class IncidentExecutionConflictError(ValueError):
     pass
 

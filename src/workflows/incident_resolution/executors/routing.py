@@ -1,5 +1,5 @@
 from typing import Never
-from src.runtime.incident_execution import EXECUTION_ID_STATE_KEY
+from src.runtime.incident_execution import EXECUTION_ID_STATE_KEY, MANUAL_ANALYSIS_REASON_KEY
 from src.runtime.execution_affinity import require_identifier
 
 from agent_framework import (
@@ -447,3 +447,5 @@ class ManualAnalysisExecutor(Executor):
         await ctx.yield_output(
             request
         )
+        if ctx.get_state(EXECUTION_ID_STATE_KEY, None) is not None:
+            ctx.set_state(MANUAL_ANALYSIS_REASON_KEY, request.reason)

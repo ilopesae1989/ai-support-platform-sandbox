@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from src.runtime.execution_affinity import AFFINITY_STATE_KEY, ExecutionAffinity, require_digest, require_identifier
-from src.runtime.incident_execution import EXECUTION_ID_STATE_KEY
+from src.runtime.incident_execution import EXECUTION_ID_STATE_KEY, MANUAL_ANALYSIS_REASON_KEY
 from src.runtime.procedure.models import WorkflowStatus
 
 
@@ -16,6 +16,7 @@ class CheckpointEvidence:
     requests: frozenset[str]
     messages: bool
     workflow_status: str | None
+    manual_reason: str | None = None
 
 
 @dataclass
@@ -51,8 +52,13 @@ class ExecutionEvidence:
         if parent is not None:
             require_identifier(parent, 'previous_checkpoint_id')
         require_digest(signature, 'graph_signature_hash')
+        reason = state.get(MANUAL_ANALYSIS_REASON_KEY)
+        if MANUAL_ANALYSIS_REASON_KEY in state and (
+                reason not in ("no_procedure", "human_escalation_required") or runtime or requests or messages):
+            self.issues.add("manual_analysis_checkpoint_conflict")
+            return
         cp = CheckpointEvidence(stored_id, parent, signature,
-                                frozenset(requests), bool(messages), runtime.get('workflow_status'))
+                                frozenset(requests), bool(messages), runtime.get('workflow_status'), reason)
         if stored_id in self.checkpoints:
             self.issues.add('duplicate_checkpoint')
         self.checkpoints[stored_id] = cp
@@ -119,6 +125,13 @@ class ExecutionEvidence:
             if (any(status != 'completed' for _, status in self.approvals.values())
                     or any(status != 'completed' for _, status in self.jobs)):
                 self.issues.add('terminal_with_unfinished_work')
+        if any(cp.manual_reason is not None and cp != head for cp in self.checkpoints.values()):
+            self.issues.add("manual_analysis_checkpoint_conflict")
+        if head and head.manual_reason:
+            if self.approvals or self.jobs:
+                self.issues.add("manual_analysis_checkpoint_conflict")
+            else:
+                phase = "manual_analysis_requested"
         if self.issues:
             phase = 'unresolved'
         return {
@@ -129,6 +142,7 @@ class ExecutionEvidence:
             'candidate_jobs': _counts(s for q, s in self.jobs if q == 'candidate'),
             'legacy_jobs': _counts(s for q, s in self.jobs if q == 'legacy'),
             'issues': sorted(self.issues), 'rejection_receipt': self.rejection_receipt,
+            'manual_analysis_reason': head.manual_reason if phase == "manual_analysis_requested" else None,
             'resolution_receipt': self.resolution_receipt,
         }
 
