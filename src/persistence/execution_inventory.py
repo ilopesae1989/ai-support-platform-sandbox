@@ -73,27 +73,29 @@ class _Reader:
             evidence.pop(records[-1][0])
         return evidence, records[limit - 1][0] if more else None
 
-    def rejection_receipts(self, evidence):
+    def terminal_receipts(self, evidence, kind):
+        table = {"rejection": "incident_rejection_closures", "resolution": "incident_resolution_closures"}[kind]
         if not evidence:
             return
-        exists = ("SELECT OBJECT_ID(N'dbo.incident_rejection_closures', N'U')" if self.sql_server
-                  else "SELECT name FROM sqlite_master WHERE type='table' AND name='incident_rejection_closures'")
+        exists = (f"SELECT OBJECT_ID(N'dbo.{table}', N'U')" if self.sql_server
+                  else f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
         if not any(row[0] for row in self.rows(exists)):
             return
         for item in evidence.values():
-            item.rejection_receipt = {'status': 'absent'}
-            query = (f'SELECT c.approval_id, j.execution_id, j.status FROM {self.prefix}incident_rejection_closures c '
+            receipt = {'status': 'absent'}
+            query = (f'SELECT c.approval_id, j.execution_id, j.status FROM {self.prefix}{table} c '
                      f'LEFT JOIN {self.prefix}incident_affine_continuation_jobs j ON j.approval_id = c.approval_id '
                      f'WHERE c.execution_id = {self.bind("execution")}')
             for approval, owner, status in self.rows(query, {'execution': item.execution_id}):
                 if owner != item.execution_id or status != 'completed':
-                    item.issues.add('rejection_receipt_conflict')
-                    item.rejection_receipt = {'status': 'conflict'}
+                    item.issues.add(f'{kind}_receipt_conflict')
+                    receipt = {'status': 'conflict'}
                 else:
-                    item.rejection_receipt = {
+                    receipt = {
                         'status': 'recorded', 'approval_sha256': hashlib.sha256(approval.encode('utf-8')).hexdigest(),
                         'notification_delivery': 'unconfirmed',
                     }
+            setattr(item, kind + '_receipt', receipt)
 
     def approvals(self, execution):
         approvals = {}
@@ -215,7 +217,8 @@ def sqlite_inventory_page(*, database, checkpoints, consumer, limit=50, after=No
                           legacy_database=None, checkpoint_encoding=None):
     with _sqlite_sources(database, checkpoints, legacy_database) as (current, legacy, directory):
         evidence, following = current.page(consumer, limit, after)
-        current.rejection_receipts(evidence)
+        current.terminal_receipts(evidence, "rejection")
+        current.terminal_receipts(evidence, "resolution")
         for item in evidence.values():
             current.jobs(item, current.approvals(item), legacy)
 
@@ -250,7 +253,8 @@ def _sql_source(connection_factory):
 def azure_sql_inventory_page(*, connection_factory, consumer, limit=50, after=None):
     with _sql_source(connection_factory) as reader:
         evidence, following = reader.page(consumer, limit, after)
-        reader.rejection_receipts(evidence)
+        reader.terminal_receipts(evidence, "rejection")
+        reader.terminal_receipts(evidence, "resolution")
         for item in evidence.values():
             reader.jobs(item, reader.approvals(item), reader)
             rows = reader.rows("""SELECT checkpoint_id, payload_json FROM dbo.workflow_checkpoints

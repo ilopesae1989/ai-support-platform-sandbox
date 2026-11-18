@@ -47,7 +47,7 @@ def setup(tmp_path):
                            factory=factory, admitted=admitted, path=tmp_path / "state.db")
 
 
-async def pending(state):
+async def pending(state, *, decision="reject"):
     workflow = state.factory()
     events = [event async for event in workflow.run(state.admitted, checkpoint_storage=state.storage, stream=True)]
     request, = [e for e in events if e.type == "request_info"]
@@ -55,7 +55,7 @@ async def pending(state):
                    if c.pending_request_info_events]
     state.approvals.register(build_pending_approval_correlation(request=request.data,
         request_id=request.request_id, checkpoint_id=checkpoint.checkpoint_id))
-    state.queue.enqueue(decision_context(request.data, decision="reject"))
+    state.queue.enqueue(decision_context(request.data, decision=decision))
     return request, checkpoint
 
 

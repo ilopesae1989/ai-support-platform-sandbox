@@ -238,12 +238,17 @@ class IncidentContinuationWorker:
             )
             from src.runtime.procedure.workflow import ApprovalOutcome
 
+            from src.runtime.procedure.models import ProcedureRuntimeState
+
+            complete_resolution = getattr(dependencies.continuation_store, "complete_resolution", None)
             complete_rejection = getattr(dependencies.continuation_store, "complete_rejection", None)
             result = getattr(processed, "workflow_result", None)
             completion = dict(approval_id=job.approval_id, worker_id=dependencies.worker_id,
                               expected_attempt_count=job.attempt_count)
             if callable(complete_rejection) and isinstance(result, ApprovalOutcome) and result.approved is False:
                 complete_rejection(outcome=result, **completion)
+            elif callable(complete_resolution) and isinstance(result, ProcedureRuntimeState) and result.workflow_status == "resolved":
+                complete_resolution(outcome=result, **completion)
             else:
                 dependencies.continuation_store.complete(**completion)
             return IncidentContinuationWorkerOutcome.COMPLETED

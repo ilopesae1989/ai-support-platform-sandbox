@@ -70,7 +70,7 @@ def test_sql_inventory_scopes_before_limit_binds_ids_and_reconciles_checkpoint_a
             "pending_request_info_events": {}, "state": {},
             "messages": {f"internal:classification-affinity-{a.fingerprint}-admitted-v1": []}}
     db = Connection([("SET TRANSACTION", []), ("SELECT TOP (3)", [record()]),
-                     ("SELECT OBJECT_ID", [(None,)]),
+                     ("SELECT OBJECT_ID", [(None,)]), ("SELECT OBJECT_ID", [(None,)]),
                      ("FROM dbo.pending_approvals", [("apr-one", "wf-one", "req-one", "cp-one", "pending")]),
                      ("FROM dbo.incident_affine_continuation_jobs", []),
                      ("FROM dbo.incident_continuation_jobs", [("apr-one", "claimed")]),
@@ -125,6 +125,7 @@ def test_sql_receipt_requires_completed_job_of_admitted_execution(owner, expecte
     db = Connection([("SET TRANSACTION", []), ("SELECT TOP", [record()]),
                      ("SELECT OBJECT_ID", [(1,)]),
                      ("WHERE c.execution_id = %(execution)s", [("apr-one", owner, "completed")]),
+                     ("SELECT OBJECT_ID", [(None,)]),
                      ("FROM dbo.pending_approvals", []), ("FROM dbo.incident_affine_continuation_jobs", []),
                      ("JSON_VALUE(payload_json", [])])
     page = azure_sql_inventory_page(connection_factory=lambda: db, consumer=affinity())

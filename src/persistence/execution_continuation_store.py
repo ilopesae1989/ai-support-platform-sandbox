@@ -4,6 +4,7 @@ SQLite and Azure SQL share invariants, not a claim of equivalent concurrency.
 Concrete adapters own connections/schema. Legacy queue tables are never accessed.
 """
 from contextlib import contextmanager
+import hashlib
 import json
 import re
 import time
@@ -43,6 +44,7 @@ class ExecutionContinuationStore:
         prefix = "dbo." if sql_server else ""
         self._executions = prefix + "incident_executions"
         self._closures = prefix + "incident_rejection_closures"
+        self._resolutions = prefix + "incident_resolution_closures"
         self._jobs = prefix + "incident_affine_continuation_jobs"
         self._pending = prefix + "pending_approvals"
 
@@ -273,24 +275,50 @@ AND execution_id = %(execution)s AND updated_at = %(updated)s
         require_continuation_attempt(expected_attempt_count)
         if type(outcome) is not ApprovalOutcome or outcome.approved is not False or outcome.status != "blocked":
             raise IncidentExecutionConflictError("Expected a terminal human rejection.")
+        return self._complete_terminal(approval_id, worker_id, expected_attempt_count, outcome.workflow_id,
+                                       False, self._closures, None)
+
+    def complete_resolution(self, *, approval_id, worker_id, expected_attempt_count, outcome):
+        from src.runtime.procedure.models import ProcedureRuntimeState
+
+        self._identifier(worker_id)
+        require_continuation_attempt(expected_attempt_count)
+        if (type(outcome) is not ProcedureRuntimeState or outcome.workflow_status != "resolved"
+                or outcome.step_status != "succeeded" or outcome.approval_id != approval_id
+                or outcome.verification_result is None or not outcome.verification_result.success):
+            raise IncidentExecutionConflictError("Expected verified terminal resolution.")
+        document = json.dumps(outcome.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), allow_nan=False)
+        digest = hashlib.sha256(document.encode()).hexdigest()
+        return self._complete_terminal(approval_id, worker_id, expected_attempt_count, outcome.workflow_id,
+                                       True, self._resolutions, digest)
+
+    def _complete_terminal(self, approval_id, worker_id, expected_attempt_count, execution_id, decision, table, digest):
         with self._transaction() as cursor:
             job = self._job(cursor, approval_id)
             correlation, status, approved = self._approval(cursor, approval_id)
-            if (outcome.workflow_id != job.execution_id or correlation.workflow_id != job.execution_id
-                    or status != "completed" or approved != 0):
-                raise IncidentExecutionConflictError("Rejected execution lacks completed decision evidence.")
+            if (execution_id != job.execution_id or correlation.workflow_id != job.execution_id
+                    or status != "completed" or approved != decision):
+                raise IncidentExecutionConflictError("Execution lacks matching completed decision evidence.")
             params = dict(id=job.execution_id, approval=approval_id, worker=worker_id, attempt=expected_attempt_count)
-            row = self._execute(cursor, f"SELECT approval_id, worker_id, attempt FROM {self._closures} "
+            columns = "approval_id, worker_id, attempt"
+            values = "%(approval)s, %(worker)s, %(attempt)s"
+            expected = (approval_id, worker_id, expected_attempt_count)
+            if digest is not None:
+                columns += ", result_sha256"
+                values += ", %(digest)s"
+                params["digest"] = digest
+                expected += (digest,)
+            row = self._execute(cursor, f"SELECT {columns} FROM {table} "
                                 f"{self._lock()} WHERE execution_id = %(id)s", {"id": job.execution_id}).fetchone()
             if row is not None:
-                if (tuple(row) != (approval_id, worker_id, expected_attempt_count)
+                if (tuple(row) != expected
                         or job.status.value != "completed" or job.attempt_count != expected_attempt_count):
                     raise IncidentExecutionConflictError("Closure conflicts with the recorded attempt.")
                 return job
             owned = self._owned(cursor, approval_id, worker_id, expected_attempt_count)
             completed = self._transition(cursor, owned, "completed")
-            self._execute(cursor, f"INSERT INTO {self._closures} (execution_id, approval_id, worker_id, attempt) "
-                          "VALUES (%(id)s, %(approval)s, %(worker)s, %(attempt)s)", params)
+            self._execute(cursor, f"INSERT INTO {table} (execution_id, {columns}) "
+                          f"VALUES (%(id)s, {values})", params)
             return completed
 
     def complete(self, *, approval_id, worker_id, expected_attempt_count):

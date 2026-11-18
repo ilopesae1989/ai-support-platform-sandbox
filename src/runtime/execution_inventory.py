@@ -30,6 +30,8 @@ class ExecutionEvidence:
 
     rejection_receipt: dict[str, str] = field(default_factory=lambda: {'status': 'unavailable'})
 
+    resolution_receipt: dict[str, str] = field(default_factory=lambda: {'status': 'unavailable'})
+
     def observe_checkpoint(self, doc, stored_id):
         state = doc['state']
         runtime = state.get('procedure_runtime_state', {})
@@ -127,6 +129,7 @@ class ExecutionEvidence:
             'candidate_jobs': _counts(s for q, s in self.jobs if q == 'candidate'),
             'legacy_jobs': _counts(s for q, s in self.jobs if q == 'legacy'),
             'issues': sorted(self.issues), 'rejection_receipt': self.rejection_receipt,
+            'resolution_receipt': self.resolution_receipt,
         }
 
 

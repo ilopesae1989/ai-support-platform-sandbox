@@ -34,6 +34,12 @@ execution_id TEXT NOT NULL PRIMARY KEY REFERENCES incident_executions(execution_
 approval_id TEXT NOT NULL UNIQUE REFERENCES incident_affine_continuation_jobs(approval_id),
 worker_id TEXT NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0))
 """)
+            cursor.execute("""
+CREATE TABLE IF NOT EXISTS incident_resolution_closures (
+execution_id TEXT NOT NULL PRIMARY KEY REFERENCES incident_executions(execution_id),
+approval_id TEXT NOT NULL UNIQUE REFERENCES incident_affine_continuation_jobs(approval_id),
+result_sha256 TEXT NOT NULL, worker_id TEXT NOT NULL, attempt INTEGER NOT NULL CHECK(attempt > 0))
+""")
             cursor.execute("CREATE INDEX IF NOT EXISTS ix_execution_affinity ON incident_executions(affinity_sha256, execution_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS ix_affine_queue ON incident_affine_continuation_jobs(status, created_at, approval_id)")
 
