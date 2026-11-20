@@ -40,9 +40,20 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--legacy-database", type=Path)
     parser.add_argument("--checkpoint-encoding", help="Source text encoding of the checkpoint files")
+    parser.add_argument("--vm-start-dispatch", action="store_true",
+                        help="Include open VM Start dispatch evidence using the operator's Foundry deployment")
     parser.add_argument("--after")
     parser.add_argument("--limit", type=int)
     args = parser.parse_args(argv)
+    deployment = None
+    if args.vm_start_dispatch:
+        from src.config.foundry_deployment import build_foundry_deployment_configuration
+
+        if not args.consumer_affinity:
+            parser.error("--vm-start-dispatch requires --consumer-affinity")
+        deployment = build_foundry_deployment_configuration(os.environ)
+        if deployment is None:
+            parser.error("--vm-start-dispatch requires FOUNDRY_DEPLOYMENT_JSON and FOUNDRY_PROJECT_ENDPOINT")
     if args.output.resolve().is_relative_to(args.checkpoints.resolve()):
         parser.error("Choose an output outside the checkpoint directory.")
     sources = dict(database=args.database, checkpoints=args.checkpoints, legacy_database=args.legacy_database,
@@ -59,7 +70,7 @@ def main(argv=None):
     else:
         consumer = ExecutionAffinity.from_document(load_inventory_json(args.consumer_affinity.read_bytes()))
         page = sqlite_inventory_page(**sources, consumer=consumer, after=args.after,
-                                    limit=50 if args.limit is None else args.limit)
+                                    limit=50 if args.limit is None else args.limit, vm_start_deployment=deployment)
     write_inventory_report(args.output, page)
 
 

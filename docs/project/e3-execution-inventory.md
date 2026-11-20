@@ -121,3 +121,25 @@ La entrega de la notificación sigue como `unconfirmed`. Una tabla visible sin
 recibo produce `absent`. Una tabla ausente o invisible produce `unavailable`.
 Una correlación contradictoria produce `conflict` y requiere conciliación.
 La consulta utiliza la transacción de lectura del inventario.
+
+## Despacho VM Start con una continuación abierta
+
+En una copia estable, añade `--vm-start-dispatch` a la consulta con
+`--consumer-affinity`. Usa la configuración de operador de la instalación
+(`FOUNDRY_DEPLOYMENT_JSON` y `FOUNDRY_PROJECT_ENDPOINT`). Su huella debe
+coincidir con la afinidad. En Python, `sqlite_inventory_page` y
+`azure_sql_inventory_page` aceptan la configuración verificada en
+`vm_start_deployment`. La consulta conserva la paginación, el estado
+observado y las razones de bloqueo de la página ordinaria.
+
+| Campo `vm_start_dispatch.status` | Lectura para el operador |
+| --- | --- |
+| `dispatch_attributed_effect_unconfirmed` | Una aprobación positiva y una continuación reclamada se vinculan al checkpoint del paso VM Start, al enlace de la instalación y a una reserva durable del mismo identificador de operación. El informe incluye operación, procedimiento, paso y SHA-256 de la aprobación. El efecto requiere verificación independiente. |
+| `review_required` | La evidencia en el ámbito está incompleta, es contradictoria o la acción no satisface el contrato VM Start. Requiere revisión. |
+| `no_open_claimed_pair` | Los contadores de la aprobación y de la cola candidata no muestran ninguna reclamación abierta. |
+| `out_of_scope` | La fila histórica pertenece a una afinidad distinta de la del consumidor. |
+
+La lectura usa metadatos JSON y consultas SELECT dentro del corte de la
+página. SQLite usa la codificación de los checkpoints indicada para la copia.
+Ante una reserva sin respuesta el operador conserva el incidente abierto.
+Los modos de drenaje y revisión global mantienen su contrato.

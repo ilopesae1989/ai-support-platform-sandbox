@@ -158,8 +158,22 @@ def _observe(doc, stored_id, evidence):
         execution.observe_checkpoint(doc, stored_id)
 
 
-def _report(consumer, evidence, following, legacy):
+def _dispatch_binding(consumer, deployment):
+    if deployment is None:
+        return None
+    if deployment.fingerprint != consumer.foundry_sha256:
+        raise ValueError("VM Start deployment does not match the consumer affinity.")
+    return deployment.write_binding.fingerprint
+
+
+def _report(consumer, evidence, following, legacy, *, reader=None, lookup=None, binding=None):
     rows = [item.describe(consumer) for item in evidence.values()]
+    if binding is not None:
+        from src.persistence.vm_start_dispatch import vm_start_dispatch
+
+        for row in rows:
+            row["vm_start_dispatch"] = vm_start_dispatch(
+                reader, evidence[row["execution_id"]], row, lookup, binding)
     blockers = []
     for row in rows:
         if row["release_id"] == consumer.release.release_id:
@@ -222,7 +236,8 @@ def _read_file(path, checkpoint_encoding=None):
 
 
 def sqlite_inventory_page(*, database, checkpoints, consumer, limit=50, after=None,
-                          legacy_database=None, checkpoint_encoding=None):
+                          legacy_database=None, checkpoint_encoding=None, vm_start_deployment=None):
+    binding = _dispatch_binding(consumer, vm_start_deployment)
     with _sqlite_sources(database, checkpoints, legacy_database) as (current, legacy, directory):
         evidence, following = current.page(consumer, limit, after)
         current.terminal_receipts(evidence, "rejection")
@@ -241,7 +256,7 @@ def sqlite_inventory_page(*, database, checkpoints, consumer, limit=50, after=No
                     _observe(_read_file(path, checkpoint_encoding), path.stem, evidence)
             for item in evidence.values():
                 item.verify_entry(lookup)
-        return _report(consumer, evidence, following, legacy)
+        return _report(consumer, evidence, following, legacy, reader=current, lookup=lookup, binding=binding)
 
 
 @contextmanager
@@ -262,15 +277,23 @@ def _sql_source(connection_factory):
             conn.rollback()
 
 
-def azure_sql_inventory_page(*, connection_factory, consumer, limit=50, after=None):
+def azure_sql_inventory_page(*, connection_factory, consumer, limit=50, after=None, vm_start_deployment=None):
+    binding = _dispatch_binding(consumer, vm_start_deployment)
     with _sql_source(connection_factory) as reader:
-        return _sql_page(reader, consumer, limit, after)
+        return _sql_page(reader, consumer, limit, after, binding=binding)
 
 
-def _sql_page(reader, consumer, limit, after):
+def _sql_page(reader, consumer, limit, after, *, binding=None):
     evidence, following = reader.page(consumer, limit, after)
     reader.terminal_receipts(evidence, "rejection")
     reader.terminal_receipts(evidence, "resolution")
+
+    def lookup(parent):
+        roots = list(reader.rows("""SELECT payload_json FROM dbo.workflow_checkpoints
+            WHERE workflow_name = 'incident-resolution' AND checkpoint_id = %(parent)s""",
+            {'parent': parent}))
+        return load_inventory_json(roots[0][0]) if roots else None
+
     for item in evidence.values():
         reader.jobs(item, reader.approvals(item), reader)
         rows = reader.rows("""SELECT checkpoint_id, payload_json FROM dbo.workflow_checkpoints
@@ -283,13 +306,8 @@ def _sql_page(reader, consumer, limit, after):
                 raise ValueError('Checkpoint workflow mismatch.')
             item.observe_checkpoint(doc, stored_id)
 
-        def lookup(parent):
-            roots = list(reader.rows("""SELECT payload_json FROM dbo.workflow_checkpoints
-                WHERE workflow_name = 'incident-resolution' AND checkpoint_id = %(parent)s""",
-                {'parent': parent}))
-            return load_inventory_json(roots[0][0]) if roots else None
         item.verify_entry(lookup)
-    return _report(consumer, evidence, following, reader)
+    return _report(consumer, evidence, following, reader, reader=reader, lookup=lookup, binding=binding)
 
 
 def _residuals(reader, legacy, documents):
