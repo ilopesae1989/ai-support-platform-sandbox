@@ -10,12 +10,22 @@ from tests.runtime.test_incident_execution_queue import affinity
 
 class Connection:
     def __init__(self, replies, *, autocommit=False):
-        self.autocommit = autocommit
+        self._autocommit = autocommit
         self.replies = iter(replies)
         self.statements = []
         self.cursors = []
         self.closed = False
         self.rollbacks = 0
+
+    @property
+    def autocommit(self):
+        return self._autocommit
+
+    @autocommit.setter
+    def autocommit(self, value):
+        if value:
+            assert self.rollbacks == 1 and self.statements == []
+        self._autocommit = value
 
     def cursor(self):
         cursor = Cursor(self)
@@ -36,7 +46,9 @@ class Cursor:
 
     def execute(self, sql, params=None):
         sql = " ".join(sql.split())
-        assert sql.startswith("SELECT ") or sql == "SET TRANSACTION ISOLATION LEVEL SNAPSHOT"
+        setup = sql == "SET TRANSACTION ISOLATION LEVEL SNAPSHOT"
+        assert setup or sql.startswith("SELECT ")
+        assert self.db.autocommit is setup
         assert set(re.findall(r"%\((\w+)\)s", sql)) == set(params or {})
         self.db.statements.append((sql, params))
         fragment, result = next(self.db.replies)
@@ -83,7 +95,7 @@ def test_sql_inventory_scopes_before_limit_binds_ids_and_reconciles_checkpoint_a
     sql, params = db.statements[1]
     assert "ORDER BY execution_id" in sql and "COLLATE Latin1_General_100_BIN2" in sql
     assert params == {"installation": a.installation_id, "after": ""}
-    assert db.rollbacks == 1 and db.closed and all(c.closed for c in db.cursors)
+    assert db.rollbacks == 2 and db.closed and all(c.closed for c in db.cursors)
 
 
 @pytest.mark.parametrize("failure", ["snapshot", "admission", "corruption"])
@@ -96,7 +108,8 @@ def test_sql_faults_rollback_and_close_without_returning_partial_evidence(failur
     db = Connection(replies)
     with pytest.raises((RuntimeError, ValueError)):
         azure_sql_inventory_page(connection_factory=lambda: db, consumer=affinity())
-    assert db.closed and db.rollbacks == 1 and all(c.closed for c in db.cursors)
+    expected_rollbacks = 1 if failure == "snapshot" else 2
+    assert db.closed and db.rollbacks == expected_rollbacks and all(c.closed for c in db.cursors)
 
 
 def test_sql_requires_transactional_connection():
@@ -117,7 +130,7 @@ def test_sql_historical_counts_are_store_wide_and_paginate_checkpoint_rows():
     assert db.statements[2][1] == {"after": "last"}
     assert result["legacy_jobs_without_attributed_approval"] == 1
     assert result["approvals_without_admission"] == 2 and result["checkpoints"] == {"other_without_execution_id": 1}
-    assert db.closed and db.rollbacks == 1 and all(c.closed for c in db.cursors)
+    assert db.closed and db.rollbacks == 2 and all(c.closed for c in db.cursors)
 
 
 @pytest.mark.parametrize("owner,expected", [("wf-one", "recorded"), ("foreign", "conflict")])
@@ -145,4 +158,4 @@ def test_release_drain_uses_one_snapshot_for_marker_pages_and_residuals():
                      ("FROM dbo.incident_affine_continuation_jobs record", [(0,)])])
     result = azure_sql_release_drain(connection_factory=lambda: db, consumer=affinity())
     assert result["status"] == "no_observed_blockers" and result["pages_read"] == 1
-    assert db.closed and db.rollbacks == 1 and all(cursor.closed for cursor in db.cursors)
+    assert db.closed and db.rollbacks == 2 and all(cursor.closed for cursor in db.cursors)

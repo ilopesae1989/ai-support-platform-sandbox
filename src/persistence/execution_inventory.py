@@ -250,9 +250,13 @@ def _sql_source(connection_factory):
     with closing(connection_factory()) as conn:
         if getattr(conn, 'autocommit', None) is not False:
             raise ValueError('Inventory requires autocommit=False.')
+        # Roll back factory work before enabling autocommit, which could commit it.
+        conn.rollback()
+        conn.autocommit = True
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('SET TRANSACTION ISOLATION LEVEL SNAPSHOT')
+        conn.autocommit = False
         try:
-            with closing(conn.cursor()) as cursor:
-                cursor.execute('SET TRANSACTION ISOLATION LEVEL SNAPSHOT')
             yield _Reader(conn, True)
         finally:
             conn.rollback()
